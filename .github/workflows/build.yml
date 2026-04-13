@@ -1,13 +1,19 @@
 name: Build VaultApp APK
 
 on:
-  push:
-    branches: [ main ]
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-22.04
+
+    env:
+      # 修复 3：启用 Node.js 24，消除弃用警告
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      # 调试增强：启用 Actions 原生步骤调试日志，失败时网页日志更详细
+      ACTIONS_STEP_DEBUG: true
+      # 调试增强：启用 Runner 诊断日志，失败时可从日志存档下载
+      ACTIONS_RUNNER_DEBUG: true
 
     steps:
       - name: Checkout code
@@ -21,8 +27,6 @@ jobs:
       - name: Install System Dependencies
         run: |
           sudo apt-get update
-          # 修复 1：libtinfo5 → libtinfo-dev（Ubuntu 22.04 已移除前者）
-          # 修复 2：保留 libssl-dev，供 openssl/cryptography C 扩展编译
           sudo apt-get install -y \
             build-essential git zip unzip openjdk-11-jdk \
             python3-pip autoconf libtool pkg-config \
@@ -30,12 +34,17 @@ jobs:
             libncurses5-dev libncursesw5-dev libtinfo-dev \
             cmake libsqlite3-dev libgmp-dev libmpc-dev libmpfr-dev
 
+      # 修复 2：安装 Rust，cryptography >= 3.5 交叉编译时需要 Cargo
+      - name: Install Rust
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
       - name: Cache Buildozer
         uses: actions/cache@v4
         with:
           path: .buildozer
-          # 强制更新缓存 Key 为 v2，避免拉取之前被 master 分支和 42.x 版本污染的脏环境
-          key: ${{ runner.os }}-buildozer-v2-${{ hashFiles('buildozer.spec') }}
+          key: ${{ runner.os }}-buildozer-v3-${{ hashFiles('buildozer.spec') }}
 
       - name: Build with Buildozer
         env:
@@ -46,13 +55,30 @@ jobs:
           P4A_RELEASE_KEYALIAS_PASSWD: ${{ secrets.KEY_PASSWORD }}
         run: |
           echo "${{ secrets.KEYSTORE_B64 }}" | base64 -d > my_release.keystore
-
-          # 锁定 Cython < 3.0，避免 pyjnius 编译报错
           pip install --upgrade buildozer "Cython<3.0.0" virtualenv
 
-          yes | buildozer -v android release
+          # tee 同时写入文件，失败时作为 artifact 上传
+          yes | buildozer -v android release 2>&1 | tee build_log.txt
+
+      # 失败时上传完整编译日志，方便下载排查
+      - name: Upload Build Log on Failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log-failure
+          path: build_log.txt
+
+      # 失败时同时上传 .buildozer 里的 p4a 详细日志
+      - name: Upload P4A Log on Failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p4a-log-failure
+          path: .buildozer/android/platform/build-arm64-v8a/dists/vaultapp/build.log
+          if-no-files-found: ignore
 
       - name: Upload APK
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: VaultApp-Signed-APK
