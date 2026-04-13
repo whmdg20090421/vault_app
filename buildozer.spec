@@ -8,28 +8,28 @@ source.include_exts = py,png,jpg,kv,atlas,json
 # 版本号
 version = 1.0.0
 
-# 明确应用需要的 Python 第三方库与打包工具版本 (设计文档 16 节)
-requirements = python3,kivy==2.3.0,kivymd==1.2.0,cryptography==42.0.8,webdav4==0.9.8,pyjnius==1.6.1,httpx==0.27.0
+# 修复 1：补全 httpx 完整依赖链（httpcore/h11/anyio/sniffio/idna/certifi）
+# 修复 2：降级 cryptography 到 38.0.4，移除 setuptools-rust，完美兼容 p4a 的 C 交叉编译配方
+requirements = python3,kivy==2.3.0,kivymd==1.2.0,openssl,libffi,cryptography==38.0.4,webdav4==0.9.8,pyjnius,httpx==0.27.0,httpcore==1.0.5,h11==0.14.0,anyio==4.3.0,sniffio==1.3.1,idna==3.7,certifi==2024.2.2
 
-# Android 架构与 API 级别 (设计文档 16 节与 11.3 节)
+# Android 架构与 API 级别
 android.api = 34
 android.minapi = 28
 android.ndk = 25b
 android.archs = arm64-v8a
 
-# 极度重要的 Android 权限申请列表 (包含前台保活、通知、SAF 文件读写等)
+# 权限申请列表
 android.permissions = READ_EXTERNAL_STORAGE,WRITE_EXTERNAL_STORAGE,MANAGE_EXTERNAL_STORAGE,READ_MEDIA_IMAGES,READ_MEDIA_VIDEO,READ_MEDIA_AUDIO,INTERNET,FOREGROUND_SERVICE,FOREGROUND_SERVICE_DATA_SYNC,WAKE_LOCK,POST_NOTIFICATIONS,USE_BIOMETRIC,REQUEST_IGNORE_BATTERY_OPTIMIZATIONS
 
-# 防止应用休眠时被杀死的服务白名单
-android.services = KeepAliveService:org.vaultapp.v5.KeepAliveService
+# 后台保活服务
+services = KeepAliveService:core/keepalive.py
 
-# 告诉打包工具使用默认的 Python3
-p4a.branch = master
+# 自动接受 SDK 协议
+android.accept_sdk_license = True
+
+# 修复 3：锁定 p4a 到稳定的 release tag，避免 master 分支的潜在波动
+p4a.branch = v2024.01.21
 
 [buildozer]
-# 控制台输出日志级别
 log_level = 2
 warn_on_root = 1
-
-# (必须确保这一行没有被 # 注释掉)
-android.accept_sdk_license = True

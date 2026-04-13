@@ -1,0 +1,59 @@
+name: Build VaultApp APK
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install System Dependencies
+        run: |
+          sudo apt-get update
+          # 修复 1：libtinfo5 → libtinfo-dev（Ubuntu 22.04 已移除前者）
+          # 修复 2：保留 libssl-dev，供 openssl/cryptography C 扩展编译
+          sudo apt-get install -y \
+            build-essential git zip unzip openjdk-11-jdk \
+            python3-pip autoconf libtool pkg-config \
+            zlib1g-dev libssl-dev libffi-dev \
+            libncurses5-dev libncursesw5-dev libtinfo-dev \
+            cmake libsqlite3-dev libgmp-dev libmpc-dev libmpfr-dev
+
+      - name: Cache Buildozer
+        uses: actions/cache@v4
+        with:
+          path: .buildozer
+          # 强制更新缓存 Key 为 v2，避免拉取之前被 master 分支和 42.x 版本污染的脏环境
+          key: ${{ runner.os }}-buildozer-v2-${{ hashFiles('buildozer.spec') }}
+
+      - name: Build with Buildozer
+        env:
+          APP_ANDROID_ACCEPT_SDK_LICENSE: 1
+          P4A_RELEASE_KEYSTORE: my_release.keystore
+          P4A_RELEASE_KEYSTORE_PASSWD: ${{ secrets.KEYSTORE_PASSWORD }}
+          P4A_RELEASE_KEYALIAS: ${{ secrets.KEY_ALIAS }}
+          P4A_RELEASE_KEYALIAS_PASSWD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          echo "${{ secrets.KEYSTORE_B64 }}" | base64 -d > my_release.keystore
+
+          # 锁定 Cython < 3.0，避免 pyjnius 编译报错
+          pip install --upgrade buildozer "Cython<3.0.0" virtualenv
+
+          yes | buildozer -v android release
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: VaultApp-Signed-APK
+          path: bin/*.apk
