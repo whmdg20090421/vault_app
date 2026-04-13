@@ -57,13 +57,8 @@ jobs:
           echo "${{ secrets.KEYSTORE_B64 }}" | base64 -d > my_release.keystore
           pip install --upgrade buildozer "Cython<3.0.0" virtualenv
 
-          # 1. 彻底去掉 yes | （我们已经有了 ACCEPT_SDK_LICENSE 变量，不需要它了，它会干扰管道状态）
-          # 2. 保留 tee 命令来生成 build_log.txt
-          buildozer -v android release 2>&1 | tee build_log.txt
-          
-          # 3. 核心修复：强制读取管道中第一个命令（也就是 buildozer）的真实退出码！
-          # 如果 buildozer 崩溃返回 1，这里就会强行 exit 1，让 GitHub 瞬间标红并停止运行。
-          exit ${PIPESTATUS[0]}
+          # tee 同时写入文件，失败时作为 artifact 上传
+          yes | buildozer -v android release 2>&1 | tee build_log.txt
 
       # 失败时上传完整编译日志，方便下载排查
       - name: Upload Build Log on Failure

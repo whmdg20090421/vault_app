@@ -26,7 +26,7 @@ requirements = python3,\
 android.api = 34
 android.minapi = 28
 # 修复 1：与 Runner 预装 NDK 版本对齐，避免重复下载或版本冲突
-android.ndk = 27.3
+android.ndk = 25b
 android.archs = arm64-v8a
 
 android.permissions = READ_EXTERNAL_STORAGE,WRITE_EXTERNAL_STORAGE,MANAGE_EXTERNAL_STORAGE,\
