@@ -10,8 +10,6 @@ version = 1.0.0
 requirements = python3,\
     kivy==2.3.0,\
     kivymd==1.2.0,\
-    openssl,\
-    libffi,\
     cryptography==38.0.4,\
     webdav4==0.9.8,\
     pyjnius,\
