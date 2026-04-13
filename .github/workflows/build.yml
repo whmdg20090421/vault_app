@@ -36,24 +36,45 @@ jobs:
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
-      # 核心修复：Buildozer 查找旧路径 tools/bin/sdkmanager
-      # 而 Runner 预装的新版 SDK 已将其移至 cmdline-tools/latest/bin/
-      # 用 symlink 把旧路径映射到新路径，同时补上 avdmanager 防止后续报同类错误
       - name: Fix Android SDK Tool Paths
         run: |
           SDK=/usr/local/lib/android/sdk
           NEW_BIN=$SDK/cmdline-tools/latest/bin
           OLD_BIN=$SDK/tools/bin
-
           sudo mkdir -p $OLD_BIN
-          sudo ln -sf $NEW_BIN/sdkmanager  $OLD_BIN/sdkmanager
-          sudo ln -sf $NEW_BIN/avdmanager  $OLD_BIN/avdmanager
+          sudo ln -sf $NEW_BIN/sdkmanager $OLD_BIN/sdkmanager
+          sudo ln -sf $NEW_BIN/avdmanager $OLD_BIN/avdmanager
+          echo "sdkmanager 版本：$($OLD_BIN/sdkmanager --version)"
 
-          # 验证映射是否成功
-          echo "--- sdkmanager 版本确认 ---"
-          $OLD_BIN/sdkmanager --version
+      # NDK r25b 单独缓存，key 固定，只要命中就跳过下载（约 800MB）
+      - name: Cache NDK r25b
+        id: cache-ndk
+        uses: actions/cache@v4
+        with:
+          path: ~/.buildozer/android/platform/android-ndk-r25b
+          key: android-ndk-r25b-linux-permanent
 
-      # 预下载 libffi，带 5 次重试，避免 p4a 编译时 GitHub CDN 504
+      # 仅在缓存未命中时下载，带重试
+      - name: Download NDK r25b
+        if: steps.cache-ndk.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p ~/.buildozer/android/platform
+          cd /tmp
+          echo "缓存未命中，开始下载 NDK r25b..."
+          for i in 1 2 3; do
+            wget -q --timeout=180 --show-progress \
+              "https://dl.google.com/android/repository/android-ndk-r25b-linux.zip" \
+              -O ndk-r25b.zip && break
+            echo "第 $i 次失败，15 秒后重试..."
+            sleep 15
+          done
+          echo "解压 NDK r25b..."
+          unzip -q ndk-r25b.zip -d ~/.buildozer/android/platform/
+          rm ndk-r25b.zip
+          echo "NDK r25b 安装完成"
+          ls ~/.buildozer/android/platform/android-ndk-r25b/
+
+      # 预下载 libffi 源码，带重试，避免 p4a 编译时 GitHub CDN 504
       - name: Pre-download libffi source
         run: |
           mkdir -p ~/.buildozer/android/packages
@@ -63,7 +84,6 @@ jobs:
             wget -q --timeout=60 \
               "https://github.com/libffi/libffi/archive/v3.4.2.tar.gz" \
               -O "libffi-v3.4.2.tar.gz" && echo "下载成功" && break
-            echo "失败，等待 15 秒后重试..."
             sleep 15
           done
 
@@ -77,9 +97,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .buildozer
-          key: ${{ runner.os }}-buildozer-v6-${{ hashFiles('buildozer.spec') }}
+          key: ${{ runner.os }}-buildozer-v7-${{ hashFiles('buildozer.spec') }}
           restore-keys: |
-            ${{ runner.os }}-buildozer-v6-
+            ${{ runner.os }}-buildozer-v7-
 
       - name: Build with Buildozer
         env:

@@ -25,12 +25,11 @@ requirements = python3,\
 
 android.api = 34
 android.minapi = 28
-android.ndk = 27.3
+# p4a 官方推荐版本，与 SDL2 的 ALooper API 兼容
+android.ndk = 25b
 android.archs = arm64-v8a
 
-# 核心修复：直接指向 Runner 预装路径，完全跳过 Buildozer 的 NDK/SDK 下载逻辑
-# Runner 上 NDK 27.3 和 SDK 已预装，无需重复下载
-android.ndk_path = /usr/local/lib/android/sdk/ndk/27.3.13750724
+# SDK 复用 Runner 预装路径，NDK 由 workflow 下载到 buildozer 自己的目录
 android.sdk_path = /usr/local/lib/android/sdk
 
 android.permissions = READ_EXTERNAL_STORAGE,WRITE_EXTERNAL_STORAGE,MANAGE_EXTERNAL_STORAGE,\
