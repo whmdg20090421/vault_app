@@ -8,11 +8,8 @@ jobs:
     runs-on: ubuntu-22.04
 
     env:
-      # 修复 3：启用 Node.js 24，消除弃用警告
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-      # 调试增强：启用 Actions 原生步骤调试日志，失败时网页日志更详细
       ACTIONS_STEP_DEBUG: true
-      # 调试增强：启用 Runner 诊断日志，失败时可从日志存档下载
       ACTIONS_RUNNER_DEBUG: true
 
     steps:
@@ -34,17 +31,41 @@ jobs:
             libncurses5-dev libncursesw5-dev libtinfo-dev \
             cmake libsqlite3-dev libgmp-dev libmpc-dev libmpfr-dev
 
-      # 修复 2：安装 Rust，cryptography >= 3.5 交叉编译时需要 Cargo
       - name: Install Rust
         run: |
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
-      - name: Cache Buildozer
+      # 预下载 libffi，带 5 次重试，彻底避免 p4a 编译时 GitHub CDN 504
+      - name: Pre-download libffi source
+        run: |
+          mkdir -p ~/.buildozer/android/packages
+          cd ~/.buildozer/android/packages
+          for i in 1 2 3 4 5; do
+            echo "下载 libffi，第 $i 次尝试..."
+            wget -q --timeout=60 \
+              "https://github.com/libffi/libffi/archive/v3.4.2.tar.gz" \
+              -O "libffi-v3.4.2.tar.gz" && echo "下载成功" && break
+            echo "失败，等待 15 秒后重试..."
+            sleep 15
+          done
+
+      # packages 缓存：用固定 key，下载的源码包不随 spec 变化
+      - name: Cache p4a Packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.buildozer/android/packages
+          key: p4a-packages-libffi342-stable
+
+      # build 缓存：用 spec hash，编译产物随依赖变化更新
+      # 注意：必须在 symlink 等操作之后，防止 cache restore 覆盖手动创建的目录
+      - name: Cache Buildozer Build
         uses: actions/cache@v4
         with:
           path: .buildozer
-          key: ${{ runner.os }}-buildozer-v3-${{ hashFiles('buildozer.spec') }}
+          key: ${{ runner.os }}-buildozer-v5-${{ hashFiles('buildozer.spec') }}
+          restore-keys: |
+            ${{ runner.os }}-buildozer-v5-
 
       - name: Build with Buildozer
         env:
@@ -56,16 +77,9 @@ jobs:
         run: |
           echo "${{ secrets.KEYSTORE_B64 }}" | base64 -d > my_release.keystore
           pip install --upgrade buildozer "Cython<3.0.0" virtualenv
-
-          # 1. 彻底去掉 yes | （我们已经有了 ACCEPT_SDK_LICENSE 变量，不需要它了，它会干扰管道状态）
-          # 2. 保留 tee 命令来生成 build_log.txt
           buildozer -v android release 2>&1 | tee build_log.txt
-          
-          # 3. 核心修复：强制读取管道中第一个命令（也就是 buildozer）的真实退出码！
-          # 如果 buildozer 崩溃返回 1，这里就会强行 exit 1，让 GitHub 瞬间标红并停止运行。
           exit ${PIPESTATUS[0]}
 
-      # 失败时上传完整编译日志，方便下载排查
       - name: Upload Build Log on Failure
         if: failure()
         uses: actions/upload-artifact@v4
@@ -73,7 +87,6 @@ jobs:
           name: build-log-failure
           path: build_log.txt
 
-      # 失败时同时上传 .buildozer 里的 p4a 详细日志
       - name: Upload P4A Log on Failure
         if: failure()
         uses: actions/upload-artifact@v4
