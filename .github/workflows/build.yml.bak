@@ -36,24 +36,7 @@ jobs:
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
-      # 核心修复：Buildozer 查找旧路径 tools/bin/sdkmanager
-      # 而 Runner 预装的新版 SDK 已将其移至 cmdline-tools/latest/bin/
-      # 用 symlink 把旧路径映射到新路径，同时补上 avdmanager 防止后续报同类错误
-      - name: Fix Android SDK Tool Paths
-        run: |
-          SDK=/usr/local/lib/android/sdk
-          NEW_BIN=$SDK/cmdline-tools/latest/bin
-          OLD_BIN=$SDK/tools/bin
-
-          sudo mkdir -p $OLD_BIN
-          sudo ln -sf $NEW_BIN/sdkmanager  $OLD_BIN/sdkmanager
-          sudo ln -sf $NEW_BIN/avdmanager  $OLD_BIN/avdmanager
-
-          # 验证映射是否成功
-          echo "--- sdkmanager 版本确认 ---"
-          $OLD_BIN/sdkmanager --version
-
-      # 预下载 libffi，带 5 次重试，避免 p4a 编译时 GitHub CDN 504
+      # 预下载 libffi，带 5 次重试，彻底避免 p4a 编译时 GitHub CDN 504
       - name: Pre-download libffi source
         run: |
           mkdir -p ~/.buildozer/android/packages
@@ -67,19 +50,22 @@ jobs:
             sleep 15
           done
 
+      # packages 缓存：用固定 key，下载的源码包不随 spec 变化
       - name: Cache p4a Packages
         uses: actions/cache@v4
         with:
           path: ~/.buildozer/android/packages
           key: p4a-packages-libffi342-stable
 
+      # build 缓存：用 spec hash，编译产物随依赖变化更新
+      # 注意：必须在 symlink 等操作之后，防止 cache restore 覆盖手动创建的目录
       - name: Cache Buildozer Build
         uses: actions/cache@v4
         with:
           path: .buildozer
-          key: ${{ runner.os }}-buildozer-v6-${{ hashFiles('buildozer.spec') }}
+          key: ${{ runner.os }}-buildozer-v5-${{ hashFiles('buildozer.spec') }}
           restore-keys: |
-            ${{ runner.os }}-buildozer-v6-
+            ${{ runner.os }}-buildozer-v5-
 
       - name: Build with Buildozer
         env:
