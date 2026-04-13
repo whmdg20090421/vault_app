@@ -30,3 +30,6 @@ p4a.branch = master
 # 控制台输出日志级别
 log_level = 2
 warn_on_root = 1
+
+# (必须确保这一行没有被 # 注释掉)
+android.accept_sdk_license = True
