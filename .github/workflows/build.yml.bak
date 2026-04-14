@@ -1,3 +1,4 @@
+```yaml
 name: Build VaultApp APK
 
 on:
@@ -148,3 +149,4 @@ jobs:
           name: VaultApp-APK
           path: bin/*.apk
           if-no-files-found: error
+```
