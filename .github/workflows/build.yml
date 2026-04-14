@@ -1,3 +1,4 @@
+```yaml
 name: Build VaultApp APK
 
 on:
@@ -23,14 +24,14 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            build-essential git zip unzip openjdk-17-jdk \
+            build-essential git zip unzip openjdk-20-jdk \
             python3-pip autoconf libtool pkg-config \
             zlib1g-dev libssl-dev libffi-dev \
             libncurses5-dev libncursesw5-dev libtinfo-dev \
             cmake libsqlite3-dev libgmp-dev libmpc-dev libmpfr-dev \
             libgl1-mesa-dev
-          echo "JAVA_HOME=/usr/lib/jvm/temurin-17-jdk-amd64" >> $GITHUB_ENV
-          echo "/usr/lib/jvm/temurin-17-jdk-amd64/bin" >> $GITHUB_PATH
+          echo "JAVA_HOME=/usr/lib/jvm/java-20-openjdk-amd64" >> $GITHUB_ENV
+          echo "/usr/lib/jvm/java-20-openjdk-amd64/bin" >> $GITHUB_PATH
 
       - name: Install Rust
         run: |
@@ -124,25 +125,16 @@ jobs:
 
           echo "::group::🔍 debug_find — 关键报错摘要（无需下载）"
 
-          echo ""
-          echo "▼▼▼ fatal error（致命编译错误）▼▼▼"
-          grep -n "fatal error" full_build_log.txt | head -30 || echo "（无 fatal error）"
-
-          echo ""
-          echo "▼▼▼ error: command ... failed（命令失败）▼▼▼"
-          grep -n "error: command" full_build_log.txt | head -20 || echo "（无 command failed）"
-
-          echo ""
-          echo "▼▼▼ ERROR: Failed building wheel▼▼▼"
-          grep -n "ERROR:.*wheel\|Failed to build\|failed-wheel" full_build_log.txt | head -20 || echo "（无 wheel 构建失败）"
-
-          echo ""
-          echo "▼▼▼ ImportError / ModuleNotFoundError▼▼▼"
-          grep -n "ImportError\|ModuleNotFoundError" full_build_log.txt | head -20 || echo "（无此类错误）"
-
-          echo ""
-          echo "▼▼▼ 最后 50 行日志（兜底）▼▼▼"
-          tail -n 50 full_build_log.txt
+          env_line=$(grep -n "#environment" full_build_log.txt | tail -1 | cut -d: -f1)
+          if [ -n "$env_line" ]; then
+            start=$((env_line - 50))
+            [ $start -lt 1 ] && start=1
+            echo "▼▼▼ #environment 前 50 行（第 ${start} ~ $((env_line - 1)) 行）▼▼▼"
+            sed -n "${start},$((env_line - 1))p" full_build_log.txt
+          else
+            echo "⚠️ 未找到 #environment 标记，输出最后 50 行兜底"
+            tail -n 50 full_build_log.txt
+          fi
 
           echo "::endgroup::"
 
@@ -157,3 +149,4 @@ jobs:
           name: VaultApp-APK
           path: bin/*.apk
           if-no-files-found: error
+```
