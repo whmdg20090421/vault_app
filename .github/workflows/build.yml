@@ -27,7 +27,8 @@ jobs:
             python3-pip autoconf libtool pkg-config \
             zlib1g-dev libssl-dev libffi-dev \
             libncurses5-dev libncursesw5-dev libtinfo-dev \
-            cmake libsqlite3-dev libgmp-dev libmpc-dev libmpfr-dev
+            cmake libsqlite3-dev libgmp-dev libmpc-dev libmpfr-dev \
+            libgl1-mesa-dev
           echo "JAVA_HOME=/usr/lib/jvm/temurin-17-jdk-amd64" >> $GITHUB_ENV
           echo "/usr/lib/jvm/temurin-17-jdk-amd64/bin" >> $GITHUB_PATH
 
@@ -45,7 +46,6 @@ jobs:
           sudo ln -sf $NEW_BIN/sdkmanager $OLD_BIN/sdkmanager
           sudo ln -sf $NEW_BIN/avdmanager $OLD_BIN/avdmanager
 
-      # NDK 单独缓存，key 永久固定，只要命中就跳过 800MB 下载
       - name: Cache NDK r25b
         id: cache-ndk
         uses: actions/cache@v4
@@ -69,16 +69,12 @@ jobs:
           rm ndk-r25b.zip
           echo "NDK r25b 就绪"
 
-      # v1 → v2：强制丢弃所有旧缓存（含 x86_64 .so 的污染版本）
-      # 删除 restore-keys：禁止跨 spec 版本的缓存回退，防止 p4a 信任错误架构文件
       - name: Cache Buildozer Build Output
         uses: actions/cache@v4
         with:
           path: .buildozer
           key: ${{ runner.os }}-build-arm64-v2-${{ hashFiles('buildozer.spec') }}
 
-      # 安全网：即使缓存中混入了 x86_64 .so，构建前强制清除
-      # p4a 检查文件存在性而非 ELF 架构，必须提前删除才能触发重新编译
       - name: Purge x86_64 .so files from stale cache
         run: |
           echo "=== 扫描并清除 x86_64 .so 文件 ==="
@@ -108,17 +104,47 @@ jobs:
           BUILD_STATUS=${PIPESTATUS[0]}
           echo "::endgroup::"
 
-          # 编译完成后验证 .so 文件架构，确保全部是 arm64
           echo "=== 验证 .so 文件架构 ==="
           find .buildozer -name "_clock.so" 2>/dev/null | while read f; do
             file "$f"
           done
 
           if [ $BUILD_STATUS -ne 0 ]; then
-            echo "::error::❌ 编译失败！最后 100 行日志："
-            tail -n 100 full_build_log.txt
+            echo "::error::❌ 编译失败，BUILD_STATUS=$BUILD_STATUS"
             exit $BUILD_STATUS
           fi
+
+      - name: debug_find
+        if: failure()
+        run: |
+          if [ ! -f full_build_log.txt ]; then
+            echo "::warning::full_build_log.txt 不存在，跳过 debug_find"
+            exit 0
+          fi
+
+          echo "::group::🔍 debug_find — 关键报错摘要（无需下载）"
+
+          echo ""
+          echo "▼▼▼ fatal error（致命编译错误）▼▼▼"
+          grep -n "fatal error" full_build_log.txt | head -30 || echo "（无 fatal error）"
+
+          echo ""
+          echo "▼▼▼ error: command ... failed（命令失败）▼▼▼"
+          grep -n "error: command" full_build_log.txt | head -20 || echo "（无 command failed）"
+
+          echo ""
+          echo "▼▼▼ ERROR: Failed building wheel▼▼▼"
+          grep -n "ERROR:.*wheel\|Failed to build\|failed-wheel" full_build_log.txt | head -20 || echo "（无 wheel 构建失败）"
+
+          echo ""
+          echo "▼▼▼ ImportError / ModuleNotFoundError▼▼▼"
+          grep -n "ImportError\|ModuleNotFoundError" full_build_log.txt | head -20 || echo "（无此类错误）"
+
+          echo ""
+          echo "▼▼▼ 最后 50 行日志（兜底）▼▼▼"
+          tail -n 50 full_build_log.txt
+
+          echo "::endgroup::"
 
       - name: Check bin directory
         if: always()
@@ -131,10 +157,3 @@ jobs:
           name: VaultApp-APK
           path: bin/*.apk
           if-no-files-found: error
-
-      - name: Upload Log on Failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-log-failure
-          path: full_build_log.txt
