@@ -24,12 +24,14 @@ jobs:
       - name: Install System Dependencies
         run: |
           sudo apt-get update
+          # 修复：从 openjdk-11 改为 openjdk-17，Gradle 9.x 要求 Java 17+
           sudo apt-get install -y \
             build-essential git zip unzip openjdk-17-jdk \
             python3-pip autoconf libtool pkg-config \
             zlib1g-dev libssl-dev libffi-dev \
             libncurses5-dev libncursesw5-dev libtinfo-dev \
             cmake libsqlite3-dev libgmp-dev libmpc-dev libmpfr-dev
+          # 确保 JAVA_HOME 指向 JDK 17
           echo "JAVA_HOME=/usr/lib/jvm/temurin-17-jdk-amd64" >> $GITHUB_ENV
           echo "/usr/lib/jvm/temurin-17-jdk-amd64/bin" >> $GITHUB_PATH
 
@@ -92,21 +94,19 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .buildozer
-          key: ${{ runner.os }}-buildozer-v9-${{ hashFiles('buildozer.spec') }}
+          key: ${{ runner.os }}-buildozer-v8-${{ hashFiles('buildozer.spec') }}
           restore-keys: |
-            ${{ runner.os }}-buildozer-v9-
+            ${{ runner.os }}-buildozer-v8-
 
       - name: Build with Buildozer
         env:
           APP_ANDROID_ACCEPT_SDK_LICENSE: 1
-          # 修复：使用绝对路径，Gradle 从 dist 子目录执行时能正确找到 keystore
-          P4A_RELEASE_KEYSTORE: ${{ github.workspace }}/my_release.keystore
+          P4A_RELEASE_KEYSTORE: my_release.keystore
           P4A_RELEASE_KEYSTORE_PASSWD: ${{ secrets.KEYSTORE_PASSWORD }}
           P4A_RELEASE_KEYALIAS: ${{ secrets.KEY_ALIAS }}
           P4A_RELEASE_KEYALIAS_PASSWD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          # 同样写到绝对路径
-          echo "${{ secrets.KEYSTORE_B64 }}" | base64 -d > "${{ github.workspace }}/my_release.keystore"
+          echo "${{ secrets.KEYSTORE_B64 }}" | base64 -d > my_release.keystore
           pip install --upgrade buildozer "Cython<3.0.0" virtualenv
           buildozer -v android release 2>&1 | tee build_log.txt
           exit ${PIPESTATUS[0]}
