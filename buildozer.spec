@@ -26,6 +26,8 @@ android.minapi = 28
 android.ndk = 25b
 android.archs = arm64-v8a
 
+android.release_artifact = apk
+
 # 将下面这一行注释掉，让 Buildozer 自动下载并接管 SDK
 # android.sdk_path = /usr/local/lib/android/sdk
 
