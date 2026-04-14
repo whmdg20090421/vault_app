@@ -4,14 +4,15 @@ package.name = vaultapp
 package.domain = org.vaultapp.v5
 source.dir = .
 source.include_exts = py,png,jpg,kv,atlas,json
-# (单选) 屏幕方向：portrait (竖屏), landscape (横屏), all (自动旋转) 
 orientation = portrait
 
 version = 1.0.0
 
+# 修复：kivy 2.3.0 + p4a v2024.01.21 存在交叉编译 bug，_clock.so 会被编译成 x86_64
+# 降级到 kivy==2.2.1 + kivymd==1.1.1，该组合与 p4a v2024.01.21 完全兼容
 requirements = python3,\
-    kivy==2.3.0,\
-    kivymd==1.2.0,\
+    kivy==2.2.1,\
+    kivymd==1.1.1,\
     cryptography==38.0.4,\
     webdav4==0.9.8,\
     pyjnius,\
@@ -30,10 +31,6 @@ android.archs = arm64-v8a
 
 android.release_artifact = apk
 
-# 将下面这一行注释掉，让 Buildozer 自动下载并接管 SDK
-# android.sdk_path = /usr/local/lib/android/sdk
-
-# 修复：所有权限必须写在一行，反斜杠换行会导致权限名带上 \n 前缀
 android.permissions = READ_EXTERNAL_STORAGE,WRITE_EXTERNAL_STORAGE,MANAGE_EXTERNAL_STORAGE,READ_MEDIA_IMAGES,READ_MEDIA_VIDEO,READ_MEDIA_AUDIO,INTERNET,FOREGROUND_SERVICE,FOREGROUND_SERVICE_DATA_SYNC,WAKE_LOCK,POST_NOTIFICATIONS,USE_BIOMETRIC,REQUEST_IGNORE_BATTERY_OPTIMIZATIONS
 
 services = KeepAliveService:core/keepalive.py
