@@ -24,12 +24,16 @@ jobs:
       - name: Install System Dependencies
         run: |
           sudo apt-get update
+          # 修复：从 openjdk-11 改为 openjdk-17，Gradle 9.x 要求 Java 17+
           sudo apt-get install -y \
-            build-essential git zip unzip openjdk-11-jdk \
+            build-essential git zip unzip openjdk-17-jdk \
             python3-pip autoconf libtool pkg-config \
             zlib1g-dev libssl-dev libffi-dev \
             libncurses5-dev libncursesw5-dev libtinfo-dev \
             cmake libsqlite3-dev libgmp-dev libmpc-dev libmpfr-dev
+          # 确保 JAVA_HOME 指向 JDK 17
+          echo "JAVA_HOME=/usr/lib/jvm/temurin-17-jdk-amd64" >> $GITHUB_ENV
+          echo "/usr/lib/jvm/temurin-17-jdk-amd64/bin" >> $GITHUB_PATH
 
       - name: Install Rust
         run: |
@@ -46,7 +50,6 @@ jobs:
           sudo ln -sf $NEW_BIN/avdmanager $OLD_BIN/avdmanager
           echo "sdkmanager 版本：$($OLD_BIN/sdkmanager --version)"
 
-      # NDK r25b 单独缓存，key 固定，只要命中就跳过下载（约 800MB）
       - name: Cache NDK r25b
         id: cache-ndk
         uses: actions/cache@v4
@@ -54,36 +57,30 @@ jobs:
           path: ~/.buildozer/android/platform/android-ndk-r25b
           key: android-ndk-r25b-linux-permanent
 
-      # 仅在缓存未命中时下载，带重试
       - name: Download NDK r25b
         if: steps.cache-ndk.outputs.cache-hit != 'true'
         run: |
           mkdir -p ~/.buildozer/android/platform
           cd /tmp
-          echo "缓存未命中，开始下载 NDK r25b..."
           for i in 1 2 3; do
-            wget -q --timeout=180 --show-progress \
+            wget -q --timeout=180 \
               "https://dl.google.com/android/repository/android-ndk-r25b-linux.zip" \
               -O ndk-r25b.zip && break
-            echo "第 $i 次失败，15 秒后重试..."
+            echo "第 $i 次失败，等待 15 秒..."
             sleep 15
           done
-          echo "解压 NDK r25b..."
           unzip -q ndk-r25b.zip -d ~/.buildozer/android/platform/
           rm ndk-r25b.zip
-          echo "NDK r25b 安装完成"
-          ls ~/.buildozer/android/platform/android-ndk-r25b/
+          echo "NDK r25b 就绪：$(ls ~/.buildozer/android/platform/android-ndk-r25b/)"
 
-      # 预下载 libffi 源码，带重试，避免 p4a 编译时 GitHub CDN 504
       - name: Pre-download libffi source
         run: |
           mkdir -p ~/.buildozer/android/packages
           cd ~/.buildozer/android/packages
           for i in 1 2 3 4 5; do
-            echo "下载 libffi，第 $i 次尝试..."
             wget -q --timeout=60 \
               "https://github.com/libffi/libffi/archive/v3.4.2.tar.gz" \
-              -O "libffi-v3.4.2.tar.gz" && echo "下载成功" && break
+              -O "libffi-v3.4.2.tar.gz" && echo "libffi 下载成功" && break
             sleep 15
           done
 
@@ -97,9 +94,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .buildozer
-          key: ${{ runner.os }}-buildozer-v7-${{ hashFiles('buildozer.spec') }}
+          key: ${{ runner.os }}-buildozer-v8-${{ hashFiles('buildozer.spec') }}
           restore-keys: |
-            ${{ runner.os }}-buildozer-v7-
+            ${{ runner.os }}-buildozer-v8-
 
       - name: Build with Buildozer
         env:
