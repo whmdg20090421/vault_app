@@ -7,11 +7,6 @@ jobs:
   build:
     runs-on: ubuntu-22.04
 
-    env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-      ACTIONS_STEP_DEBUG: true
-      ACTIONS_RUNNER_DEBUG: true
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -31,104 +26,69 @@ jobs:
             libncurses5-dev libncursesw5-dev libtinfo-dev \
             cmake libsqlite3-dev libgmp-dev libmpc-dev libmpfr-dev
           echo "JAVA_HOME=/usr/lib/jvm/temurin-17-jdk-amd64" >> $GITHUB_ENV
-          echo "/usr/lib/jvm/temurin-17-jdk-amd64/bin" >> $GITHUB_PATH
 
       - name: Install Rust
         run: |
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
-      - name: Fix Android SDK Tool Paths
-        run: |
-          SDK=/usr/local/lib/android/sdk
-          NEW_BIN=$SDK/cmdline-tools/latest/bin
-          OLD_BIN=$SDK/tools/bin
-          sudo mkdir -p $OLD_BIN
-          sudo ln -sf $NEW_BIN/sdkmanager $OLD_BIN/sdkmanager
-          sudo ln -sf $NEW_BIN/avdmanager $OLD_BIN/avdmanager
-          echo "sdkmanager 版本：$($OLD_BIN/sdkmanager --version)"
-
-      - name: Cache NDK r25b
-        id: cache-ndk
+      - name: Cache NDK & Packages
         uses: actions/cache@v4
         with:
-          path: ~/.buildozer/android/platform/android-ndk-r25b
-          key: android-ndk-r25b-linux-permanent
-
-      - name: Download NDK r25b
-        if: steps.cache-ndk.outputs.cache-hit != 'true'
-        run: |
-          mkdir -p ~/.buildozer/android/platform
-          cd /tmp
-          for i in 1 2 3; do
-            wget -q --timeout=180 \
-              "https://dl.google.com/android/repository/android-ndk-r25b-linux.zip" \
-              -O ndk-r25b.zip && break
-            echo "第 $i 次失败，等待 15 秒..."
-            sleep 15
-          done
-          unzip -q ndk-r25b.zip -d ~/.buildozer/android/platform/
-          rm ndk-r25b.zip
-          echo "NDK r25b 就绪：$(ls ~/.buildozer/android/platform/android-ndk-r25b/)"
-
-      - name: Pre-download libffi source
-        run: |
-          mkdir -p ~/.buildozer/android/packages
-          cd ~/.buildozer/android/packages
-          for i in 1 2 3 4 5; do
-            wget -q --timeout=60 \
-              "https://github.com/libffi/libffi/archive/v3.4.2.tar.gz" \
-              -O "libffi-v3.4.2.tar.gz" && echo "libffi 下载成功" && break
-            sleep 15
-          done
-
-      - name: Cache p4a Packages
-        uses: actions/cache@v4
-        with:
-          path: ~/.buildozer/android/packages
-          key: p4a-packages-libffi342-stable
-
-      - name: Cache Buildozer Build
-        uses: actions/cache@v4
-        with:
-          path: .buildozer
-          key: ${{ runner.os }}-buildozer-v9-${{ hashFiles('buildozer.spec') }}
+          path: |
+            ~/.buildozer
+            .buildozer
+          key: ${{ runner.os }}-buildozer-v10-${{ hashFiles('buildozer.spec') }}
           restore-keys: |
-            ${{ runner.os }}-buildozer-v9-
+            ${{ runner.os }}-buildozer-v10-
 
       - name: Build with Buildozer
         env:
           APP_ANDROID_ACCEPT_SDK_LICENSE: 1
-          # 修复：使用绝对路径，Gradle 从 dist 子目录执行时能正确找到 keystore
           P4A_RELEASE_KEYSTORE: ${{ github.workspace }}/my_release.keystore
           P4A_RELEASE_KEYSTORE_PASSWD: ${{ secrets.KEYSTORE_PASSWORD }}
           P4A_RELEASE_KEYALIAS: ${{ secrets.KEY_ALIAS }}
           P4A_RELEASE_KEYALIAS_PASSWD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          # 同样写到绝对路径
+          # 1. 准备 Keystore
           echo "${{ secrets.KEYSTORE_B64 }}" | base64 -d > "${{ github.workspace }}/my_release.keystore"
+          
+          # 2. 安装必要工具
           pip install --upgrade buildozer "Cython<3.0.0" virtualenv
-          buildozer -v android release 2>&1 | tee build_log.txt
-          exit ${PIPESTATUS[0]}
+          
+          # 3. 开始构建（使用 Group 折叠日志）
+          echo "::group::🚀 点击展开详细编译过程"
+          # 运行构建，保存完整日志，但在控制台依然实时输出以便查看进度
+          buildozer -v android release 2>&1 | tee full_build_log.txt
+          # 获取 buildozer 的真实退出状态码
+          BUILD_STATUS=${PIPESTATUS[0]}
+          echo "::endgroup::"
+          
+          # 4. 智能结果处理
+          if [ $BUILD_STATUS -ne 0 ]; then
+            echo "::error::❌ 编译失败！以下是最后 100 行错误日志："
+            tail -n 100 full_build_log.txt
+            exit $BUILD_STATUS
+          fi
 
-      - name: Upload Build Log on Failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-log-failure
-          path: build_log.txt
+      - name: Check bin directory
+        if: always()
+        run: |
+          echo "==== 检查生成文件 ===="
+          ls -R bin/ || echo "bin 目录为空"
 
-      - name: Upload P4A Log on Failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: p4a-log-failure
-          path: .buildozer/android/platform/build-arm64-v8a/dists/vaultapp/build.log
-          if-no-files-found: ignore
-
-      - name: Upload APK
+      - name: Upload Artifacts
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: VaultApp-Signed-APK
-          path: bin/*.apk
+          name: VaultApp-Packages
+          # 搜索所有 apk 和 aab 文件
+          path: bin/*.[ap][ka][b] 
+          if-no-files-found: error
+
+      - name: Upload Full Log on Failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: full-build-log
+          path: full_build_log.txt

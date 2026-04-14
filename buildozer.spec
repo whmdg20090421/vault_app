@@ -39,5 +39,5 @@ p4a.branch = v2024.01.21
 
 
 [buildozer]
-log_level = 2
+log_level = 1
 warn_on_root = 1
