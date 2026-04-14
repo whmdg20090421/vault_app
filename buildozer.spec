@@ -4,6 +4,8 @@ package.name = vaultapp
 package.domain = org.vaultapp.v5
 source.dir = .
 source.include_exts = py,png,jpg,kv,atlas,json
+# (单选) 屏幕方向：portrait (竖屏), landscape (横屏), all (自动旋转) 
+orientation = portrait
 
 version = 1.0.0
 
