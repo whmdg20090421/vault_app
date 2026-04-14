@@ -56,11 +56,9 @@ jobs:
           # 2. 安装必要工具
           pip install --upgrade buildozer "Cython<3.0.0" virtualenv
           
-          # 3. 开始构建（使用 Group 折叠日志）
+          # 3. 开始构建
           echo "::group::🚀 点击展开详细编译过程"
-          # 运行构建，保存完整日志，但在控制台依然实时输出以便查看进度
           buildozer -v android release 2>&1 | tee full_build_log.txt
-          # 获取 buildozer 的真实退出状态码
           BUILD_STATUS=${PIPESTATUS[0]}
           echo "::endgroup::"
           
@@ -82,8 +80,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: VaultApp-Packages
-          # 搜索所有 apk 和 aab 文件
-          path: bin/*.[ap][ka][b] 
+          # 彻底修复匹配规则：明确指定上传 apk 和 aab
+          path: |
+            bin/*.apk
+            bin/*.aab
           if-no-files-found: error
 
       - name: Upload Full Log on Failure
