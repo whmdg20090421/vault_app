@@ -69,15 +69,28 @@ jobs:
           rm ndk-r25b.zip
           echo "NDK r25b 就绪"
 
-      # 修复核心：编译产物缓存与 NDK 缓存完全分离
-      # 升级到 arm64-v1，强制丢弃含有 x86_64 .so 文件的所有旧缓存
+      # v1 → v2：强制丢弃所有旧缓存（含 x86_64 .so 的污染版本）
+      # 删除 restore-keys：禁止跨 spec 版本的缓存回退，防止 p4a 信任错误架构文件
       - name: Cache Buildozer Build Output
         uses: actions/cache@v4
         with:
           path: .buildozer
-          key: ${{ runner.os }}-build-arm64-v1-${{ hashFiles('buildozer.spec') }}
-          restore-keys: |
-            ${{ runner.os }}-build-arm64-v1-
+          key: ${{ runner.os }}-build-arm64-v2-${{ hashFiles('buildozer.spec') }}
+
+      # 安全网：即使缓存中混入了 x86_64 .so，构建前强制清除
+      # p4a 检查文件存在性而非 ELF 架构，必须提前删除才能触发重新编译
+      - name: Purge x86_64 .so files from stale cache
+        run: |
+          echo "=== 扫描并清除 x86_64 .so 文件 ==="
+          found=0
+          while IFS= read -r f; do
+            if file "$f" 2>/dev/null | grep -q "x86-64"; then
+              echo "❌ 错误架构，删除: $f"
+              rm "$f"
+              found=$((found + 1))
+            fi
+          done < <(find .buildozer -name "*.so" -path "*/python-installs/*" 2>/dev/null)
+          echo "共清除 $found 个 x86_64 .so 文件"
 
       - name: Build with Buildozer
         env:
