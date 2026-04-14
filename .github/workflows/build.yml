@@ -22,15 +22,18 @@ jobs:
       - name: Install System Dependencies
         run: |
           sudo apt-get update
+          # 【修复】：将 openjdk-20-jdk 改回官方支持的最稳定版本 openjdk-17-jdk
           sudo apt-get install -y \
-            build-essential git zip unzip openjdk-20-jdk \
+            build-essential git zip unzip openjdk-17-jdk \
             python3-pip autoconf libtool pkg-config \
             zlib1g-dev libssl-dev libffi-dev \
             libncurses5-dev libncursesw5-dev libtinfo-dev \
             cmake libsqlite3-dev libgmp-dev libmpc-dev libmpfr-dev \
             libgl1-mesa-dev
-          echo "JAVA_HOME=/usr/lib/jvm/java-20-openjdk-amd64" >> $GITHUB_ENV
-          echo "/usr/lib/jvm/java-20-openjdk-amd64/bin" >> $GITHUB_PATH
+          
+          # 同步修改 JAVA_HOME 的路径版本
+          echo "JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64" >> $GITHUB_ENV
+          echo "/usr/lib/jvm/java-17-openjdk-amd64/bin" >> $GITHUB_PATH
 
       - name: Install Rust
         run: |
