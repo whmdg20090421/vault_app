@@ -32,15 +32,16 @@ jobs:
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
+      # 【修复核心】：将 v10 改为 v11，强制 GitHub 放弃可能损坏的旧缓存，重新编译底层 C 代码
       - name: Cache NDK & Packages
         uses: actions/cache@v4
         with:
           path: |
             ~/.buildozer
             .buildozer
-          key: ${{ runner.os }}-buildozer-v10-${{ hashFiles('buildozer.spec') }}
+          key: ${{ runner.os }}-buildozer-v11-${{ hashFiles('buildozer.spec') }}
           restore-keys: |
-            ${{ runner.os }}-buildozer-v10-
+            ${{ runner.os }}-buildozer-v11-
 
       - name: Build with Buildozer
         env:
@@ -50,19 +51,14 @@ jobs:
           P4A_RELEASE_KEYALIAS: ${{ secrets.KEY_ALIAS }}
           P4A_RELEASE_KEYALIAS_PASSWD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          # 1. 准备 Keystore
           echo "${{ secrets.KEYSTORE_B64 }}" | base64 -d > "${{ github.workspace }}/my_release.keystore"
-          
-          # 2. 安装必要工具
           pip install --upgrade buildozer "Cython<3.0.0" virtualenv
           
-          # 3. 开始构建
           echo "::group::🚀 点击展开详细编译过程"
           buildozer -v android release 2>&1 | tee full_build_log.txt
           BUILD_STATUS=${PIPESTATUS[0]}
           echo "::endgroup::"
           
-          # 4. 智能结果处理
           if [ $BUILD_STATUS -ne 0 ]; then
             echo "::error::❌ 编译失败！以下是最后 100 行错误日志："
             tail -n 100 full_build_log.txt
@@ -80,7 +76,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: VaultApp-Packages
-          # 彻底修复匹配规则：明确指定上传 apk 和 aab
           path: |
             bin/*.apk
             bin/*.aab
