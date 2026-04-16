@@ -6,6 +6,7 @@
 ## What Changes
 - 修改 `lib/encryption/encryption_page.dart`，使其展示已配置的“加密文件夹”（Vault）列表。底部添加一个全局加号按钮（FAB），点击后调用目录选择器选择一个本地文件夹。
 - 新增 `lib/encryption/vault_config_page.dart`，用户选择文件夹后跳转至此页。页面包含：
+  - 右上角提供一个“测试（Benchmark）”图标。点击后将生成一个 500MB 的临时测试文件，允许用户选择加密算法并执行加密测试，最终给出该算法的平均加密速度（MB/s），以帮助用户评估性能。
   - 保险箱名称输入框。
   - 密码输入及确认框。
   - 加密模式选择：如 `AES-256-GCM`，`ChaCha20-Poly1305` 等。
@@ -33,7 +34,11 @@
 - **WHEN** 用户选择了一个目录并填写了名称、密码、加密算法及 KDF 参数
 - **THEN** 系统根据密码及 KDF 派生密钥，加密一段校验字符串，并将完整配置明文（含 KDF 参数、salt 和校验密文）保存至 `vault_config.json`，然后在列表中展示该保险箱。
 
-### Requirement: Vault Unlock and Explorer
+### Requirement: Encryption Performance Benchmark
+系统应当提供一个测速工具，供用户在配置页面评估所选加密算法的实际速度。
+#### Scenario: Success case
+- **WHEN** 用户在配置页面点击右上角的测试图标并选择某个算法（如 ChaCha20）
+- **THEN** 系统在临时目录创建一个 500MB 文件并执行流式加密，最终弹窗显示加密耗时与平均速度（如 `150 MB/s`），避免 OOM 的同时给出准确参考。
 系统在用户点击保险箱时必须要求输入密码，并在解密验证成功后进入文件管理器界面。
 #### Scenario: Success case
 - **WHEN** 用户点击保险箱并输入正确密码
