@@ -31,6 +31,7 @@ jobs:
           cache: true
 
       - name: Write Android signing files
+        if: ${{ secrets.KEY_STORE_BASE64 != '' && secrets.KEY_ALIAS != '' && secrets.KEY_PASSWORD != '' && secrets.STORE_PASSWORD != '' }}
         shell: bash
         env:
           KEY_STORE_BASE64: ${{ secrets.KEY_STORE_BASE64 }}
