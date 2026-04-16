@@ -8,6 +8,8 @@ import 'webdav_client_service.dart';
 
 import '../vfs/virtual_file_system.dart';
 import '../vfs/standard_vfs.dart';
+import '../services/sync_storage_service.dart';
+import '../models/sync_task.dart';
 
 class WebDavBrowserPage extends StatefulWidget {
   const WebDavBrowserPage({
@@ -21,6 +23,18 @@ class WebDavBrowserPage extends StatefulWidget {
   State<WebDavBrowserPage> createState() => _WebDavBrowserPageState();
 }
 
+String _formatBytes(int bytes) {
+  if (bytes <= 0) return '0 B';
+  const suffixes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
+  int i = 0;
+  double d = bytes.toDouble();
+  while (d >= 1024 && i < suffixes.length - 1) {
+    d /= 1024;
+    i++;
+  }
+  return '${d.toStringAsFixed(2)} ${suffixes[i]}';
+}
+
 class _WebDavBrowserPageState extends State<WebDavBrowserPage> {
   VirtualFileSystem? _vfs;
   bool _isLoading = true;
@@ -28,6 +42,7 @@ class _WebDavBrowserPageState extends State<WebDavBrowserPage> {
 
   List<String> _pathSegments = [];
   List<VfsNode> _files = [];
+  Set<String> _syncedPaths = {};
 
   String get _currentPath {
     if (_pathSegments.isEmpty) return '/';
@@ -38,6 +53,32 @@ class _WebDavBrowserPageState extends State<WebDavBrowserPage> {
   void initState() {
     super.initState();
     _initClient();
+  }
+
+  Future<void> _loadSyncStatus() async {
+    try {
+      final syncStorage = SyncStorageService();
+      final tasks = await syncStorage.loadTasks();
+      final syncedPaths = <String>{};
+      
+      for (final task in tasks) {
+        if (task.cloudWebDavId == widget.config.id) {
+          for (final item in task.items) {
+            if (item.status == SyncStatus.completed) {
+              syncedPaths.add(item.path);
+            }
+          }
+        }
+      }
+      
+      if (mounted) {
+        setState(() {
+          _syncedPaths = syncedPaths;
+        });
+      }
+    } catch (e) {
+      // Ignore sync status load error
+    }
   }
 
   Future<void> _initClient() async {
@@ -67,12 +108,15 @@ class _WebDavBrowserPageState extends State<WebDavBrowserPage> {
   Future<void> _loadCurrentPath() async {
     if (_vfs == null) return;
     
-    setState(() {
-      _isLoading = true;
-      _error = '';
-    });
+    if (mounted) {
+      setState(() {
+        _isLoading = true;
+        _error = '';
+      });
+    }
 
     try {
+      await _loadSyncStatus();
       final list = await _vfs!.list(_currentPath);
       
       // Sort: folders first, then alphabetically
@@ -150,11 +194,11 @@ class _WebDavBrowserPageState extends State<WebDavBrowserPage> {
     ).whenComplete(() => nameController.dispose());
 
     if (name != null && name.trim().isNotEmpty) {
-      setState(() => _isLoading = true);
+      if (mounted) setState(() => _isLoading = true);
       try {
         final newPath = '$_currentPath${name.trim()}/'.replaceAll('//', '/');
         await _vfs!.mkdir(newPath);
-        await _loadCurrentPath();
+        if (mounted) await _loadCurrentPath();
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('创建文件夹失败：${translateWebDavError(e)}')));
@@ -170,11 +214,11 @@ class _WebDavBrowserPageState extends State<WebDavBrowserPage> {
       final file = File(result.files.single.path!);
       final fileName = result.files.single.name;
       
-      setState(() => _isLoading = true);
+      if (mounted) setState(() => _isLoading = true);
       try {
         final remotePath = '$_currentPath$fileName'.replaceAll('//', '/');
         await _vfs!.upload(file.path, remotePath);
-        await _loadCurrentPath();
+        if (mounted) await _loadCurrentPath();
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('上传文件失败：${translateWebDavError(e)}')));
@@ -204,10 +248,10 @@ class _WebDavBrowserPageState extends State<WebDavBrowserPage> {
     );
 
     if (confirm == true) {
-      setState(() => _isLoading = true);
+      if (mounted) setState(() => _isLoading = true);
       try {
         await _vfs!.delete(file.path);
-        await _loadCurrentPath();
+        if (mounted) await _loadCurrentPath();
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('删除失败：${translateWebDavError(e)}')));
@@ -242,7 +286,7 @@ class _WebDavBrowserPageState extends State<WebDavBrowserPage> {
     ).whenComplete(() => nameController.dispose());
 
     if (newName != null && newName.trim().isNotEmpty && newName != file.name) {
-      setState(() => _isLoading = true);
+      if (mounted) setState(() => _isLoading = true);
       try {
         String p = file.path;
         if (p.endsWith('/')) {
@@ -257,7 +301,7 @@ class _WebDavBrowserPageState extends State<WebDavBrowserPage> {
         }
         
         await _vfs!.rename(file.path, newPath);
-        await _loadCurrentPath();
+        if (mounted) await _loadCurrentPath();
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('重命名失败：${translateWebDavError(e)}')));
@@ -344,13 +388,49 @@ class _WebDavBrowserPageState extends State<WebDavBrowserPage> {
                                 itemBuilder: (context, index) {
                                   final file = _files[index];
                                   final isDir = file.isDirectory;
+                                  
+                                  // 检查同步状态
+                                  bool isSynced = false;
+                                  if (!isDir) {
+                                    String cleanPath = file.path;
+                                    if (cleanPath.startsWith('/')) {
+                                      cleanPath = cleanPath.substring(1);
+                                    }
+                                    isSynced = _syncedPaths.contains(cleanPath) || _syncedPaths.contains(file.path);
+                                  }
+
                                   return ListTile(
                                     leading: Icon(
                                       isDir ? Icons.folder : Icons.insert_drive_file,
                                       color: isDir ? Colors.orange : Colors.blue,
                                     ),
                                     title: Text(file.name),
-                                    subtitle: isDir ? null : Text('${file.size} bytes'),
+                                    subtitle: isDir ? null : Row(
+                                      children: [
+                                        Text(_formatBytes(file.size)),
+                                        const SizedBox(width: 8),
+                                        if (isSynced)
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                            decoration: BoxDecoration(
+                                              color: Colors.green.withOpacity(0.1),
+                                              borderRadius: BorderRadius.circular(4),
+                                              border: Border.all(color: Colors.green.withOpacity(0.5)),
+                                            ),
+                                            child: const Text('已同步', style: TextStyle(fontSize: 10, color: Colors.green)),
+                                          )
+                                        else
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                            decoration: BoxDecoration(
+                                              color: Colors.grey.withOpacity(0.1),
+                                              borderRadius: BorderRadius.circular(4),
+                                              border: Border.all(color: Colors.grey.withOpacity(0.5)),
+                                            ),
+                                            child: const Text('未同步', style: TextStyle(fontSize: 10, color: Colors.grey)),
+                                          ),
+                                      ],
+                                    ),
                                     onTap: isDir ? () => _navigateTo(file.name) : null,
                                     trailing: PopupMenuButton<String>(
                                       onSelected: (value) {

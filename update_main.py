@@ -1,25 +1,17 @@
-import 'dart:io';
+import re
+
+with open('lib/main.dart', 'r', encoding='utf-8') as f:
+    content = f.read()
+
+# 1. Add BackgroundSettings and imports
+imports = """import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+"""
+content = re.sub(r"import 'dart:ui';\n+import 'package:flutter/material\.dart';", imports, content)
 
-
-import 'services/stats_service.dart';
-import 'cloud_drive/cloud_drive_page.dart';
-import 'encryption/encryption_page.dart';
-import 'cloud_drive/cloud_drive_progress_manager.dart';
-import 'cloud_drive/cloud_drive_progress_panel.dart';
-import 'error_reporter.dart';
-import 'about_page.dart';
-import 'home_page.dart';
-
-extension ThemeCyberpunk on ThemeData {
-  bool get isCyberpunk => brightness == Brightness.dark && colorScheme.primary.value == 0xFF00E5FF;
-}
-
-
-enum AppTheme { defaultTheme, cyberpunk, pureBlack }
-
+bg_settings = """
 class BackgroundSettings extends ChangeNotifier {
   bool _enabled = false;
   String? _imagePath;
@@ -74,34 +66,22 @@ class BackgroundSettings extends ChangeNotifier {
     await prefs.setDouble('bg_ui_opacity', val);
   }
 }
+"""
 
+content = re.sub(r"enum AppTheme \{ defaultTheme, cyberpunk \}", "enum AppTheme { defaultTheme, cyberpunk, pureBlack }\n" + bg_settings, content)
 
-final ValueNotifier<AppTheme> appTheme = ValueNotifier(AppTheme.defaultTheme);
+# 2. Remove CyberpunkBorder and its references
+content = re.sub(r"class CyberpunkBorder extends OutlinedBorder \{[\s\S]*?\}\n\n", "", content)
 
-Future<void> main() async {
+# 3. Update main()
+main_init = """Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await BackgroundSettings.instance.init();
-  await ErrorReporter.instance.initialize();
-  await StatsService().init();
+  await ErrorReporter.instance.initialize();"""
+content = re.sub(r"Future<void> main\(\) async \{\n  WidgetsFlutterBinding\.ensureInitialized\(\);\n  await ErrorReporter\.instance\.initialize\(\);", main_init, content)
 
-  FlutterError.onError = (details) {
-    FlutterError.presentError(details);
-    ErrorReporter.instance.writeFlutterError(details);
-  };
-
-  PlatformDispatcher.instance.onError = (error, stack) {
-    ErrorReporter.instance.writeError(error, stack);
-    return true;
-  };
-
-  runApp(const TianyanApp());
-}
-
-class TianyanApp extends StatelessWidget {
-  const TianyanApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
+# 4. Update TianyanApp
+app_build = """  Widget build(BuildContext context) {
     return ListenableBuilder(
       listenable: Listenable.merge([appTheme, BackgroundSettings.instance]),
       builder: (context, _) {
@@ -152,10 +132,11 @@ class TianyanApp extends StatelessWidget {
         );
       },
     );
-  }
-}
+  }"""
+content = re.sub(r"  Widget build\(BuildContext context\) \{[\s\S]*?  \}", app_build, content, count=1)
 
-ThemeData _buildTheme(AppTheme theme, bool bgEnabled, double uiOpacity) {
+# 5. Update _buildTheme
+build_theme_new = """ThemeData _buildTheme(AppTheme theme, bool bgEnabled, double uiOpacity) {
   Color applyUiOpacity(Color color) {
     if (!bgEnabled) return color;
     return color.withValues(alpha: uiOpacity);
@@ -486,117 +467,11 @@ ThemeData _buildTheme(AppTheme theme, bool bgEnabled, double uiOpacity) {
       backgroundColor: applyUiOpacity(lightScheme.surfaceContainer),
     ),
   );
-}
+}"""
+content = re.sub(r"ThemeData _buildTheme\(AppTheme theme\) \{[\s\S]*?\}", build_theme_new, content)
 
-class MainShell extends StatefulWidget {
-  const MainShell({super.key});
-
-  @override
-  State<MainShell> createState() => _MainShellState();
-}
-
-class _MainShellState extends State<MainShell> {
-  int _index = 0;
-
-  @override
-  Widget build(BuildContext context) {
-    final pages = const [
-      HomePage(),
-      CloudDrivePage(),
-      EncryptionPage(),
-      SettingsPage(),
-    ];
-
-    final titles = const ['主页', '云盘', '加密', '设置'];
-
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(titles[_index].toUpperCase()),
-        centerTitle: true,
-      ),
-      body: IndexedStack(index: _index, children: pages),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _index,
-        onDestinationSelected: (value) {
-          if (value == 1 && _index == 1) {
-            showCloudDriveProgressPanel(context);
-          } else {
-            setState(() => _index = value);
-          }
-        },
-        destinations: [
-          const NavigationDestination(
-            icon: Icon(Icons.home_rounded),
-            label: '主页',
-          ),
-          NavigationDestination(
-            icon: ListenableBuilder(
-              listenable: CloudDriveProgressManager.instance,
-              builder: (context, _) {
-                final manager = CloudDriveProgressManager.instance;
-                if (manager.hasActiveTasks) {
-                  return const Badge(
-                    label: Icon(
-                      Icons.sync_rounded,
-                      size: 12,
-                      color: Colors.white,
-                    ),
-                    child: Icon(Icons.cloud_sync_rounded),
-                  );
-                }
-                return const Icon(Icons.cloud_rounded);
-              },
-            ),
-            label: '云盘',
-          ),
-          const NavigationDestination(
-            icon: Icon(Icons.lock_rounded),
-            label: '加密',
-          ),
-          const NavigationDestination(
-            icon: Icon(Icons.settings_rounded),
-            label: '设置',
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-
-class SettingsPage extends StatelessWidget {
-  const SettingsPage({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return ValueListenableBuilder<AppTheme>(
-      valueListenable: appTheme,
-      builder: (context, theme, _) {
-        return ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            ListTile(
-              leading: const Icon(Icons.info_outline_rounded),
-              title: const Text('关于'),
-              trailing: const Icon(Icons.chevron_right_rounded),
-              contentPadding: EdgeInsets.zero,
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const AboutPage()),
-                );
-              },
-            ),
-            const Divider(),
-            const SizedBox(height: 8),
-            Text(
-              '主题'.toUpperCase(),
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-            ),
-            const SizedBox(height: 12),
-            SegmentedButton<AppTheme>(
+# 6. Add pureBlack to SegmentedButton in SettingsPage
+settings_segment = """            SegmentedButton<AppTheme>(
               segments: const [
                 ButtonSegment(
                   value: AppTheme.defaultTheme,
@@ -613,14 +488,10 @@ class SettingsPage extends StatelessWidget {
                   label: Text('极简黑'),
                   icon: Icon(Icons.dark_mode_rounded),
                 ),
-              ],
-              selected: {theme},
-              onSelectionChanged: (selection) => appTheme.value = selection.first,
-              showSelectedIcon: true,
-            ),
-          ],
-        );
-      },
-    );
-  }
-}
+              ],"""
+content = re.sub(r"            SegmentedButton<AppTheme>\(\n              segments: const \[\n                ButtonSegment\(\n                  value: AppTheme\.defaultTheme,\n                  label: Text\('默认主题'\),\n                  icon: Icon\(Icons\.auto_awesome_rounded\),\n                \),\n                ButtonSegment\(\n                  value: AppTheme\.cyberpunk,\n                  label: Text\('赛博朋克'\),\n                  icon: Icon\(Icons\.bolt_rounded\),\n                \),\n              \],", settings_segment, content)
+
+
+with open('lib/main.dart', 'w', encoding='utf-8') as f:
+    f.write(content)
+

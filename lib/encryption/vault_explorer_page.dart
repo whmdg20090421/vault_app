@@ -137,7 +137,7 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
   }
 
   Future<void> _loadFiles() async {
-    setState(() => _isLoading = true);
+    if (mounted) setState(() => _isLoading = true);
     try {
       final files = await _vfs.list(_currentPath);
       // Sort: directories first, then files
@@ -476,12 +476,35 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
     );
   }
 
+  String _formatBytes(int bytes) {
+    if (bytes <= 0) return '0 B';
+    const suffixes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
+    int i = 0;
+    double d = bytes.toDouble();
+    while (d >= 1024 && i < suffixes.length - 1) {
+      d /= 1024;
+      i++;
+    }
+    return '${d.toStringAsFixed(2)} ${suffixes[i]}';
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Scaffold(
-      appBar: AppBar(
+    return PopScope(
+      canPop: _currentPath == '/',
+      onPopInvoked: (didPop) {
+        if (!didPop && _currentPath != '/') {
+          setState(() {
+            _currentPath = p.dirname(_currentPath).replaceAll(r'\', '/');
+            if (_currentPath.isEmpty) _currentPath = '/';
+          });
+          _loadFiles();
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(
         title: Text(_currentPath == '/' ? widget.vaultConfig.name.toUpperCase() : p.basename(_currentPath)),
         leading: _currentPath != '/'
             ? IconButton(
@@ -527,8 +550,12 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
                         file.isDirectory ? Icons.folder : Icons.insert_drive_file,
                         color: file.isDirectory ? theme.colorScheme.primary : theme.colorScheme.secondary,
                       ),
-                      title: Text(file.name),
-                      subtitle: file.isDirectory ? null : Text('${file.size} bytes'),
+                      title: Text(
+                        file.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      subtitle: file.isDirectory ? null : Text(_formatBytes(file.size)),
                       onTap: () {
                         if (file.isDirectory) {
                           setState(() {
@@ -543,6 +570,7 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
                   },
                 ),
       floatingActionButton: _buildExpandableFab(),
+    ),
     );
   }
 }

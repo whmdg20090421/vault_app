@@ -68,7 +68,7 @@ class _SyncConfigPageState extends State<SyncConfigPage> {
   }
 
   Future<void> _loadVaults() async {
-    setState(() => _loadingVaults = true);
+    if (mounted) setState(() => _loadingVaults = true);
     try {
       final prefs = await SharedPreferences.getInstance();
       final paths = prefs.getStringList('vault_paths') ?? [];
@@ -96,7 +96,7 @@ class _SyncConfigPageState extends State<SyncConfigPage> {
   }
 
   Future<void> _loadWebDavConfigs() async {
-    setState(() => _loadingWebDavConfigs = true);
+    if (mounted) setState(() => _loadingWebDavConfigs = true);
     try {
       final repo = WebDavConfigRepository();
       final configs = await repo.listConfigs();
@@ -207,7 +207,7 @@ class _SyncConfigPageState extends State<SyncConfigPage> {
   // --- Step 2 Actions ---
   Future<void> _loadLocalDirs() async {
     if (_localVfs == null) return;
-    setState(() => _loadingLocalDirs = true);
+    if (mounted) setState(() => _loadingLocalDirs = true);
     try {
       final files = await _localVfs!.list(_localPath);
       final dirs = files.where((f) => f.isDirectory).toList();
@@ -267,7 +267,7 @@ class _SyncConfigPageState extends State<SyncConfigPage> {
 
   Future<void> _loadCloudDirs() async {
     if (_cloudVfs == null) return;
-    setState(() => _loadingCloudDirs = true);
+    if (mounted) setState(() => _loadingCloudDirs = true);
     try {
       final files = await _cloudVfs!.list(_cloudPath);
       final dirs = files.where((f) => f.isDirectory).toList();
@@ -302,7 +302,7 @@ class _SyncConfigPageState extends State<SyncConfigPage> {
 
   Future<void> _autoMatchCloudFolder() async {
     if (_cloudVfs == null) return;
-    setState(() => _loadingCloudDirs = true);
+    if (mounted) setState(() => _loadingCloudDirs = true);
     try {
       // 尝试访问与本地相同的路径
       String targetPath = _selectedLocalFolder;

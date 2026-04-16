@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'package:webdav_client/webdav_client.dart' as webdav;
 
 import '../cloud_drive/webdav_client_service.dart';
 import 'virtual_file_system.dart';
@@ -9,13 +8,13 @@ class StandardVfs implements VirtualFileSystem {
 
   StandardVfs({required this.client});
 
-  VfsNode _mapWebDavFile(webdav.File file) {
+  VfsNode _mapWebDavFile(WebDavFile file) {
     return VfsNode(
-      name: file.name ?? 'unknown',
-      path: file.path ?? '/',
-      isDirectory: file.isDir ?? false,
-      size: file.size ?? 0,
-      lastModified: file.mTime,
+      name: file.name,
+      path: file.path,
+      isDirectory: file.isDirectory,
+      size: file.size,
+      lastModified: file.lastModified,
     );
   }
 
@@ -23,8 +22,8 @@ class StandardVfs implements VirtualFileSystem {
   Future<List<VfsNode>> list(String path) async {
     final list = await client.readDir(path);
     // Remove the directory itself from the listing if present
-    list.removeWhere((file) => file == null || file.path == path || file.path == '$path/');
-    return list.where((f) => f != null).map((f) => _mapWebDavFile(f!)).toList();
+    list.removeWhere((file) => file.path == path || file.path == '$path/');
+    return list.map((f) => _mapWebDavFile(f)).toList();
   }
 
   @override

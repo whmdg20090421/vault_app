@@ -39,9 +39,11 @@ class _EncryptionPageState extends State<EncryptionPage> {
   }
 
   Future<void> _loadVaults() async {
-    setState(() {
-      _isLoading = true;
-    });
+    if (mounted) {
+      setState(() {
+        _isLoading = true;
+      });
+    }
 
     try {
       final prefs = await SharedPreferences.getInstance();

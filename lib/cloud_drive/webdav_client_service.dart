@@ -1,6 +1,22 @@
 import 'dart:convert';
 import 'dart:io';
-import 'package:webdav_client/webdav_client.dart' as webdav;
+import 'package:xml/xml.dart';
+
+class WebDavFile {
+  final String name;
+  final String path;
+  final bool isDirectory;
+  final int size;
+  final DateTime? lastModified;
+
+  WebDavFile({
+    required this.name,
+    required this.path,
+    required this.isDirectory,
+    required this.size,
+    this.lastModified,
+  });
+}
 
 String translateWebDavError(Object error) {
   final errStr = error.toString();
@@ -57,31 +73,108 @@ class WebDavClientService {
     required this.url,
     required this.username,
     required this.password,
-  }) : _client = webdav.newClient(
-          url,
-          user: username,
-          password: password,
-          debug: false,
-        );
+  });
 
   final String url;
   final String username;
   final String password;
-  final webdav.Client _client;
+
+  /// Custom HttpClient for streaming and range requests
+  Future<HttpClientRequest> createRequest(String method, String path) async {
+    final client = HttpClient();
+    client.badCertificateCallback = (X509Certificate cert, String host, int port) => true; // Ignore SSL errors
+    
+    String fullUrl = url;
+    if (fullUrl.endsWith('/')) {
+      fullUrl = fullUrl.substring(0, fullUrl.length - 1);
+    }
+    if (!path.startsWith('/')) {
+      path = '/$path';
+    }
+    // Encode path segments to handle spaces and special characters
+    final segments = path.split('/').map((s) => s.isEmpty ? '' : Uri.encodeComponent(s)).join('/');
+    final uri = Uri.parse(fullUrl + segments);
+    final request = await client.openUrl(method, uri);
+    final auth = 'Basic ${base64Encode(utf8.encode('$username:$password'))}';
+    request.headers.add('Authorization', auth);
+    return request;
+  }
 
   /// PROPFIND: Get list of files in a directory
-  Future<List<webdav.File>> readDir(String path) async {
-    return _client.readDir(path);
+  Future<List<WebDavFile>> readDir(String path) async {
+    final req = await createRequest('PROPFIND', path);
+    req.headers.set('Depth', '1');
+    final resp = await req.close();
+    if (resp.statusCode >= 400) {
+      throw Exception('Failed to read directory: ${resp.statusCode}');
+    }
+    
+    final body = await resp.transform(utf8.decoder).join();
+    final document = XmlDocument.parse(body);
+    final responses = document.findAllElements('d:response').toList();
+    if (responses.isEmpty) {
+      responses.addAll(document.findAllElements('response'));
+    }
+    
+    List<WebDavFile> files = [];
+    for (var r in responses) {
+      var href = r.findElements('d:href').firstOrNull?.innerText ?? r.findElements('href').firstOrNull?.innerText ?? '';
+      href = Uri.decodeComponent(href);
+      
+      final propstat = r.findElements('d:propstat').firstOrNull ?? r.findElements('propstat').firstOrNull;
+      final prop = propstat?.findElements('d:prop').firstOrNull ?? propstat?.findElements('prop').firstOrNull;
+      
+      if (prop != null) {
+        final resourcetype = prop.findElements('d:resourcetype').firstOrNull ?? prop.findElements('resourcetype').firstOrNull;
+        final isCollection = (resourcetype?.findElements('d:collection').isNotEmpty ?? false) || (resourcetype?.findElements('collection').isNotEmpty ?? false);
+        
+        final getcontentlength = prop.findElements('d:getcontentlength').firstOrNull?.innerText ?? prop.findElements('getcontentlength').firstOrNull?.innerText ?? '0';
+        final size = int.tryParse(getcontentlength) ?? 0;
+        
+        final getlastmodified = prop.findElements('d:getlastmodified').firstOrNull?.innerText ?? prop.findElements('getlastmodified').firstOrNull?.innerText;
+        DateTime? lastModified;
+        if (getlastmodified != null) {
+          try {
+            lastModified = HttpDate.parse(getlastmodified);
+          } catch (e) {
+            // Ignore parse error
+          }
+        }
+        
+        String name = href;
+        if (name.endsWith('/')) {
+          name = name.substring(0, name.length - 1);
+        }
+        name = name.split('/').last;
+        
+        files.add(WebDavFile(
+          name: name,
+          path: href,
+          isDirectory: isCollection,
+          size: size,
+          lastModified: lastModified,
+        ));
+      }
+    }
+    return files;
   }
 
   /// MKCOL: Create a new directory
   Future<void> mkdir(String path) async {
-    return _client.mkdir(path);
+    final req = await createRequest('MKCOL', path);
+    final resp = await req.close();
+    if (resp.statusCode >= 400 && resp.statusCode != 405) { // 405 means already exists in WebDAV
+      throw Exception('Failed to create directory: ${resp.statusCode}');
+    }
   }
 
   /// DELETE: Remove a file or directory
   Future<void> remove(String path) async {
-    return _client.removeAll(path);
+    final req = await createRequest('DELETE', path);
+    final resp = await req.close();
+    if (resp.statusCode >= 400) {
+      throw Exception('Failed to delete: ${resp.statusCode}');
+    }
   }
 
   /// PUT: Upload a file
@@ -105,25 +198,6 @@ class WebDavClientService {
     if (resp.statusCode >= 400) {
       throw Exception('Failed to upload data: ${resp.statusCode}');
     }
-  }
-
-  /// Custom HttpClient for streaming and range requests
-  Future<HttpClientRequest> createRequest(String method, String path) async {
-    final client = HttpClient();
-    String fullUrl = url;
-    if (fullUrl.endsWith('/')) {
-      fullUrl = fullUrl.substring(0, fullUrl.length - 1);
-    }
-    if (!path.startsWith('/')) {
-      path = '/$path';
-    }
-    // Encode path segments to handle spaces and special characters
-    final segments = path.split('/').map((s) => s.isEmpty ? '' : Uri.encodeComponent(s)).join('/');
-    final uri = Uri.parse(fullUrl + segments);
-    final request = await client.openUrl(method, uri);
-    final auth = 'Basic ${base64Encode(utf8.encode('$username:$password'))}';
-    request.headers.add('Authorization', auth);
-    return request;
   }
 
   /// GET: Download a file to local path
@@ -176,9 +250,62 @@ class WebDavClientService {
   }
   
   /// Get specific file info
-  Future<webdav.File> stat(String path) async {
-    final list = await _client.readDir(path);
-    if (list.isEmpty) throw Exception('File not found');
-    return list.first;
+  Future<WebDavFile> stat(String path) async {
+    final req = await createRequest('PROPFIND', path);
+    req.headers.set('Depth', '0');
+    final resp = await req.close();
+    if (resp.statusCode >= 400) {
+      throw Exception('Failed to get file info: ${resp.statusCode}');
+    }
+    
+    final body = await resp.transform(utf8.decoder).join();
+    final document = XmlDocument.parse(body);
+    final responses = document.findAllElements('d:response').toList();
+    if (responses.isEmpty) {
+      responses.addAll(document.findAllElements('response'));
+    }
+    
+    if (responses.isEmpty) throw Exception('File not found');
+    
+    var r = responses.first;
+    var href = r.findElements('d:href').firstOrNull?.innerText ?? r.findElements('href').firstOrNull?.innerText ?? '';
+    href = Uri.decodeComponent(href);
+    
+    final propstat = r.findElements('d:propstat').firstOrNull ?? r.findElements('propstat').firstOrNull;
+    final prop = propstat?.findElements('d:prop').firstOrNull ?? propstat?.findElements('prop').firstOrNull;
+    
+    if (prop != null) {
+      final resourcetype = prop.findElements('d:resourcetype').firstOrNull ?? prop.findElements('resourcetype').firstOrNull;
+      final isCollection = (resourcetype?.findElements('d:collection').isNotEmpty ?? false) || (resourcetype?.findElements('collection').isNotEmpty ?? false);
+      
+      final getcontentlength = prop.findElements('d:getcontentlength').firstOrNull?.innerText ?? prop.findElements('getcontentlength').firstOrNull?.innerText ?? '0';
+      final size = int.tryParse(getcontentlength) ?? 0;
+      
+      final getlastmodified = prop.findElements('d:getlastmodified').firstOrNull?.innerText ?? prop.findElements('getlastmodified').firstOrNull?.innerText;
+      DateTime? lastModified;
+      if (getlastmodified != null) {
+        try {
+          lastModified = HttpDate.parse(getlastmodified);
+        } catch (e) {
+          // Ignore parse error
+        }
+      }
+      
+      String name = href;
+      if (name.endsWith('/')) {
+        name = name.substring(0, name.length - 1);
+      }
+      name = name.split('/').last;
+      
+      return WebDavFile(
+        name: name,
+        path: href,
+        isDirectory: isCollection,
+        size: size,
+        lastModified: lastModified,
+      );
+    }
+    
+    throw Exception('Failed to parse file info');
   }
 }

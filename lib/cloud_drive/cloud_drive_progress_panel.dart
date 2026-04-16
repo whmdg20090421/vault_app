@@ -57,20 +57,22 @@ class CloudDriveProgressPanel extends StatelessWidget {
         children: [
           const Icon(Icons.cloud_sync_rounded),
           const SizedBox(width: 8),
-          Text(
-            '传输进度',
-            style: Theme.of(context).textTheme.titleLarge,
+          Expanded(
+            child: Text(
+              '传输进度',
+              style: Theme.of(context).textTheme.titleLarge,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
-          const Spacer(),
-          TextButton.icon(
+          IconButton(
             onPressed: manager.pauseAll,
             icon: const Icon(Icons.pause_circle_outline_rounded),
-            label: const Text('全部暂停'),
+            tooltip: '全部暂停',
           ),
-          TextButton.icon(
+          IconButton(
             onPressed: manager.startAll,
             icon: const Icon(Icons.play_circle_outline_rounded),
-            label: const Text('一键全部开启'),
+            tooltip: '一键全部开启',
           ),
         ],
       ),
@@ -115,7 +117,11 @@ class _TaskItemNodeState extends State<_TaskItemNode> {
             Icons.sync_rounded,
             color: Colors.amber,
           ),
-          title: Text(taskTitle),
+          title: Text(
+            taskTitle,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
           subtitle: _buildSubtitle(task),
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
@@ -193,7 +199,11 @@ class _FileItemNode extends StatelessWidget {
         Icons.insert_drive_file_rounded,
         color: Colors.blueAccent,
       ),
-      title: Text(item.name),
+      title: Text(
+        item.name,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
       subtitle: _buildSubtitle(item),
       trailing: _buildActionIcon(item),
     );

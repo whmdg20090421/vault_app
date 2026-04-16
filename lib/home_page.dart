@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:fl_chart/fl_chart.dart';
 import 'services/stats_service.dart';
 
 class HomePage extends StatefulWidget {
@@ -17,8 +16,7 @@ class _HomePageState extends State<HomePage> {
     final int unencryptedBytes = statsService.unencryptedBytes;
     final int totalBytes = statsService.totalBytes;
 
-    final double encryptedPercentage = totalBytes > 0 ? (encryptedBytes / totalBytes) * 100 : 0;
-    final double unencryptedPercentage = totalBytes > 0 ? (unencryptedBytes / totalBytes) * 100 : 0;
+    final double encryptedPercentage = totalBytes > 0 ? (encryptedBytes / totalBytes) : 0;
 
     return RefreshIndicator(
       onRefresh: () async {
@@ -31,103 +29,64 @@ class _HomePageState extends State<HomePage> {
         physics: const AlwaysScrollableScrollPhysics(),
         child: Padding(
           padding: const EdgeInsets.all(16.0),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                flex: 1,
-                child: AspectRatio(
-                  aspectRatio: 1,
-                  child: Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24.0),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            '数据概览'.toUpperCase(),
-                            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          child: Card(
+            child: Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '数据概览',
+                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 24),
+                  if (totalBytes == 0)
+                    const Center(
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(vertical: 32.0),
+                        child: Text(
+                          '暂无数据',
+                          style: TextStyle(fontSize: 16, color: Colors.grey),
+                        ),
+                      ),
+                    )
+                  else
+                    Column(
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: LinearProgressIndicator(
+                            value: encryptedPercentage,
+                            minHeight: 24,
+                            backgroundColor: Colors.red,
+                            color: Colors.green,
                           ),
-                          const SizedBox(height: 24),
-                          Expanded(
-                            child: LayoutBuilder(
-                              builder: (context, constraints) {
-                                final minDimension = constraints.maxWidth < constraints.maxHeight
-                                    ? constraints.maxWidth
-                                    : constraints.maxHeight;
-                                final radius = minDimension * 0.3;
-                                final centerRadius = minDimension * 0.25;
-
-                                return ClipRRect(
-                                  borderRadius: BorderRadius.circular(8),
-                                  child: PieChart(
-                                    PieChartData(
-                                      sectionsSpace: 2,
-                                      centerSpaceRadius: centerRadius,
-                                      sections: [
-                                        PieChartSectionData(
-                                          color: Colors.blueAccent,
-                                          value: encryptedBytes.toDouble(),
-                                          title: totalBytes > 0 ? '${encryptedPercentage.toStringAsFixed(1)}%' : '0%',
-                                          radius: radius,
-                                          showTitle: totalBytes > 0,
-                                          titleStyle: const TextStyle(
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.bold,
-                                            color: Colors.white,
-                                            fontFamily: 'monospace',
-                                          ),
-                                        ),
-                                        PieChartSectionData(
-                                          color: Colors.grey.shade300,
-                                          value: totalBytes == 0 ? 1.0 : unencryptedBytes.toDouble(),
-                                          title: totalBytes > 0 ? '${unencryptedPercentage.toStringAsFixed(1)}%' : '0%',
-                                          radius: radius,
-                                          showTitle: totalBytes > 0,
-                                          titleStyle: const TextStyle(
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.bold,
-                                            color: Colors.black54,
-                                            fontFamily: 'monospace',
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                          const SizedBox(height: 24),
-                          Wrap(
-                            alignment: WrapAlignment.center,
-                            spacing: 16,
-                            runSpacing: 8,
-                            children: [
-                              _Indicator(
-                                color: Colors.blueAccent,
+                        ),
+                        const SizedBox(height: 24),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceAround,
+                          children: [
+                            Expanded(
+                              child: _Indicator(
+                                color: Colors.green,
                                 text: '已加密',
                                 subtext: statsService.formatBytes(encryptedBytes),
                               ),
-                              _Indicator(
-                                color: Colors.grey.shade300,
+                            ),
+                            Expanded(
+                              child: _Indicator(
+                                color: Colors.red,
                                 text: '未加密',
                                 subtext: statsService.formatBytes(unencryptedBytes),
                               ),
-                            ],
-                          ),
-                        ],
-                      ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
-                  ),
-                ),
+                ],
               ),
-              const SizedBox(width: 16),
-              const Expanded(
-                flex: 1,
-                child: SizedBox(), // 右侧为空
-              ),
-            ],
+            ),
           ),
         ),
       ),
@@ -157,22 +116,29 @@ class _Indicator extends StatelessWidget {
           decoration: BoxDecoration(
             shape: BoxShape.rectangle,
             color: color,
+            borderRadius: BorderRadius.circular(4),
           ),
         ),
         const SizedBox(width: 8),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              text,
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              subtext,
-              style: const TextStyle(fontSize: 12, color: Colors.grey, fontFamily: 'monospace'),
-            ),
-          ],
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                text,
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                subtext,
+                style: const TextStyle(fontSize: 12, color: Colors.grey, fontFamily: 'monospace'),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
         )
       ],
     );

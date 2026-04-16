@@ -1,23 +1,17 @@
-import 'dart:io';
+import re
+
+with open('lib/main.dart', 'r', encoding='utf-8') as f:
+    content = f.read()
+
+# 1. Imports and BackgroundSettings
+imports = """import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+"""
+content = content.replace("import 'dart:ui';\n\nimport 'package:flutter/material.dart';", imports)
 
-
-import 'services/stats_service.dart';
-import 'cloud_drive/cloud_drive_page.dart';
-import 'encryption/encryption_page.dart';
-import 'cloud_drive/cloud_drive_progress_manager.dart';
-import 'cloud_drive/cloud_drive_progress_panel.dart';
-import 'error_reporter.dart';
-import 'about_page.dart';
-import 'home_page.dart';
-
-extension ThemeCyberpunk on ThemeData {
-  bool get isCyberpunk => brightness == Brightness.dark && colorScheme.primary.value == 0xFF00E5FF;
-}
-
-
+bg_settings = """
 enum AppTheme { defaultTheme, cyberpunk, pureBlack }
 
 class BackgroundSettings extends ChangeNotifier {
@@ -74,30 +68,41 @@ class BackgroundSettings extends ChangeNotifier {
     await prefs.setDouble('bg_ui_opacity', val);
   }
 }
+"""
 
+content = content.replace("enum AppTheme { defaultTheme, cyberpunk }", bg_settings)
 
-final ValueNotifier<AppTheme> appTheme = ValueNotifier(AppTheme.defaultTheme);
+# 2. Remove CyberpunkBorder class completely
+border_start = content.find("class CyberpunkBorder extends OutlinedBorder {")
+border_end = content.find("final ValueNotifier<AppTheme> appTheme")
+if border_start != -1 and border_end != -1:
+    content = content[:border_start] + content[border_end:]
 
-Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  await BackgroundSettings.instance.init();
-  await ErrorReporter.instance.initialize();
-  await StatsService().init();
+# 3. Update main()
+main_str = "Future<void> main() async {\n  WidgetsFlutterBinding.ensureInitialized();\n  await ErrorReporter.instance.initialize();"
+main_new = "Future<void> main() async {\n  WidgetsFlutterBinding.ensureInitialized();\n  await BackgroundSettings.instance.init();\n  await ErrorReporter.instance.initialize();"
+content = content.replace(main_str, main_new)
 
-  FlutterError.onError = (details) {
-    FlutterError.presentError(details);
-    ErrorReporter.instance.writeFlutterError(details);
-  };
+# 4. Replace TianyanApp class
+tianyan_app_old = """class TianyanApp extends StatelessWidget {
+  const TianyanApp({super.key});
 
-  PlatformDispatcher.instance.onError = (error, stack) {
-    ErrorReporter.instance.writeError(error, stack);
-    return true;
-  };
-
-  runApp(const TianyanApp());
-}
-
-class TianyanApp extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder(
+      valueListenable: appTheme,
+      builder: (context, theme, _) {
+        return MaterialApp(
+          debugShowCheckedModeBanner: false,
+          title: '天眼·艨艟战舰',
+          theme: _buildTheme(theme),
+          home: const MainShell(),
+        );
+      },
+    );
+  }
+}"""
+tianyan_app_new = """class TianyanApp extends StatelessWidget {
   const TianyanApp({super.key});
 
   @override
@@ -153,9 +158,14 @@ class TianyanApp extends StatelessWidget {
       },
     );
   }
-}
+}"""
+content = content.replace(tianyan_app_old, tianyan_app_new)
 
-ThemeData _buildTheme(AppTheme theme, bool bgEnabled, double uiOpacity) {
+# 5. Replace _buildTheme
+build_theme_start = content.find("ThemeData _buildTheme(AppTheme theme) {")
+build_theme_end = content.find("class MainShell extends StatefulWidget {")
+if build_theme_start != -1 and build_theme_end != -1:
+    new_build_theme = """ThemeData _buildTheme(AppTheme theme, bool bgEnabled, double uiOpacity) {
   Color applyUiOpacity(Color color) {
     if (!bgEnabled) return color;
     return color.withValues(alpha: uiOpacity);
@@ -488,115 +498,24 @@ ThemeData _buildTheme(AppTheme theme, bool bgEnabled, double uiOpacity) {
   );
 }
 
-class MainShell extends StatefulWidget {
-  const MainShell({super.key});
+"""
+    content = content[:build_theme_start] + new_build_theme + content[build_theme_end:]
 
-  @override
-  State<MainShell> createState() => _MainShellState();
-}
-
-class _MainShellState extends State<MainShell> {
-  int _index = 0;
-
-  @override
-  Widget build(BuildContext context) {
-    final pages = const [
-      HomePage(),
-      CloudDrivePage(),
-      EncryptionPage(),
-      SettingsPage(),
-    ];
-
-    final titles = const ['主页', '云盘', '加密', '设置'];
-
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(titles[_index].toUpperCase()),
-        centerTitle: true,
-      ),
-      body: IndexedStack(index: _index, children: pages),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _index,
-        onDestinationSelected: (value) {
-          if (value == 1 && _index == 1) {
-            showCloudDriveProgressPanel(context);
-          } else {
-            setState(() => _index = value);
-          }
-        },
-        destinations: [
-          const NavigationDestination(
-            icon: Icon(Icons.home_rounded),
-            label: '主页',
-          ),
-          NavigationDestination(
-            icon: ListenableBuilder(
-              listenable: CloudDriveProgressManager.instance,
-              builder: (context, _) {
-                final manager = CloudDriveProgressManager.instance;
-                if (manager.hasActiveTasks) {
-                  return const Badge(
-                    label: Icon(
-                      Icons.sync_rounded,
-                      size: 12,
-                      color: Colors.white,
-                    ),
-                    child: Icon(Icons.cloud_sync_rounded),
-                  );
-                }
-                return const Icon(Icons.cloud_rounded);
-              },
-            ),
-            label: '云盘',
-          ),
-          const NavigationDestination(
-            icon: Icon(Icons.lock_rounded),
-            label: '加密',
-          ),
-          const NavigationDestination(
-            icon: Icon(Icons.settings_rounded),
-            label: '设置',
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-
-class SettingsPage extends StatelessWidget {
-  const SettingsPage({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return ValueListenableBuilder<AppTheme>(
-      valueListenable: appTheme,
-      builder: (context, theme, _) {
-        return ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            ListTile(
-              leading: const Icon(Icons.info_outline_rounded),
-              title: const Text('关于'),
-              trailing: const Icon(Icons.chevron_right_rounded),
-              contentPadding: EdgeInsets.zero,
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const AboutPage()),
-                );
-              },
-            ),
-            const Divider(),
-            const SizedBox(height: 8),
-            Text(
-              '主题'.toUpperCase(),
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-            ),
-            const SizedBox(height: 12),
-            SegmentedButton<AppTheme>(
+# 6. Update SettingsPage
+settings_segment_old = """            SegmentedButton<AppTheme>(
+              segments: const [
+                ButtonSegment(
+                  value: AppTheme.defaultTheme,
+                  label: Text('默认主题'),
+                  icon: Icon(Icons.auto_awesome_rounded),
+                ),
+                ButtonSegment(
+                  value: AppTheme.cyberpunk,
+                  label: Text('赛博朋克'),
+                  icon: Icon(Icons.bolt_rounded),
+                ),
+              ],"""
+settings_segment_new = """            SegmentedButton<AppTheme>(
               segments: const [
                 ButtonSegment(
                   value: AppTheme.defaultTheme,
@@ -613,14 +532,9 @@ class SettingsPage extends StatelessWidget {
                   label: Text('极简黑'),
                   icon: Icon(Icons.dark_mode_rounded),
                 ),
-              ],
-              selected: {theme},
-              onSelectionChanged: (selection) => appTheme.value = selection.first,
-              showSelectedIcon: true,
-            ),
-          ],
-        );
-      },
-    );
-  }
-}
+              ],"""
+content = content.replace(settings_segment_old, settings_segment_new)
+
+with open('lib/main.dart', 'w', encoding='utf-8') as f:
+    f.write(content)
+
