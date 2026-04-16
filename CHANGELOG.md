@@ -1,3 +1,10 @@
+# 1.2.0 (2026-04-16)
+
+### ✨ Features & Improvements
+- **UI Refactor**: Complete rewrite of the app theme to a Cyberpunk style.
+- **CI Fixes**: Resolved GitHub Actions build errors and improved the CI pipeline.
+- **Automation**: Fully automated build and release pipeline.
+
 # 1.1.4 (2026-04-16)
 
 ### ✨ Features & Sync Engine
