@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import '../main.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as p;
 import 'models/vault_config.dart';
@@ -281,8 +282,9 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           decoration: BoxDecoration(
             color: theme.colorScheme.surface,
-            borderRadius: BorderRadius.circular(8),
-            boxShadow: [
+            borderRadius: theme.isCyberpunk ? BorderRadius.zero : BorderRadius.circular(8),
+            border: theme.isCyberpunk ? Border.all(color: const Color(0xFF00E5FF)) : null,
+            boxShadow: theme.isCyberpunk ? [] : [
               BoxShadow(
                 color: Colors.black26,
                 blurRadius: 4,
@@ -309,7 +311,7 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(_currentPath == '/' ? widget.vaultConfig.name : p.basename(_currentPath)),
+        title: Text(_currentPath == '/' ? widget.vaultConfig.name.toUpperCase() : p.basename(_currentPath)),
         leading: _currentPath != '/'
             ? IconButton(
                 icon: const Icon(Icons.arrow_back),

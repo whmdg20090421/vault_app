@@ -6,6 +6,7 @@ import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import '../main.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:pointycastle/export.dart' as pc;
 
@@ -224,7 +225,7 @@ class _VaultConfigPageState extends State<VaultConfigPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('配置保险箱'),
+        title: Text('配置保险箱'.toUpperCase()),
         actions: [
           IconButton(
             icon: const Icon(Icons.speed),
@@ -294,8 +295,8 @@ class _VaultConfigPageState extends State<VaultConfigPage> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  border: Border.all(color: Colors.white24),
-                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Theme.of(context).isCyberpunk ? const Color(0xFF00E5FF) : Colors.white24),
+                  borderRadius: Theme.of(context).isCyberpunk ? BorderRadius.zero : BorderRadius.circular(8),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,

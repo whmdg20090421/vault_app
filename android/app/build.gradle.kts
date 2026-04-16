@@ -6,6 +6,7 @@ plugins {
 }
 
 import java.io.FileInputStream
+import java.io.FileOutputStream
 import java.io.File
 import java.util.Properties
 
@@ -39,6 +40,23 @@ if (hasKeystoreProperties) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
 
+// Version Control Logic
+val versionPropsFile = file("version.properties")
+val versionProps = Properties()
+var currentVersionCode = 0
+
+if (versionPropsFile.exists()) {
+    versionProps.load(FileInputStream(versionPropsFile))
+    currentVersionCode = versionProps.getProperty("VERSION_CODE", "0").toInt()
+}
+
+val isBuilding = gradle.startParameter.taskNames.any { it.contains("assemble") || it.contains("bundle") }
+if (isBuilding) {
+    currentVersionCode += 1
+    versionProps.setProperty("VERSION_CODE", currentVersionCode.toString())
+    versionProps.store(FileOutputStream(versionPropsFile), "Local Version Record")
+}
+
 android {
     namespace = "com.tianyanmczj.vault"
     compileSdk = flutter.compileSdkVersion
@@ -60,8 +78,8 @@ android {
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
-        versionCode = flutter.versionCode
-        versionName = flutter.versionName
+        versionCode = currentVersionCode
+        versionName = "1.2.0"
     }
 
     signingConfigs {

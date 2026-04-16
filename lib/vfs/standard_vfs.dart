@@ -23,8 +23,8 @@ class StandardVfs implements VirtualFileSystem {
   Future<List<VfsNode>> list(String path) async {
     final list = await client.readDir(path);
     // Remove the directory itself from the listing if present
-    list.removeWhere((file) => file.path == path || file.path == '$path/');
-    return list.map(_mapWebDavFile).toList();
+    list.removeWhere((file) => file == null || file.path == path || file.path == '$path/');
+    return list.where((f) => f != null).map((f) => _mapWebDavFile(f!)).toList();
   }
 
   @override

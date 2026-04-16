@@ -63,13 +63,6 @@ class EncryptedVfs implements VirtualFileSystem {
     return normalizedPath.substring(0, lastSlash);
   }
 
-  /// 获取路径最后一段的名称
-  String _getBaseName(String normalizedPath) {
-    if (normalizedPath == '/') return '/';
-    int lastSlash = normalizedPath.lastIndexOf('/');
-    return normalizedPath.substring(lastSlash + 1);
-  }
-
   /// 检查给定虚拟路径是否处于加密域中
   bool _isEncryptedDomain(String virtualPath) {
     String current = _normalizePath(virtualPath);

@@ -45,3 +45,7 @@ app.*.map.json
 /android/app/release
 /android/key.properties
 /android/app/keystore.jks
+
+dart-sdk/
+dart.zip
+

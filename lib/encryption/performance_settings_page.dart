@@ -72,14 +72,20 @@ class _PerformanceSettingsPageState extends State<PerformanceSettingsPage> {
             style: Theme.of(context).textTheme.titleMedium,
           ),
           const SizedBox(height: 12),
-          Slider(
-            value: _selectedCores.toDouble(),
-            min: 1,
-            max: _maxUsableCores.toDouble(),
-            divisions: (_maxUsableCores - 1).clamp(1, 100),
-            label: _selectedCores.toString(),
-            onChanged: (v) => _setCores(v.round()),
-          ),
+          if (_maxUsableCores > 1)
+            Slider(
+              value: _selectedCores.toDouble(),
+              min: 1,
+              max: _maxUsableCores.toDouble(),
+              divisions: (_maxUsableCores - 1).clamp(1, 100),
+              label: _selectedCores.toString(),
+              onChanged: (v) => _setCores(v.round()),
+            )
+          else
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 16.0),
+              child: Text('当前设备可用核心数仅为 1，无法调整。', style: TextStyle(color: Colors.grey)),
+            ),
           const SizedBox(height: 8),
           TextField(
             controller: _coresController,

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../main.dart';
 
 import 'security_detector.dart';
 import 'security_level.dart';
@@ -162,7 +163,8 @@ class _CloudDrivePageState extends State<CloudDrivePage> {
     return Container(
       decoration: BoxDecoration(
         color: theme.colorScheme.tertiaryContainer,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: theme.isCyberpunk ? BorderRadius.zero : BorderRadius.circular(12),
+        border: theme.isCyberpunk ? Border.all(color: theme.colorScheme.tertiary, width: 2) : null,
       ),
       padding: const EdgeInsets.all(12),
       margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
@@ -234,8 +236,8 @@ class _CloudDrivePageState extends State<CloudDrivePage> {
                           child: ListTile(
                             leading:
                                 Icon(_levelIcon(), color: _levelColor(theme)),
-                            title: Text(item.name),
-                            subtitle: Text('${item.username} · ${item.url}'),
+                            title: Text(item.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+                            subtitle: Text('${item.username} · ${item.url}', maxLines: 2, overflow: TextOverflow.ellipsis),
                             onTap: () {
                               Navigator.of(context).push(
                                 MaterialPageRoute(

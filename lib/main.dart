@@ -11,7 +11,92 @@ import 'error_reporter.dart';
 import 'about_page.dart';
 import 'home_page.dart';
 
+extension ThemeCyberpunk on ThemeData {
+  bool get isCyberpunk => brightness == Brightness.dark && colorScheme.primary.value == 0xFF00E5FF;
+}
+
 enum AppTheme { defaultTheme, cyberpunk }
+
+class CyberpunkBorder extends ShapeBorder {
+  final Color color;
+  final double borderWidth;
+  final double thickBorderWidth;
+  final double cornerLength;
+
+  const CyberpunkBorder({
+    this.color = const Color(0xFF00E5FF),
+    this.borderWidth = 1.0,
+    this.thickBorderWidth = 4.0,
+    this.cornerLength = 10.0,
+  });
+
+  @override
+  EdgeInsetsGeometry get dimensions => EdgeInsets.fromLTRB(thickBorderWidth, borderWidth, borderWidth, borderWidth);
+
+  @override
+  Path getInnerPath(Rect rect, {TextDirection? textDirection}) {
+    return getOuterPath(rect.deflate(borderWidth), textDirection: textDirection);
+  }
+
+  @override
+  Path getOuterPath(Rect rect, {TextDirection? textDirection}) {
+    final path = Path();
+    path.addRect(rect);
+    return path;
+  }
+
+  @override
+  void paint(Canvas canvas, Rect rect, {TextDirection? textDirection}) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = borderWidth;
+
+    // Draw main border
+    canvas.drawRect(rect, paint);
+
+    // Draw left thick border
+    final thickPaint = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill;
+    canvas.drawRect(
+      Rect.fromLTRB(rect.left, rect.top, rect.left + thickBorderWidth, rect.bottom),
+      thickPaint,
+    );
+
+    // Draw corner crosshairs / angled lines
+    final crosshairPaint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.0;
+
+    // Top-left
+    canvas.drawLine(rect.topLeft, rect.topLeft + Offset(cornerLength, 0), crosshairPaint);
+    canvas.drawLine(rect.topLeft, rect.topLeft + Offset(0, cornerLength), crosshairPaint);
+
+    // Top-right
+    canvas.drawLine(rect.topRight, rect.topRight + Offset(-cornerLength, 0), crosshairPaint);
+    canvas.drawLine(rect.topRight, rect.topRight + Offset(0, cornerLength), crosshairPaint);
+
+    // Bottom-left
+    canvas.drawLine(rect.bottomLeft, rect.bottomLeft + Offset(cornerLength, 0), crosshairPaint);
+    canvas.drawLine(rect.bottomLeft, rect.bottomLeft + Offset(0, -cornerLength), crosshairPaint);
+
+    // Bottom-right
+    canvas.drawLine(rect.bottomRight, rect.bottomRight + Offset(-cornerLength, 0), crosshairPaint);
+    canvas.drawLine(rect.bottomRight, rect.bottomRight + Offset(0, -cornerLength), crosshairPaint);
+  }
+
+  @override
+  ShapeBorder scale(double t) {
+    return CyberpunkBorder(
+      color: color,
+      borderWidth: borderWidth * t,
+      thickBorderWidth: thickBorderWidth * t,
+      cornerLength: cornerLength * t,
+    );
+  }
+}
 
 final ValueNotifier<AppTheme> appTheme = ValueNotifier(AppTheme.defaultTheme);
 
@@ -55,38 +140,164 @@ class TianyanApp extends StatelessWidget {
 ThemeData _buildTheme(AppTheme theme) {
   if (theme == AppTheme.cyberpunk) {
     final scheme = ColorScheme.fromSeed(
-      seedColor: const Color(0xFFFCE205),
+      seedColor: const Color(0xFF00E5FF),
       brightness: Brightness.dark,
     ).copyWith(
-      primary: const Color(0xFFFCE205),
-      secondary: const Color(0xFF00F0FF),
+      primary: const Color(0xFF00E5FF),
+      secondary: const Color(0xFFFCE205),
       tertiary: const Color(0xFFFF003C),
-      surface: const Color(0xFF0A0A0A),
-      surfaceContainer: const Color(0xFF141414),
+      surface: const Color(0xFF121A21),
+      surfaceContainer: const Color(0xFF1A242D),
+      onPrimary: const Color(0xFF0F1418),
+      onSecondary: const Color(0xFF0F1418),
+      onSurface: const Color(0xFFE0E0E0),
     );
 
     return ThemeData(
       useMaterial3: true,
       colorScheme: scheme,
-      scaffoldBackgroundColor: const Color(0xFF000000),
+      scaffoldBackgroundColor: const Color(0xFF0F1418),
+      textTheme: const TextTheme(
+        displayLarge: TextStyle(fontFamily: 'sans-serif', fontWeight: FontWeight.bold, letterSpacing: 2.0),
+        displayMedium: TextStyle(fontFamily: 'sans-serif', fontWeight: FontWeight.bold, letterSpacing: 2.0),
+        displaySmall: TextStyle(fontFamily: 'sans-serif', fontWeight: FontWeight.bold, letterSpacing: 2.0),
+        headlineLarge: TextStyle(fontFamily: 'sans-serif', fontWeight: FontWeight.bold, letterSpacing: 1.5),
+        headlineMedium: TextStyle(fontFamily: 'sans-serif', fontWeight: FontWeight.bold, letterSpacing: 1.5),
+        headlineSmall: TextStyle(fontFamily: 'sans-serif', fontWeight: FontWeight.bold, letterSpacing: 1.5),
+        titleLarge: TextStyle(fontFamily: 'sans-serif', fontWeight: FontWeight.bold, letterSpacing: 1.2),
+        titleMedium: TextStyle(fontFamily: 'sans-serif', fontWeight: FontWeight.bold, letterSpacing: 1.2),
+        titleSmall: TextStyle(fontFamily: 'sans-serif', fontWeight: FontWeight.bold, letterSpacing: 1.2),
+        bodyLarge: TextStyle(fontFamily: 'monospace'),
+        bodyMedium: TextStyle(fontFamily: 'monospace'),
+        bodySmall: TextStyle(fontFamily: 'monospace'),
+        labelLarge: TextStyle(fontFamily: 'monospace', fontWeight: FontWeight.bold),
+        labelMedium: TextStyle(fontFamily: 'monospace'),
+        labelSmall: TextStyle(fontFamily: 'monospace'),
+      ),
+      cardTheme: CardTheme(
+        color: scheme.surfaceContainer,
+        shape: const CyberpunkBorder(),
+        elevation: 8,
+        shadowColor: const Color(0xFF00E5FF).withValues(alpha: 0.5),
+        margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: scheme.primary,
+          foregroundColor: scheme.onPrimary,
+          shape: const CyberpunkBorder(thickBorderWidth: 2.0),
+          elevation: 10,
+          shadowColor: scheme.primary,
+          textStyle: const TextStyle(fontFamily: 'sans-serif', fontWeight: FontWeight.bold, letterSpacing: 1.5),
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: scheme.primary,
+          side: BorderSide.none, // We use CyberpunkBorder to draw it
+          shape: const CyberpunkBorder(thickBorderWidth: 2.0),
+          textStyle: const TextStyle(fontFamily: 'sans-serif', fontWeight: FontWeight.bold, letterSpacing: 1.5),
+        ),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+          foregroundColor: scheme.primary,
+          shape: const CyberpunkBorder(thickBorderWidth: 0.0),
+          textStyle: const TextStyle(fontFamily: 'sans-serif', fontWeight: FontWeight.bold, letterSpacing: 1.5),
+        ),
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: scheme.surfaceContainer,
+        border: const OutlineInputBorder(
+          borderRadius: BorderRadius.zero,
+          borderSide: BorderSide(color: Color(0xFF00E5FF), width: 1),
+        ),
+        enabledBorder: const OutlineInputBorder(
+          borderRadius: BorderRadius.zero,
+          borderSide: BorderSide(color: Color(0xFF00E5FF), width: 1),
+        ),
+        focusedBorder: const OutlineInputBorder(
+          borderRadius: BorderRadius.zero,
+          borderSide: BorderSide(color: Color(0xFF00E5FF), width: 2),
+        ),
+        labelStyle: const TextStyle(fontFamily: 'monospace', color: Color(0xFF00E5FF)),
+      ),
+      progressIndicatorTheme: const ProgressIndicatorThemeData(
+        color: Color(0xFF00E5FF),
+        linearTrackColor: Color(0xFF1A242D),
+        linearMinHeight: 2,
+      ),
+      floatingActionButtonTheme: FloatingActionButtonThemeData(
+        backgroundColor: scheme.primary,
+        foregroundColor: scheme.onPrimary,
+        shape: const CyberpunkBorder(thickBorderWidth: 4.0),
+        elevation: 8,
+      ),
+      segmentedButtonTheme: SegmentedButtonThemeData(
+        style: ButtonStyle(
+          shape: WidgetStateProperty.all(const CyberpunkBorder(thickBorderWidth: 2.0)),
+          side: WidgetStateProperty.all(BorderSide.none),
+          backgroundColor: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.selected)) {
+              return scheme.primary;
+            }
+            return scheme.surfaceContainer;
+          }),
+          foregroundColor: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.selected)) {
+              return scheme.onPrimary;
+            }
+            return scheme.primary;
+          }),
+          textStyle: WidgetStateProperty.all(const TextStyle(fontFamily: 'sans-serif', fontWeight: FontWeight.bold)),
+        ),
+      ),
+      bottomSheetTheme: const BottomSheetThemeData(
+        backgroundColor: Color(0xFF1A242D),
+        shape: CyberpunkBorder(thickBorderWidth: 4.0),
+      ),
+      dialogTheme: DialogTheme(
+        backgroundColor: scheme.surfaceContainer,
+        shape: const CyberpunkBorder(thickBorderWidth: 4.0),
+        titleTextStyle: const TextStyle(fontFamily: 'sans-serif', fontWeight: FontWeight.bold, letterSpacing: 1.5, color: Color(0xFF00E5FF), fontSize: 20),
+        contentTextStyle: const TextStyle(fontFamily: 'monospace', color: Color(0xFFE0E0E0), fontSize: 16),
+      ),
       navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: const Color(0xFF0A0A0A),
-        indicatorColor: const Color(0x33FCE205),
+        backgroundColor: scheme.surfaceContainer,
+        indicatorColor: scheme.primary,
+        indicatorShape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
         labelTextStyle: WidgetStateProperty.resolveWith(
           (states) => TextStyle(
-            fontWeight: FontWeight.w600,
+            fontFamily: 'sans-serif',
+            fontWeight: FontWeight.bold,
+            letterSpacing: 1.0,
             color: states.contains(WidgetState.selected)
-                ? const Color(0xFFFCE205)
+                ? scheme.onPrimary
                 : scheme.onSurface.withValues(alpha: 0.75),
           ),
         ),
         iconTheme: WidgetStateProperty.resolveWith(
           (states) => IconThemeData(
             color: states.contains(WidgetState.selected)
-                ? const Color(0xFFFCE205)
+                ? scheme.onPrimary
                 : scheme.onSurface.withValues(alpha: 0.75),
           ),
         ),
+      ),
+      appBarTheme: AppBarTheme(
+        backgroundColor: const Color(0xFF0F1418),
+        elevation: 0,
+        centerTitle: true,
+        titleTextStyle: const TextStyle(
+          fontFamily: 'sans-serif',
+          fontWeight: FontWeight.bold,
+          fontSize: 20,
+          letterSpacing: 2.0,
+          color: Color(0xFF00E5FF),
+        ),
+        iconTheme: const IconThemeData(color: Color(0xFF00E5FF)),
+        shape: const Border(bottom: BorderSide(color: Color(0xFF00E5FF), width: 2)),
       ),
     );
   }
@@ -123,7 +334,7 @@ class _MainShellState extends State<MainShell> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(titles[_index]),
+        title: Text(titles[_index].toUpperCase()),
         centerTitle: true,
       ),
       body: IndexedStack(index: _index, children: pages),
@@ -175,23 +386,6 @@ class _MainShellState extends State<MainShell> {
   }
 }
 
-class _TitlePage extends StatelessWidget {
-  const _TitlePage({required this.title});
-
-  final String title;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Text(
-        title,
-        style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-              fontWeight: FontWeight.w600,
-            ),
-      ),
-    );
-  }
-}
 
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});
@@ -219,7 +413,7 @@ class SettingsPage extends StatelessWidget {
             const Divider(),
             const SizedBox(height: 8),
             Text(
-              '主题',
+              '主题'.toUpperCase(),
               style: Theme.of(context).textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.w700,
                   ),

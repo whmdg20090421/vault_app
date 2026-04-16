@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../main.dart';
 
 import 'models/vault_config.dart';
 import 'utils/crypto_utils.dart';
@@ -248,11 +249,11 @@ class _EncryptionPageState extends State<EncryptionPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isCyberpunk = theme.brightness == Brightness.dark && 
-                        theme.colorScheme.secondary.value == 0xFF00F0FF;
+                        theme.colorScheme.primary.value == 0xFF00E5FF;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('加密保险箱 (Vaults)'),
+        title: Text('加密保险箱 (VAULTS)'.toUpperCase()),
         actions: [
           IconButton(
             icon: const Icon(Icons.sync),
@@ -261,9 +262,9 @@ class _EncryptionPageState extends State<EncryptionPage> {
               showModalBottomSheet(
                 context: context,
                 isScrollControlled: true,
-                shape: const RoundedRectangleBorder(
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-                ),
+                shape: theme.isCyberpunk 
+                    ? const RoundedRectangleBorder(borderRadius: BorderRadius.zero)
+                    : const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
                 builder: (context) => DraggableScrollableSheet(
                   initialChildSize: 0.6,
                   minChildSize: 0.4,
@@ -310,12 +311,14 @@ class _EncryptionPageState extends State<EncryptionPage> {
                     return Card(
                       margin: const EdgeInsets.only(bottom: 12),
                       elevation: isCyberpunk ? 0 : 1,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        side: isCyberpunk 
-                            ? BorderSide(color: theme.colorScheme.secondary.withOpacity(0.5))
-                            : BorderSide.none,
-                      ),
+                      shape: isCyberpunk
+                          ? const RoundedRectangleBorder(
+                              borderRadius: BorderRadius.zero,
+                              side: BorderSide(color: Color(0xFF00E5FF), width: 1.0),
+                            )
+                          : RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
                       color: isCyberpunk ? theme.colorScheme.surfaceContainer : theme.colorScheme.surface,
                       child: ListTile(
                         onTap: () => _showUnlockDialog(item),
@@ -324,9 +327,9 @@ class _EncryptionPageState extends State<EncryptionPage> {
                           padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
                             color: isCyberpunk 
-                                ? theme.colorScheme.secondary.withOpacity(0.1)
-                                : theme.colorScheme.primary.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(12),
+                                ? theme.colorScheme.secondary.withValues(alpha: 0.1)
+                                : theme.colorScheme.primary.withValues(alpha: 0.1),
+                            borderRadius: isCyberpunk ? BorderRadius.zero : BorderRadius.circular(12),
                           ),
                           child: Icon(
                             hasConfig ? Icons.lock : Icons.error_outline,
@@ -372,14 +375,14 @@ class EncryptionProgressPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isCyberpunk = theme.brightness == Brightness.dark && 
-                        theme.colorScheme.secondary.value == 0xFF00F0FF;
+                        theme.colorScheme.primary.value == 0xFF00E5FF;
 
     return Container(
       decoration: BoxDecoration(
         color: theme.scaffoldBackgroundColor,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+        borderRadius: isCyberpunk ? BorderRadius.zero : const BorderRadius.vertical(top: Radius.circular(16)),
         border: isCyberpunk
-            ? Border(top: BorderSide(color: theme.colorScheme.secondary, width: 2))
+            ? Border(top: BorderSide(color: theme.colorScheme.primary, width: 2))
             : null,
       ),
       child: Column(

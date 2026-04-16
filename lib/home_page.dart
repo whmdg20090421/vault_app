@@ -39,16 +39,14 @@ class _HomePageState extends State<HomePage> {
                 child: AspectRatio(
                   aspectRatio: 1,
                   child: Card(
-                    elevation: 4,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                     child: Padding(
                       padding: const EdgeInsets.all(24.0),
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Text(
-                            '数据概览',
-                            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                          Text(
+                            '数据概览'.toUpperCase(),
+                            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                           ),
                           const SizedBox(height: 24),
                           Expanded(
@@ -59,7 +57,7 @@ class _HomePageState extends State<HomePage> {
                                 sections: [
                                   PieChartSectionData(
                                     color: Colors.blueAccent,
-                                    value: encryptedBytes.toDouble() > 0 ? encryptedBytes.toDouble() : 1, // 如果为0时避免报错，可以给个极小值，但如果总数为0不显示也可以。不过当总数都是0，我们显示均匀的或者空的
+                                    value: encryptedBytes.toDouble(),
                                     title: totalBytes > 0 ? '${encryptedPercentage.toStringAsFixed(1)}%' : '0%',
                                     radius: 60,
                                     showTitle: totalBytes > 0,
@@ -67,11 +65,12 @@ class _HomePageState extends State<HomePage> {
                                       fontSize: 14,
                                       fontWeight: FontWeight.bold,
                                       color: Colors.white,
+                                      fontFamily: 'monospace',
                                     ),
                                   ),
                                   PieChartSectionData(
                                     color: Colors.grey.shade300,
-                                    value: unencryptedBytes.toDouble() > 0 ? unencryptedBytes.toDouble() : (totalBytes == 0 ? 1 : 0),
+                                    value: totalBytes == 0 ? 1.0 : unencryptedBytes.toDouble(),
                                     title: totalBytes > 0 ? '${unencryptedPercentage.toStringAsFixed(1)}%' : '0%',
                                     radius: 60,
                                     showTitle: totalBytes > 0,
@@ -79,6 +78,7 @@ class _HomePageState extends State<HomePage> {
                                       fontSize: 14,
                                       fontWeight: FontWeight.bold,
                                       color: Colors.black54,
+                                      fontFamily: 'monospace',
                                     ),
                                   ),
                                 ],
@@ -86,15 +86,16 @@ class _HomePageState extends State<HomePage> {
                             ),
                           ),
                           const SizedBox(height: 24),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
+                          Wrap(
+                            alignment: WrapAlignment.center,
+                            spacing: 16,
+                            runSpacing: 8,
                             children: [
                               _Indicator(
                                 color: Colors.blueAccent,
                                 text: '已加密',
                                 subtext: statsService.formatBytes(encryptedBytes),
                               ),
-                              const SizedBox(width: 32),
                               _Indicator(
                                 color: Colors.grey.shade300,
                                 text: '未加密',
@@ -141,7 +142,7 @@ class _Indicator extends StatelessWidget {
           width: 16,
           height: 16,
           decoration: BoxDecoration(
-            shape: BoxShape.circle,
+            shape: BoxShape.rectangle,
             color: color,
           ),
         ),
@@ -156,7 +157,7 @@ class _Indicator extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               subtext,
-              style: const TextStyle(fontSize: 12, color: Colors.grey),
+              style: const TextStyle(fontSize: 12, color: Colors.grey, fontFamily: 'monospace'),
             ),
           ],
         )
