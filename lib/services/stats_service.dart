@@ -1,7 +1,8 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-class StatsService {
+class StatsService extends ChangeNotifier {
   static final StatsService _instance = StatsService._internal();
 
   factory StatsService() {
@@ -45,6 +46,8 @@ class StatsService {
 
     await prefs.setInt('encrypted_bytes', _encryptedBytes);
     await prefs.setInt('unencrypted_bytes', _unencryptedBytes);
+
+    notifyListeners();
   }
 
   Future<int> _getFolderSize(Directory dir) async {

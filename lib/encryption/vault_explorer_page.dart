@@ -4,6 +4,10 @@ import 'package:flutter/material.dart';
 import '../main.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as p;
+import 'package:share_plus/share_plus.dart';
+import 'package:open_filex/open_filex.dart';
+import 'package:path_provider/path_provider.dart';
+import '../services/stats_service.dart';
 import 'models/vault_config.dart';
 import '../utils/format_utils.dart';
 import '../vfs/virtual_file_system.dart';
@@ -118,6 +122,8 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
   String _currentPath = '/';
   List<VfsNode> _files = [];
   bool _isLoading = true;
+  bool _isMultiSelectMode = false;
+  final Set<VfsNode> _selectedNodes = {};
 
   @override
   void initState() {
@@ -139,6 +145,8 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
 
   Future<void> _loadFiles() async {
     if (mounted) setState(() => _isLoading = true);
+    _isMultiSelectMode = false;
+    _selectedNodes.clear();
     try {
       final files = await _vfs.list(_currentPath);
       // Sort: directories first, then files
@@ -213,6 +221,7 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
               EncryptionTaskManager().updateTaskProgress(tid, bytes);
             } else if (type == 'done') {
               EncryptionTaskManager().updateTaskStatus(tid, 'completed');
+              StatsService().recalculate();
               if (mounted) {
                 _loadCurrentDirectory();
               }
@@ -296,6 +305,7 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
                 EncryptionTaskManager().updateTaskProgress(tid, bytes);
               } else if (type == 'done') {
                 EncryptionTaskManager().updateTaskStatus(tid, 'completed');
+                StatsService().recalculate();
                 if (mounted) {
                   _loadCurrentDirectory();
                 }
@@ -417,6 +427,150 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
     ).whenComplete(() => controller.dispose());
   }
 
+  Future<void> _deleteSelected() async {
+    if (_selectedNodes.isEmpty) return;
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('确认删除'),
+        content: Text('确定要删除选中的 ${_selectedNodes.length} 项吗？此操作不可恢复。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('取消'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    if (mounted) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    try {
+      for (final node in _selectedNodes) {
+        await _vfs.delete(node.path);
+      }
+      StatsService().recalculate();
+      if (mounted) {
+        Navigator.of(context).pop(); // Close loading
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('删除成功')),
+        );
+        _loadFiles();
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.of(context).pop(); // Close loading
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('删除失败: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _shareSelected() async {
+    if (_selectedNodes.isEmpty) return;
+
+    if (mounted) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    try {
+      final tempDir = await getTemporaryDirectory();
+      final shareDir = Directory(p.join(tempDir.path, 'vault_share_${DateTime.now().millisecondsSinceEpoch}'));
+      await shareDir.create(recursive: true);
+
+      final xFiles = <XFile>[];
+      for (final node in _selectedNodes) {
+        if (node.isDirectory) continue; // 仅支持分享文件
+        final stream = await _vfs.open(node.path);
+        final tempFile = File(p.join(shareDir.path, node.name));
+        final sink = tempFile.openWrite();
+        await stream.pipe(sink);
+        xFiles.add(XFile(tempFile.path));
+      }
+
+      if (mounted) {
+        Navigator.of(context).pop(); // Close loading
+        if (xFiles.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('没有可分享的文件')),
+          );
+          return;
+        }
+        await Share.shareXFiles(xFiles, text: '来自加密保险箱的分享');
+        // 分享完成后清理临时文件
+        if (await shareDir.exists()) {
+          await shareDir.delete(recursive: true);
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.of(context).pop(); // Close loading
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('分享失败: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _previewFile(VfsNode file) async {
+    if (mounted) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    try {
+      final tempDir = await getTemporaryDirectory();
+      final previewDir = Directory(p.join(tempDir.path, 'vault_preview_${DateTime.now().millisecondsSinceEpoch}'));
+      await previewDir.create(recursive: true);
+
+      final stream = await _vfs.open(file.path);
+      final tempFile = File(p.join(previewDir.path, file.name));
+      final sink = tempFile.openWrite();
+      await stream.pipe(sink);
+
+      if (mounted) {
+        Navigator.of(context).pop(); // Close loading
+        final result = await OpenFilex.open(tempFile.path);
+        if (result.type != ResultType.done) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('打开文件失败: ${result.message}')),
+          );
+        }
+        // 由于预览可能是异步外部进程，我们不能立即删除文件，可以依赖系统的临时目录清理，
+        // 或者保留一段时间。这里为简便，依赖系统自动清理临时目录。
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.of(context).pop(); // Close loading
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('解密预览失败: $e')),
+        );
+      }
+    }
+  }
+
   Widget _buildExpandableFab() {
     final theme = Theme.of(context);
     return Column(
@@ -477,18 +631,6 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
     );
   }
 
-  String _formatBytes(int bytes) {
-    if (bytes <= 0) return '0 B';
-    const suffixes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
-    int i = 0;
-    double d = bytes.toDouble();
-    while (d >= 1024 && i < suffixes.length - 1) {
-      d /= 1024;
-      i++;
-    }
-    return '${d.toStringAsFixed(2)} ${suffixes[i]}';
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -506,20 +648,44 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
       },
       child: Scaffold(
         appBar: AppBar(
-        title: Text(_currentPath == '/' ? widget.vaultConfig.name.toUpperCase() : p.basename(_currentPath)),
-        leading: _currentPath != '/'
-            ? IconButton(
-                icon: const Icon(Icons.arrow_back),
-                onPressed: () {
-                  setState(() {
-                    _currentPath = p.dirname(_currentPath).replaceAll(r'\', '/');
-                    if (_currentPath.isEmpty) _currentPath = '/';
-                  });
-                  _loadFiles();
-                },
-              )
-            : null,
-      ),
+          title: _isMultiSelectMode
+              ? Text('已选择 ${_selectedNodes.length} 项')
+              : Text(_currentPath == '/' ? widget.vaultConfig.name.toUpperCase() : p.basename(_currentPath)),
+          leading: _isMultiSelectMode
+              ? IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () {
+                    setState(() {
+                      _isMultiSelectMode = false;
+                      _selectedNodes.clear();
+                    });
+                  },
+                )
+              : (_currentPath != '/'
+                  ? IconButton(
+                      icon: const Icon(Icons.arrow_back),
+                      onPressed: () {
+                        setState(() {
+                          _currentPath = p.dirname(_currentPath).replaceAll(r'\', '/');
+                          if (_currentPath.isEmpty) _currentPath = '/';
+                        });
+                        _loadFiles();
+                      },
+                    )
+                  : null),
+          actions: _isMultiSelectMode
+              ? [
+                  IconButton(
+                    icon: const Icon(Icons.share),
+                    onPressed: _selectedNodes.any((n) => !n.isDirectory) ? _shareSelected : null,
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.delete),
+                    onPressed: _selectedNodes.isNotEmpty ? _deleteSelected : null,
+                  ),
+                ]
+              : null,
+        ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _files.isEmpty
@@ -546,31 +712,63 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
                   itemCount: _files.length,
                   itemBuilder: (context, index) {
                     final file = _files[index];
+                    final isSelected = _selectedNodes.contains(file);
                     return ListTile(
-                      leading: Icon(
-                        file.isDirectory ? Icons.folder : Icons.insert_drive_file,
-                        color: file.isDirectory ? theme.colorScheme.primary : theme.colorScheme.secondary,
-                      ),
+                      leading: _isMultiSelectMode
+                          ? Checkbox(
+                              value: isSelected,
+                              onChanged: (val) {
+                                setState(() {
+                                  if (val == true) {
+                                    _selectedNodes.add(file);
+                                  } else {
+                                    _selectedNodes.remove(file);
+                                  }
+                                });
+                              },
+                            )
+                          : Icon(
+                              file.isDirectory ? Icons.folder : Icons.insert_drive_file,
+                              color: file.isDirectory ? theme.colorScheme.primary : theme.colorScheme.secondary,
+                            ),
                       title: Text(
                         file.name,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      subtitle: file.isDirectory ? null : Text(_formatBytes(file.size)),
-                      onTap: () {
-                        if (file.isDirectory) {
+                      subtitle: file.isDirectory ? null : Text(FormatUtils.formatBytes(file.size)),
+                      onLongPress: () {
+                        if (!_isMultiSelectMode) {
                           setState(() {
-                            _currentPath = file.path;
+                            _isMultiSelectMode = true;
+                            _selectedNodes.add(file);
                           });
-                          _loadFiles();
+                        }
+                      },
+                      onTap: () {
+                        if (_isMultiSelectMode) {
+                          setState(() {
+                            if (isSelected) {
+                              _selectedNodes.remove(file);
+                            } else {
+                              _selectedNodes.add(file);
+                            }
+                          });
                         } else {
-                          _exportFile(file);
+                          if (file.isDirectory) {
+                            setState(() {
+                              _currentPath = file.path;
+                            });
+                            _loadFiles();
+                          } else {
+                            _previewFile(file);
+                          }
                         }
                       },
                     );
                   },
                 ),
-      floatingActionButton: _buildExpandableFab(),
+      floatingActionButton: _isMultiSelectMode ? null : _buildExpandableFab(),
     ),
     );
   }

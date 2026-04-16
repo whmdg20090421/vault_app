@@ -25,7 +25,7 @@ class WebDavBrowserPage extends StatefulWidget {
 
   @override
   State<WebDavBrowserPage> createState() => _WebDavBrowserPageState();
-
+}
 
 class _WebDavBrowserPageState extends State<WebDavBrowserPage> {
   VirtualFileSystem? _vfs;

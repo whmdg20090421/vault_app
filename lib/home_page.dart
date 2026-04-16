@@ -11,22 +11,31 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   @override
+  void initState() {
+    super.initState();
+    // 页面初始化时触发重新计算
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      StatsService().recalculate();
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final statsService = StatsService();
-    final int encryptedBytes = statsService.encryptedBytes;
-    final int unencryptedBytes = statsService.unencryptedBytes;
-    final int totalBytes = statsService.totalBytes;
+    return ListenableBuilder(
+      listenable: StatsService(),
+      builder: (context, _) {
+        final statsService = StatsService();
+        final int encryptedBytes = statsService.encryptedBytes;
+        final int unencryptedBytes = statsService.unencryptedBytes;
+        final int totalBytes = statsService.totalBytes;
 
-    final double encryptedPercentage = totalBytes > 0 ? (encryptedBytes / totalBytes) : 0;
+        final double encryptedPercentage = totalBytes > 0 ? (encryptedBytes / totalBytes) : 0;
 
-    return RefreshIndicator(
-      onRefresh: () async {
-        await statsService.recalculate();
-        if (mounted) {
-          setState(() {});
-        }
-      },
-      child: SingleChildScrollView(
+        return RefreshIndicator(
+          onRefresh: () async {
+            await statsService.recalculate();
+          },
+          child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         child: Padding(
           padding: const EdgeInsets.all(16.0),
@@ -91,6 +100,8 @@ class _HomePageState extends State<HomePage> {
           ),
         ),
       ),
+    );
+      },
     );
   }
 }
