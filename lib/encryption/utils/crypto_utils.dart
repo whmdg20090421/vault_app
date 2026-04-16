@@ -76,7 +76,7 @@ class CryptoUtils {
     return _processAead(cipher, ciphertext);
   }
 
-  static pc.AEADCipher _getAEADCipher(String algorithm) {
+  static dynamic _getAEADCipher(String algorithm) {
     if (algorithm == 'AES-256-GCM') {
       return pc.GCMBlockCipher(pc.AESEngine());
     } else if (algorithm == 'ChaCha20-Poly1305') {
@@ -86,7 +86,7 @@ class CryptoUtils {
     }
   }
 
-  static Uint8List _processAead(pc.AEADCipher cipher, Uint8List input) {
+  static Uint8List _processAead(dynamic cipher, Uint8List input) {
     final out = Uint8List(cipher.getOutputSize(input.length));
     var outLen = cipher.processBytes(input, 0, input.length, out, 0);
     outLen += cipher.doFinal(out, outLen);

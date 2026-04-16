@@ -392,7 +392,7 @@ class _BenchmarkDialogState extends State<BenchmarkDialog> {
       final nonce = Uint8List(12);
       for (int i = 0; i < 12; i++) nonce[i] = i;
 
-      pc.AEADCipher cipher;
+      dynamic cipher;
       if (_selectedAlgorithm == 'AES-256-GCM') {
         cipher = pc.GCMBlockCipher(pc.AESEngine());
       } else {
