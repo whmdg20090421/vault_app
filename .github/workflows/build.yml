@@ -41,7 +41,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "$KEY_STORE_BASE64" ] || [ -z "$KEY_ALIAS" ] || [ -z "$KEY_PASSWORD" ] || [ -z "$STORE_PASSWORD" ]; then
-            echo "Signing secrets not configured; skipping signing setup."
+            echo "Signing secrets not configured; skipping production signing setup."
             exit 0
           fi
 
@@ -90,6 +90,21 @@ jobs:
           EOF
           if [ -n "$KEY_STORE_TYPE" ]; then
             echo "storeType=$KEY_STORE_TYPE" >> android/key.properties
+          fi
+        continue-on-error: true
+
+      - name: Force write debug signing fallback
+        shell: bash
+        run: |
+          if [ ! -f android/key.properties ]; then
+            cat > android/key.properties <<EOF
+          storePassword=android
+          keyPassword=android
+          keyAlias=androiddebugkey
+          storeFile=app/debug.keystore
+          storeType=JKS
+          EOF
+            echo "Using fixed debug keystore for release build since secrets are not configured."
           fi
 
       - name: Pub get
