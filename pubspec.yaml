@@ -41,6 +41,7 @@ dependencies:
   crypto: ^3.0.3
   pointycastle: ^3.9.1
   shared_preferences: ^2.3.2
+  webdav_client: ^3.1.0
 
 dev_dependencies:
   flutter_test:
