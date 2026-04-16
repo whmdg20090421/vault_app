@@ -1,6 +1,34 @@
 import 'dart:convert';
+import 'dart:isolate';
 import 'dart:typed_data';
 import 'package:pointycastle/export.dart' as pc;
+
+String _computeValidationCiphertext(Map<String, dynamic> args) {
+  final password = args['password'] as String;
+  final saltBase64 = args['saltBase64'] as String;
+  final kdfType = args['kdfType'] as String;
+  final kdfParams = Map<String, dynamic>.from(args['kdfParams'] as Map);
+  final nonceBase64 = args['nonceBase64'] as String;
+  final algorithm = args['algorithm'] as String;
+
+  final derivedKey = CryptoUtils.deriveKey(
+    password: password,
+    saltBase64: saltBase64,
+    kdfType: kdfType,
+    kdfParams: kdfParams,
+  );
+
+  final nonceBytes = base64Url.decode(nonceBase64);
+  final magicPlaintext = Uint8List.fromList(utf8.encode('vault_magic_encrypted'));
+  final encryptedMagic = CryptoUtils.encrypt(
+    key: derivedKey,
+    nonce: nonceBytes,
+    plaintext: magicPlaintext,
+    algorithm: algorithm,
+  );
+
+  return base64Encode(encryptedMagic);
+}
 
 class CryptoUtils {
   static const int keyLength = 32; // 256 bits
@@ -91,5 +119,25 @@ class CryptoUtils {
     var outLen = cipher.processBytes(input, 0, input.length, out, 0);
     outLen += cipher.doFinal(out, outLen);
     return out.sublist(0, outLen);
+  }
+
+  static Future<String> computeValidationCiphertextAsync({
+    required String password,
+    required String saltBase64,
+    required String kdfType,
+    required Map<String, dynamic> kdfParams,
+    required String nonceBase64,
+    required String algorithm,
+  }) {
+    return Isolate.run(
+      () => _computeValidationCiphertext({
+        'password': password,
+        'saltBase64': saltBase64,
+        'kdfType': kdfType,
+        'kdfParams': kdfParams,
+        'nonceBase64': nonceBase64,
+        'algorithm': algorithm,
+      }),
+    );
   }
 }

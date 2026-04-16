@@ -1,14 +1,16 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:crypto/crypto.dart';
 import 'package:pointycastle/export.dart' as pc;
 
 import 'models/vault_config.dart';
+import 'performance_settings_page.dart';
 import 'utils/crypto_utils.dart';
 
 class VaultConfigPage extends StatefulWidget {
@@ -91,24 +93,14 @@ class _VaultConfigPageState extends State<VaultConfigPage> {
         };
       }
 
-      // Derive key and generate validation ciphertext
-      final derivedKey = CryptoUtils.deriveKey(
+      final validationCiphertext = await CryptoUtils.computeValidationCiphertextAsync(
         password: password,
         saltBase64: salt,
         kdfType: _selectedKDF,
         kdfParams: kdfParams,
-      );
-
-      final nonceBytes = base64Url.decode(nonce);
-      final magicPlaintext = Uint8List.fromList(utf8.encode('vault_magic_encrypted'));
-      final encryptedMagic = CryptoUtils.encrypt(
-        key: derivedKey,
-        nonce: nonceBytes,
-        plaintext: magicPlaintext,
+        nonceBase64: nonce,
         algorithm: _selectedAlgorithm,
       );
-      
-      final validationCiphertext = base64Encode(encryptedMagic);
 
       final config = VaultConfig(
         name: name,
@@ -224,7 +216,7 @@ class _VaultConfigPageState extends State<VaultConfigPage> {
   void _showBenchmarkDialog() {
     showDialog(
       context: context,
-      builder: (context) => const BenchmarkDialog(),
+      builder: (context) => BenchmarkDialog(vaultDirectoryPath: widget.vaultDirectoryPath),
     );
   }
 
@@ -238,6 +230,15 @@ class _VaultConfigPageState extends State<VaultConfigPage> {
             icon: const Icon(Icons.speed),
             tooltip: 'Benchmark',
             onPressed: _showBenchmarkDialog,
+          ),
+          IconButton(
+            icon: const Icon(Icons.tune),
+            tooltip: 'Performance Settings',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const PerformanceSettingsPage()),
+              );
+            },
           ),
         ],
       ),
@@ -331,7 +332,9 @@ class _VaultConfigPageState extends State<VaultConfigPage> {
 }
 
 class BenchmarkDialog extends StatefulWidget {
-  const BenchmarkDialog({super.key});
+  final String vaultDirectoryPath;
+
+  const BenchmarkDialog({super.key, required this.vaultDirectoryPath});
 
   @override
   State<BenchmarkDialog> createState() => _BenchmarkDialogState();
@@ -344,27 +347,34 @@ class _BenchmarkDialogState extends State<BenchmarkDialog> {
   bool _isRunning = false;
   double _progress = 0.0;
   String _result = '';
+  String _status = '';
+  String _filePath = '';
+  int _doneBytes = 0;
+  int _totalBytes = 0;
+
+  File? _benchmarkFile;
 
   Future<void> _runBenchmark() async {
     setState(() {
       _isRunning = true;
       _progress = 0.0;
       _result = '';
+      _status = '';
+      _filePath = '';
+      _doneBytes = 0;
+      _totalBytes = 500 * 1024 * 1024;
     });
 
-    File? inputFile;
-    File? outputFile;
     IOSink? inputSink;
-    IOSink? outputSink;
 
     try {
-      final tempDir = Directory.systemTemp;
       final suffix = DateTime.now().millisecondsSinceEpoch.toString();
-      inputFile = File('${tempDir.path}/benchmark_in_$suffix.tmp');
-      outputFile = File('${tempDir.path}/benchmark_out_$suffix.tmp');
+      final inputFile = File('${widget.vaultDirectoryPath}/benchmark_$suffix.bin');
+      _benchmarkFile = inputFile;
+      _filePath = inputFile.path;
 
-      const chunkSize = 1024 * 1024; // 1MB
-      const totalChunks = 500; // 500MB
+      const chunkSize = 1024 * 1024;
+      const totalChunks = 500;
 
       final random = Random.secure();
       final chunkData = Uint8List(chunkSize);
@@ -372,69 +382,63 @@ class _BenchmarkDialogState extends State<BenchmarkDialog> {
         chunkData[i] = random.nextInt(256);
       }
 
-      // 1. Write dummy data
+      setState(() {
+        _status = '正在生成测试文件 (Generating): 0 / 500 MB';
+        _progress = 0.0;
+      });
+
       inputSink = inputFile.openWrite();
+      var writtenBytes = 0;
       for (int i = 0; i < totalChunks; i++) {
         inputSink.add(chunkData);
-        if (i % 50 == 0) {
-          setState(() => _progress = (i / totalChunks) * 0.2);
+        writtenBytes += chunkSize;
+        if (i % 10 == 0) {
+          final mbDone = writtenBytes / (1024 * 1024);
+          setState(() {
+            _status = '正在生成测试文件 (Generating): ${mbDone.toStringAsFixed(0)} / 500 MB';
+            _progress = (writtenBytes / _totalBytes).clamp(0.0, 1.0) * 0.2;
+          });
           await Future.delayed(Duration.zero);
         }
       }
       await inputSink.close();
       inputSink = null;
 
-      setState(() => _progress = 0.2);
+      setState(() {
+        _status = '正在加密测试文件 (Encrypting): 0 / 500 MB';
+        _progress = 0.2;
+      });
 
-      // 2. Setup cipher
       final key = Uint8List(32);
       for (int i = 0; i < 32; i++) key[i] = i;
-      final nonce = Uint8List(12);
-      for (int i = 0; i < 12; i++) nonce[i] = i;
+      final baseNonce = Uint8List(12);
+      for (int i = 0; i < 12; i++) baseNonce[i] = i;
 
-      dynamic cipher;
-      if (_selectedAlgorithm == 'AES-256-GCM') {
-        cipher = pc.GCMBlockCipher(pc.AESEngine());
-      } else {
-        cipher = pc.ChaCha20Poly1305(pc.ChaCha7539Engine(), pc.Poly1305());
-      }
-
-      final params = pc.AEADParameters(pc.KeyParameter(key), 128, nonce, Uint8List(0));
-
-      final inputStream = inputFile.openRead();
-      outputSink = outputFile.openWrite();
-
-      Uint8List processChunk(Uint8List input) {
-        final out = Uint8List(cipher.getOutputSize(input.length));
-        var outLen = cipher.processBytes(input, 0, input.length, out, 0);
-        outLen += cipher.doFinal(out, outLen);
-        return out.sublist(0, outLen);
-      }
+      final prefs = await SharedPreferences.getInstance();
+      final totalCores = Platform.numberOfProcessors;
+      final maxUsableCores = (totalCores - 1).clamp(1, totalCores);
+      final configuredCores = prefs.getInt('benchmark_cores') ?? maxUsableCores;
+      final workerCount = configuredCores.clamp(1, maxUsableCores);
 
       final stopwatch = Stopwatch()..start();
-
-      int chunksProcessed = 0;
-
-      await for (final chunk in inputStream) {
-        final uint8Chunk = chunk is Uint8List ? chunk : Uint8List.fromList(chunk);
-        
-        cipher.reset();
-        cipher.init(true, params);
-        final encryptedChunk = processChunk(uint8Chunk);
-        outputSink.add(encryptedChunk);
-
-        chunksProcessed++;
-
-        if (chunksProcessed % 10 == 0) {
+      await _runParallelEncryption(
+        filePath: inputFile.path,
+        totalBytes: _totalBytes,
+        chunkSize: chunkSize,
+        totalChunks: totalChunks,
+        workerCount: workerCount,
+        algorithm: _selectedAlgorithm,
+        key: key,
+        baseNonce: baseNonce,
+        onProgress: (bytesDone) {
+          _doneBytes = bytesDone;
+          final mbDone = _doneBytes / (1024 * 1024);
           setState(() {
-            _progress = 0.2 + (chunksProcessed / totalChunks) * 0.8;
+            _status = '正在加密测试文件 (Encrypting): ${mbDone.toStringAsFixed(0)} / 500 MB';
+            _progress = (0.2 + (_doneBytes / _totalBytes) * 0.8).clamp(0.0, 1.0);
           });
-          await Future.delayed(Duration.zero);
-        }
-      }
-
-      await outputSink.close();
-      outputSink = null;
+        },
+      );
       stopwatch.stop();
 
       final seconds = stopwatch.elapsedMilliseconds / 1000.0;
@@ -442,6 +446,7 @@ class _BenchmarkDialogState extends State<BenchmarkDialog> {
 
       setState(() {
         _progress = 1.0;
+        _status = '完成 (Done)';
         _result = '速度 (Speed): ${speed.toStringAsFixed(2)} MB/s\n耗时 (Time): ${seconds.toStringAsFixed(2)} s';
       });
     } catch (e) {
@@ -452,23 +457,21 @@ class _BenchmarkDialogState extends State<BenchmarkDialog> {
       try {
         await inputSink?.close();
       } catch (_) {}
-      try {
-        await outputSink?.close();
-      } catch (_) {}
-      try {
-        if (inputFile != null && await inputFile.exists()) {
-          await inputFile.delete();
-        }
-      } catch (_) {}
-      try {
-        if (outputFile != null && await outputFile.exists()) {
-          await outputFile.delete();
-        }
-      } catch (_) {}
       setState(() {
         _isRunning = false;
       });
     }
+  }
+
+  @override
+  void dispose() {
+    final file = _benchmarkFile;
+    if (file != null) {
+      file.exists().then((exists) {
+        if (exists) file.delete();
+      });
+    }
+    super.dispose();
   }
 
   @override
@@ -498,6 +501,19 @@ class _BenchmarkDialogState extends State<BenchmarkDialog> {
               LinearProgressIndicator(value: _progress),
               const SizedBox(height: 8),
               Text('${(_progress * 100).toStringAsFixed(1)}%'),
+              if (_status.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(_status),
+              ],
+              if (_filePath.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Text(
+                  _filePath,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
             ],
             if (_result.isNotEmpty) ...[
               const SizedBox(height: 16),
@@ -517,5 +533,135 @@ class _BenchmarkDialogState extends State<BenchmarkDialog> {
         ),
       ],
     );
+  }
+}
+
+Future<void> _runParallelEncryption({
+  required String filePath,
+  required int totalBytes,
+  required int chunkSize,
+  required int totalChunks,
+  required int workerCount,
+  required String algorithm,
+  required Uint8List key,
+  required Uint8List baseNonce,
+  required void Function(int bytesDone) onProgress,
+}) async {
+  final receivePort = ReceivePort();
+
+  final chunksPerWorker = (totalChunks / workerCount).ceil();
+  var bytesDone = 0;
+  var doneWorkers = 0;
+
+  final completer = Completer<void>();
+  final subscription = receivePort.listen((message) {
+    if (message is Map) {
+      final type = message['type'];
+      if (type == 'progress') {
+        final bytes = message['bytes'] as int;
+        bytesDone += bytes;
+        if (bytesDone > totalBytes) bytesDone = totalBytes;
+        onProgress(bytesDone);
+      } else if (type == 'done') {
+        doneWorkers += 1;
+        if (doneWorkers >= workerCount) {
+          completer.complete();
+        }
+      }
+    }
+  });
+
+  for (int workerId = 0; workerId < workerCount; workerId++) {
+    final startChunk = workerId * chunksPerWorker;
+    if (startChunk >= totalChunks) {
+      receivePort.sendPort.send({'type': 'done'});
+      continue;
+    }
+    final endChunk = min(totalChunks, startChunk + chunksPerWorker);
+
+    final args = <String, dynamic>{
+      'sendPort': receivePort.sendPort,
+      'filePath': filePath,
+      'startChunk': startChunk,
+      'endChunk': endChunk,
+      'chunkSize': chunkSize,
+      'algorithm': algorithm,
+      'key': key,
+      'baseNonce': baseNonce,
+    };
+
+    await Isolate.spawn(_benchmarkEncryptWorker, args);
+  }
+
+  await completer.future;
+  await subscription.cancel();
+  receivePort.close();
+}
+
+Uint8List _nonceWithCounter(Uint8List base, int counter) {
+  final nonce = Uint8List.fromList(base);
+  final bd = ByteData.sublistView(nonce);
+  bd.setUint64(4, counter, Endian.big);
+  return nonce;
+}
+
+dynamic _createCipher(String algorithm) {
+  if (algorithm == 'AES-256-GCM') {
+    return pc.GCMBlockCipher(pc.AESEngine());
+  }
+  if (algorithm == 'ChaCha20-Poly1305') {
+    return pc.ChaCha20Poly1305(pc.ChaCha7539Engine(), pc.Poly1305());
+  }
+  throw Exception('Unsupported algorithm: $algorithm');
+}
+
+void _benchmarkEncryptWorker(Map<String, dynamic> args) async {
+  final sendPort = args['sendPort'] as SendPort;
+  final filePath = args['filePath'] as String;
+  final startChunk = args['startChunk'] as int;
+  final endChunk = args['endChunk'] as int;
+  final chunkSize = args['chunkSize'] as int;
+  final algorithm = args['algorithm'] as String;
+  final key = Uint8List.fromList(args['key'] as Uint8List);
+  final baseNonce = Uint8List.fromList(args['baseNonce'] as Uint8List);
+
+  RandomAccessFile? raf;
+  try {
+    raf = await File(filePath).open();
+    await raf.setPosition(startChunk * chunkSize);
+
+    final cipher = _createCipher(algorithm);
+    var bytesSinceLastReport = 0;
+
+    for (int chunkIndex = startChunk; chunkIndex < endChunk; chunkIndex++) {
+      final data = await raf.read(chunkSize);
+      if (data.isEmpty) break;
+
+      final nonce = _nonceWithCounter(baseNonce, chunkIndex);
+      final params = pc.AEADParameters(pc.KeyParameter(key), 128, nonce, Uint8List(0));
+
+      cipher.reset();
+      cipher.init(true, params);
+      final out = Uint8List(cipher.getOutputSize(data.length));
+      var outLen = cipher.processBytes(data, 0, data.length, out, 0);
+      outLen += cipher.doFinal(out, outLen);
+
+      bytesSinceLastReport += data.length;
+      if (bytesSinceLastReport >= 4 * 1024 * 1024) {
+        sendPort.send({'type': 'progress', 'bytes': bytesSinceLastReport});
+        bytesSinceLastReport = 0;
+      }
+    }
+
+    if (bytesSinceLastReport > 0) {
+      sendPort.send({'type': 'progress', 'bytes': bytesSinceLastReport});
+    }
+  } catch (e) {
+    sendPort.send({'type': 'progress', 'bytes': 0});
+  } finally {
+    try {
+      await raf?.close();
+    } catch (_) {}
+    sendPort.send({'type': 'done'});
   }
 }
