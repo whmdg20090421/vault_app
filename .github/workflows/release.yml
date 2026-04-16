@@ -1,6 +1,9 @@
 name: Release Android APK
 
 on:
+  push:
+    tags:
+      - 'v*'
   workflow_dispatch:
 
 env:
