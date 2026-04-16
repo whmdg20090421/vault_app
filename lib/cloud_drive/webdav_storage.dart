@@ -42,6 +42,7 @@ abstract class WebDavPasswordStore {
   Future<String?> readPassword(String id);
   Future<void> writePassword(String id, String password);
   Future<void> deletePassword(String id);
+  Future<bool> hasPassword(String id);
 }
 
 class FlutterSecurePasswordStore implements WebDavPasswordStore {
@@ -65,6 +66,11 @@ class FlutterSecurePasswordStore implements WebDavPasswordStore {
   @override
   Future<void> deletePassword(String id) {
     return _storage.delete(key: '$_prefix$id');
+  }
+
+  @override
+  Future<bool> hasPassword(String id) {
+    return _storage.containsKey(key: '$_prefix$id');
   }
 }
 
@@ -155,5 +161,8 @@ class WebDavConfigRepository {
   Future<String?> readPassword(String id) {
     return _passwordStore.readPassword(id);
   }
-}
 
+  Future<bool> hasPassword(String id) {
+    return _passwordStore.hasPassword(id);
+  }
+}

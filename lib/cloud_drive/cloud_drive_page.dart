@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'security_detector.dart';
 import 'security_level.dart';
 import 'webdav_config.dart';
+import 'webdav_browser_page.dart';
 import 'webdav_edit_page.dart';
 import 'webdav_storage.dart';
 
@@ -64,11 +65,35 @@ class _CloudDrivePageState extends State<CloudDrivePage> {
       return;
     }
     setState(() => _securityLevel = detected);
+
+    final theme = Theme.of(context);
+    final title = detected == SecurityLevel.level1 ? '安全存储提示' : '安全存储提醒';
+    final content = detected == SecurityLevel.level1
+        ? '当前设备支持硬件级安全存储（Level 1），授权密码将安全保存。'
+        : '当前设备仅支持软件级安全存储（Level 2），授权密码仍会保存，但安全等级较低。';
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(title),
+        content: Text(content),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text('知道了', style: TextStyle(color: theme.colorScheme.primary)),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _create() async {
     final result = await Navigator.of(context).push<WebDavEditResult>(
-      MaterialPageRoute(builder: (_) => const WebDavEditPage()),
+      MaterialPageRoute(
+        builder: (_) => WebDavEditPage(
+          securityLevel: _securityLevel?.toJson(),
+          hasStoredPassword: false,
+        ),
+      ),
     );
     if (result == null) {
       return;
@@ -80,8 +105,15 @@ class _CloudDrivePageState extends State<CloudDrivePage> {
   }
 
   Future<void> _edit(WebDavConfig config) async {
+    final hasPassword = await _repository.hasPassword(config.id);
     final result = await Navigator.of(context).push<WebDavEditResult>(
-      MaterialPageRoute(builder: (_) => WebDavEditPage(initial: config)),
+      MaterialPageRoute(
+        builder: (_) => WebDavEditPage(
+          initial: config,
+          securityLevel: _securityLevel?.toJson(),
+          hasStoredPassword: hasPassword,
+        ),
+      ),
     );
     if (result == null) {
       return;
@@ -202,20 +234,25 @@ class _CloudDrivePageState extends State<CloudDrivePage> {
                                 Icon(_levelIcon(), color: _levelColor(theme)),
                             title: Text(item.name),
                             subtitle: Text('${item.username} · ${item.url}'),
-                            onTap: () => _edit(item),
-                            trailing: PopupMenuButton<String>(
-                              onSelected: (value) {
-                                if (value == 'edit') {
-                                  _edit(item);
-                                } else if (value == 'delete') {
-                                  _delete(item);
-                                }
-                              },
-                              itemBuilder: (context) => const [
-                                PopupMenuItem(value: 'edit', child: Text('编辑')),
-                                PopupMenuItem(
-                                  value: 'delete',
-                                  child: Text('删除'),
+                            onTap: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => WebDavBrowserPage(config: item),
+                                ),
+                              );
+                            },
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  tooltip: '编辑',
+                                  onPressed: () => _edit(item),
+                                  icon: const Icon(Icons.edit_rounded),
+                                ),
+                                IconButton(
+                                  tooltip: '删除',
+                                  onPressed: () => _delete(item),
+                                  icon: const Icon(Icons.delete_rounded),
                                 ),
                               ],
                             ),

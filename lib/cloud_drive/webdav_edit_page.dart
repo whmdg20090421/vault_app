@@ -13,9 +13,16 @@ class WebDavEditResult {
 }
 
 class WebDavEditPage extends StatefulWidget {
-  const WebDavEditPage({super.key, this.initial});
+  const WebDavEditPage({
+    super.key,
+    this.initial,
+    this.securityLevel,
+    this.hasStoredPassword,
+  });
 
   final WebDavConfig? initial;
+  final String? securityLevel;
+  final bool? hasStoredPassword;
 
   @override
   State<WebDavEditPage> createState() => _WebDavEditPageState();
@@ -29,6 +36,38 @@ class _WebDavEditPageState extends State<WebDavEditPage> {
   late final TextEditingController _passwordController;
 
   bool get _isEdit => widget.initial != null;
+
+  String? get _passwordStatusText {
+    if (!_isEdit) {
+      return null;
+    }
+    final hasStored = widget.hasStoredPassword ?? false;
+    if (!hasStored) {
+      return '授权密码未存储（当前将继续使用已保存的密码，直到你重新输入并保存）';
+    }
+    final level = widget.securityLevel;
+    if (level == 'level2') {
+      return '授权密码已存储，但设备仅支持软件级安全存储（安全等级较低）';
+    }
+    if (level == 'level1') {
+      return '授权密码已安全存储（硬件级）';
+    }
+    return '授权密码已存储';
+  }
+
+  Color? _passwordStatusColor(ThemeData theme) {
+    if (!_isEdit) {
+      return null;
+    }
+    final hasStored = widget.hasStoredPassword ?? false;
+    if (!hasStored) {
+      return theme.colorScheme.outline;
+    }
+    if (widget.securityLevel == 'level2') {
+      return theme.colorScheme.tertiary;
+    }
+    return theme.colorScheme.primary;
+  }
 
   @override
   void initState() {
@@ -99,6 +138,7 @@ class _WebDavEditPageState extends State<WebDavEditPage> {
   @override
   Widget build(BuildContext context) {
     final title = _isEdit ? '编辑 WebDAV' : '新增 WebDAV';
+    final theme = Theme.of(context);
 
     return Scaffold(
       appBar: AppBar(
@@ -159,10 +199,19 @@ class _WebDavEditPageState extends State<WebDavEditPage> {
               textInputAction: TextInputAction.done,
               onFieldSubmitted: (_) => _submit(),
             ),
+            if (_passwordStatusText != null) ...[
+              const SizedBox(height: 10),
+              Text(
+                _passwordStatusText!,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: _passwordStatusColor(theme),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
           ],
         ),
       ),
     );
   }
 }
-
