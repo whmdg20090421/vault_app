@@ -1,10 +1,12 @@
 # WebDAV End-to-End Encrypted Virtual File System Spec
 
 ## Why
-用户需要在基于 WebDAV 的云盘服务上实现端到端的透明加密虚拟文件系统，以确保云端只存储密文而无法获取明文信息。该功能优先支持 Android 平台，需提供类似于本地文件系统的完整读写体验（上传、浏览、打开、删除、改名），并能够流畅且安全地进行流式传输，保证大文件播放不卡顿。
+用户需要在基于 WebDAV 的云盘服务上实现端到端的透明加密虚拟文件系统。当前云盘点击进入后仅为一个骨架页面，缺乏基础的文件浏览架构。因此，需要先搭建完整的 WebDAV 客户端架构与文件浏览器 UI，在此基础上实现透明加密的虚拟文件系统（VFS），确保云端只存储密文而无法获取明文信息。该功能优先支持 Android 平台，需提供类似于本地文件系统的完整读写体验（上传、浏览、打开、删除、改名），并能够流畅且安全地进行流式传输，保证大文件播放不卡顿。
 
 ## What Changes
-- 实现 WebDAV 端到端加密虚拟文件系统，支持完整的读写操作（浏览、上传、打开、改名、删除）。
+- **架构先行**：实现 WebDAV 基础通信层（Client）与文件浏览器交互层（UI），包含目录导航（面包屑）、文件列表展示、基础操作入口（上传、新建、删除、重命名）。
+- **VFS 抽象层**：在 UI 与 WebDAV Client 之间引入虚拟文件系统抽象层（VFS），UI 层仅与 VFS 交互，由 VFS 决定数据的加解密。
+- 实现 WebDAV 端到端加密，支持完整的读写操作（浏览、上传、打开、改名、删除）。
 - 统一文件名与文件内容的加密算法：均采用相同的对称加密方案（如 AES-256-GCM），且使用同一套用户密钥。
 - 严禁使用 Base64 作为加密手段，仅将其（如 Base64Url）用于密文等二进制数据的传输编码。
 - 引入加密标识符（Encryption Marker）机制，支持目录树的加密状态向下递归继承。
@@ -14,11 +16,17 @@
 ## Impact
 - Affected specs: 云盘模块（WebDAV 客户端与预览机制）、加密模块。
 - Affected code:
-  - `lib/cloud_drive/`（WebDAV API、虚拟文件系统抽象、预览播放器）
+  - `lib/cloud_drive/`（WebDAV API、文件浏览器 UI、虚拟文件系统抽象、预览播放器）
   - `lib/encryption/`（AES-256-GCM 封装、文件分块加解密流）
   - `.github/workflows/`（工作流触发条件修改验证）
 
 ## ADDED Requirements
+### Requirement: WebDAV Browser Architecture
+系统需提供基础的 WebDAV 文件浏览与操作界面。
+#### Scenario: Basic File Operations
+- **WHEN** 用户进入 WebDAV 云盘
+- **THEN** 界面展示当前的目录结构，提供层级导航（面包屑），并允许用户进行文件上传、新建文件夹、重命名和删除等操作。
+
 ### Requirement: E2EE Virtual File System
 系统需提供透明的加密文件系统操作，云端仅存储密文。
 #### Scenario: Directory Browsing (Encrypted Domain)
