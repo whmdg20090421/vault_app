@@ -1,0 +1,10 @@
+- [ ] 已经在 `pubspec.yaml` 中添加了相应的密码学支持库（`crypto`, `pointycastle` 等）
+- [ ] `VaultConfig` 模型已定义，支持 JSON 序列化并包含所有必要的加密参数
+- [ ] 在选择文件夹后，能够正常跳转到 `VaultConfigPage`
+- [ ] `VaultConfigPage` 能够根据选择的抗暴力破解防御模式（KDF）动态展开参数面板，并展示预设的默认安全值
+- [ ] 用户配置完成后，能够成功将包含验证块和 KDF 详情的 `vault_config.json` 明文写入到所选加密文件夹根目录
+- [ ] `EncryptionPage` 已成功更新为显示配置好的保险箱（Vault）的列表视图
+- [ ] 点击列表中的保险箱时，能正确弹出密码输入框
+- [ ] 密码验证逻辑能够正确派生密钥，并成功校验 `vault_config.json` 中的验证密文
+- [ ] 验证成功后，系统正确跳转到 `VaultExplorerPage`
+- [ ] `VaultExplorerPage` 拥有一个右下角加号展开菜单，包含导入文件、导入文件夹、新建空文件夹的完整功能按钮
