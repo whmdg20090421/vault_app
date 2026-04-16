@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'cloud_drive/cloud_drive_page.dart';
 import 'encryption/encryption_page.dart';
 import 'error_reporter.dart';
+import 'about_page.dart';
+import 'home_page.dart';
 
 enum AppTheme { defaultTheme, cyberpunk }
 
@@ -107,7 +109,7 @@ class _MainShellState extends State<MainShell> {
   @override
   Widget build(BuildContext context) {
     final pages = const [
-      _TitlePage(title: '主页'),
+      HomePage(),
       CloudDrivePage(),
       EncryptionPage(),
       SettingsPage(),
@@ -176,6 +178,20 @@ class SettingsPage extends StatelessWidget {
         return ListView(
           padding: const EdgeInsets.all(16),
           children: [
+            ListTile(
+              leading: const Icon(Icons.info_outline_rounded),
+              title: const Text('关于'),
+              trailing: const Icon(Icons.chevron_right_rounded),
+              contentPadding: EdgeInsets.zero,
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const AboutPage()),
+                );
+              },
+            ),
+            const Divider(),
+            const SizedBox(height: 8),
             Text(
               '主题',
               style: Theme.of(context).textTheme.titleLarge?.copyWith(

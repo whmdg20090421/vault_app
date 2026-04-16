@@ -42,6 +42,7 @@ dependencies:
   pointycastle: ^3.9.1
   shared_preferences: ^2.3.2
   webdav_client: ^1.2.2
+  fl_chart: ^0.68.0
 
 dev_dependencies:
   flutter_test:
