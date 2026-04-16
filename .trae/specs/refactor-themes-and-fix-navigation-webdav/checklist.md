@@ -1,0 +1,7 @@
+- [ ] 赛博朋克主题已改为圆角与合适的彩色背景。
+- [ ] 纯黑主题已添加，风格极简且不带发光边框。
+- [ ] `vault_explorer_page.dart` 中的物理返回键能够正常进行逐级目录返回，根目录时才允许关闭界面。
+- [ ] `home_page.dart` 中的数据概览已更新为线性进度条，宽度满铺，包含绿红双色，并准确使用了真实统计数据。
+- [ ] 文件列表中显示的文件大小已正确换算并展示为 KB/MB/GB。
+- [ ] `webdav_client_service.dart` (或其底层 HTTP client) 已配置为信任所有证书/忽略 SSL 报错。
+- [ ] `AndroidManifest.xml` 中已配置 `android:usesCleartextTraffic="true"`。
