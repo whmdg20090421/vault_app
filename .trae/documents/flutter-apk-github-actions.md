@@ -13,12 +13,12 @@
 ### 1) 新建 Flutter 应用骨架
 **目标**
 - App 显示名：`天眼·艨艟战舰`
-- Android 包名（applicationId）：`com.tianyanjcz.vault`
+- Android 包名（applicationId）：`com.tianyanmczj.value`
 - 主界面：BottomNavigationBar，4 个 Tab：`主页 / 云盘 / 加密 / 设置`；每页仅展示标题文字。
 
 **将新增/生成的核心文件（按 flutter create 结构）**
 - `pubspec.yaml`
-  - `name: vault`（Dart package 名称，与 Android applicationId 无强制绑定，但建议保持一致、简短）
+  - `name: value`（Dart package 名称，与 Android applicationId 无强制绑定，但建议保持一致、简短）
   - Flutter SDK 约束：`>=3.0.0 <4.0.0`（兼容 Flutter 3.x 稳定版）
 - `lib/main.dart`
   - `MaterialApp` + `Scaffold`
@@ -44,8 +44,8 @@
 - 创建工程的方式：
   - 优先用 `flutter create --org com.tianyanjcz --project-name vault .` 在仓库根目录初始化（确保生成完整标准结构与 Gradle 配置），再按需要修改显示名、UI 与签名读取逻辑。
 - Android 包名：
-  - 通过 `--org com.tianyanjcz` + `--project-name vault` 生成 `com.tianyanjcz.vault`
-  - 若生成结果与期望不一致，再在 `android/app/build.gradle*` 的 `applicationId` 处修正为 `com.tianyanjcz.vault`
+  - 通过 `--org com.tianyanmczj` + `--project-name value` 生成 `com.tianyanmczj.value`
+  - 若生成结果与期望不一致，再在 `android/app/build.gradle*` 的 `applicationId` 处修正为 `com.tianyanmczj.value`
 
 ### 2) Android Release 签名（基于 Secrets）
 **目标**
@@ -100,4 +100,3 @@
 ### CI（必做）
 - push 到 `main` 后，Actions workflow 成功
 - 构建产物中包含 `apk-arm64-v8a-release` artifact，且内含 `app-arm64-v8a-release.apk`
-
