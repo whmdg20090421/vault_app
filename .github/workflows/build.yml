@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - main
+  pull_request:
+    branches:
+      - main
 
 jobs:
   build-android:
@@ -31,19 +34,63 @@ jobs:
         shell: bash
         env:
           KEY_STORE_BASE64: ${{ secrets.KEY_STORE_BASE64 }}
+          KEY_STORE_TYPE: ${{ secrets.KEY_STORE_TYPE }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
           STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
         run: |
           set -euo pipefail
+          if [ -z "$KEY_STORE_BASE64" ] || [ -z "$KEY_ALIAS" ] || [ -z "$KEY_PASSWORD" ] || [ -z "$STORE_PASSWORD" ]; then
+            echo "Signing secrets not configured; skipping signing setup."
+            exit 0
+          fi
+
           mkdir -p android/app
-          echo "$KEY_STORE_BASE64" | base64 --decode > android/app/keystore.jks
+          printf '%s' "$KEY_STORE_BASE64" | base64 --decode > android/app/keystore.src
+
+          DETECTED_STORE_TYPE=""
+          if [ -n "$KEY_STORE_TYPE" ]; then
+            DETECTED_STORE_TYPE="$KEY_STORE_TYPE"
+          else
+            if keytool -list -keystore android/app/keystore.src -storetype PKCS12 -storepass "$STORE_PASSWORD" >/dev/null 2>&1; then
+              DETECTED_STORE_TYPE="PKCS12"
+            elif keytool -list -keystore android/app/keystore.src -storetype JKS -storepass "$STORE_PASSWORD" >/dev/null 2>&1; then
+              DETECTED_STORE_TYPE="JKS"
+            fi
+          fi
+
+          if [ -z "$DETECTED_STORE_TYPE" ]; then
+            echo "Could not detect keystore type (PKCS12/JKS)." >&2
+            exit 1
+          fi
+
+          if [ "$DETECTED_STORE_TYPE" = "PKCS12" ]; then
+            keytool -importkeystore \
+              -srckeystore android/app/keystore.src \
+              -srcstoretype PKCS12 \
+              -srcstorepass "$STORE_PASSWORD" \
+              -destkeystore android/app/keystore.jks \
+              -deststoretype JKS \
+              -deststorepass "$STORE_PASSWORD" \
+              -srcalias "$KEY_ALIAS" \
+              -destalias "$KEY_ALIAS" \
+              -srckeypass "$KEY_PASSWORD" \
+              -destkeypass "$KEY_PASSWORD" \
+              -noprompt
+          else
+            mv android/app/keystore.src android/app/keystore.jks
+          fi
+
+          rm -f android/app/keystore.src
           cat > android/key.properties <<EOF
           storePassword=$STORE_PASSWORD
           keyPassword=$KEY_PASSWORD
           keyAlias=$KEY_ALIAS
           storeFile=app/keystore.jks
           EOF
+          if [ -n "$KEY_STORE_TYPE" ]; then
+            echo "storeType=$KEY_STORE_TYPE" >> android/key.properties
+          fi
 
       - name: Pub get
         run: flutter pub get
