@@ -2,6 +2,7 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
+import 'cloud_drive/cloud_drive_page.dart';
 import 'error_reporter.dart';
 
 enum AppTheme { defaultTheme, cyberpunk }
@@ -105,7 +106,7 @@ class _MainShellState extends State<MainShell> {
   Widget build(BuildContext context) {
     final pages = [
       const _TitlePage(title: '主页'),
-      const _TitlePage(title: '云盘'),
+      const CloudDrivePage(),
       const _TitlePage(title: '加密'),
       SettingsPage(
         theme: appTheme.value,
