@@ -11,14 +11,17 @@ import '../vfs/standard_vfs.dart';
 import '../services/sync_storage_service.dart';
 import '../models/sync_task.dart';
 import '../utils/format_utils.dart';
+import 'webdav_state_manager.dart';
 
 class WebDavBrowserPage extends StatefulWidget {
   const WebDavBrowserPage({
     super.key,
     required this.config,
+    this.isEmbedded = false,
   });
 
   final WebDavConfig config;
+  final bool isEmbedded;
 
   @override
   State<WebDavBrowserPage> createState() => _WebDavBrowserPageState();
@@ -237,15 +240,21 @@ class _WebDavBrowserPageState extends State<WebDavBrowserPage> {
     );
 
     if (confirm == true) {
-      if (mounted) setState(() => _isLoading = true);
-      try {
-        await _vfs!.delete(file.path);
-        if (mounted) await _loadCurrentPath();
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('删除失败：${translateWebDavError(e)}')));
-          setState(() => _isLoading = false);
-        }
+      await _deleteItemWithoutConfirm(file);
+    }
+  }
+
+  Future<void> _deleteItemWithoutConfirm(VfsNode file) async {
+    if (mounted) setState(() => _isLoading = true);
+    try {
+      await _vfs!.delete(file.path);
+      WebDAVStateManager.instance.addLog('已删除云端文件: ${file.name}');
+      if (mounted) await _loadCurrentPath();
+    } catch (e) {
+      WebDAVStateManager.instance.addLog('删除云端文件失败: ${file.name} - $e', isError: true);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('删除失败：${translateWebDavError(e)}')));
+        setState(() => _isLoading = false);
       }
     }
   }
@@ -348,136 +357,191 @@ class _WebDavBrowserPageState extends State<WebDavBrowserPage> {
 
   @override
   Widget build(BuildContext context) {
+    final body = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildBreadcrumbs(),
+        const Divider(height: 1),
+        Expanded(
+          child: _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : _error.isNotEmpty
+                  ? Center(child: Text(_error, style: const TextStyle(color: Colors.red)))
+                  : RefreshIndicator(
+                      onRefresh: _loadCurrentPath,
+                      child: _files.isEmpty
+                          ? ListView(
+                              children: const [
+                                SizedBox(height: 100),
+                                Center(child: Text('空目录')),
+                              ],
+                            )
+                          : ListView.builder(
+                              itemCount: _files.length,
+                              itemBuilder: (context, index) {
+                                final file = _files[index];
+                                final isDir = file.isDirectory;
+                                
+                                // 检查同步状态
+                                bool isSynced = false;
+                                if (!isDir) {
+                                  String cleanPath = file.path;
+                                  if (cleanPath.startsWith('/')) {
+                                    cleanPath = cleanPath.substring(1);
+                                  }
+                                  isSynced = _syncedPaths.contains(cleanPath) || _syncedPaths.contains(file.path);
+                                }
+
+                                final listTile = ListTile(
+                                  leading: Icon(
+                                    isDir ? Icons.folder : Icons.insert_drive_file,
+                                    color: isDir ? Colors.orange : Colors.blue,
+                                  ),
+                                  title: Text(file.name),
+                                  subtitle: isDir ? null : Row(
+                                    children: [
+                                      Text(FormatUtils.formatBytes(file.size)),
+                                      const SizedBox(width: 8),
+                                      if (isSynced)
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: Colors.green.withOpacity(0.1),
+                                            borderRadius: BorderRadius.circular(4),
+                                            border: Border.all(color: Colors.green.withOpacity(0.5)),
+                                          ),
+                                          child: const Text('已同步', style: TextStyle(fontSize: 10, color: Colors.green)),
+                                        )
+                                      else
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: Colors.grey.withOpacity(0.1),
+                                            borderRadius: BorderRadius.circular(4),
+                                            border: Border.all(color: Colors.grey.withOpacity(0.5)),
+                                          ),
+                                          child: const Text('未同步', style: TextStyle(fontSize: 10, color: Colors.grey)),
+                                        ),
+                                    ],
+                                  ),
+                                  onTap: isDir ? () => _navigateTo(file.name) : null,
+                                  onLongPress: () {
+                                    if (widget.isEmbedded) {
+                                      _deleteItem(file);
+                                    }
+                                  },
+                                  trailing: PopupMenuButton<String>(
+                                    onSelected: (value) {
+                                      if (value == 'rename') {
+                                        _renameItem(file);
+                                      } else if (value == 'delete') {
+                                        _deleteItem(file);
+                                      }
+                                    },
+                                    itemBuilder: (context) => [
+                                      const PopupMenuItem(
+                                        value: 'rename',
+                                        child: Text('重命名'),
+                                      ),
+                                      const PopupMenuItem(
+                                        value: 'delete',
+                                        child: Text('删除', style: TextStyle(color: Colors.red)),
+                                      ),
+                                    ],
+                                  ),
+                                );
+
+                                if (widget.isEmbedded) {
+                                  return Dismissible(
+                                    key: Key(file.path),
+                                    direction: DismissDirection.endToStart,
+                                    background: Container(
+                                      color: Colors.red,
+                                      alignment: Alignment.centerRight,
+                                      padding: const EdgeInsets.only(right: 20),
+                                      child: const Icon(Icons.delete, color: Colors.white),
+                                    ),
+                                    confirmDismiss: (direction) async {
+                                      final confirm = await showDialog<bool>(
+                                        context: context,
+                                        builder: (context) => AlertDialog(
+                                          title: const Text('确认删除'),
+                                          content: Text('确定要删除 ${file.name} 吗？'),
+                                          actions: [
+                                            TextButton(
+                                              onPressed: () => Navigator.pop(context, false),
+                                              child: const Text('取消'),
+                                            ),
+                                            TextButton(
+                                              onPressed: () => Navigator.pop(context, true),
+                                              child: const Text('删除', style: TextStyle(color: Colors.red)),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                      return confirm == true;
+                                    },
+                                    onDismissed: (direction) {
+                                      _deleteItemWithoutConfirm(file);
+                                    },
+                                    child: listTile,
+                                  );
+                                }
+
+                                return listTile;
+                              },
+                            ),
+                    ),
+        ),
+      ],
+    );
+
+    final floatingActionButton = FloatingActionButton(
+      onPressed: () {
+        showModalBottomSheet(
+          context: context,
+          builder: (context) => SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.create_new_folder),
+                  title: const Text('新建文件夹'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _createFolder();
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.upload_file),
+                  title: const Text('上传文件'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _uploadFile();
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+      child: const Icon(Icons.add),
+    );
+
+    if (widget.isEmbedded) {
+      return Scaffold(
+        body: body,
+        floatingActionButton: floatingActionButton,
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.config.name),
         centerTitle: true,
       ),
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildBreadcrumbs(),
-          const Divider(height: 1),
-          Expanded(
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : _error.isNotEmpty
-                    ? Center(child: Text(_error, style: const TextStyle(color: Colors.red)))
-                    : RefreshIndicator(
-                        onRefresh: _loadCurrentPath,
-                        child: _files.isEmpty
-                            ? ListView(
-                                children: const [
-                                  SizedBox(height: 100),
-                                  Center(child: Text('空目录')),
-                                ],
-                              )
-                            : ListView.builder(
-                                itemCount: _files.length,
-                                itemBuilder: (context, index) {
-                                  final file = _files[index];
-                                  final isDir = file.isDirectory;
-                                  
-                                  // 检查同步状态
-                                  bool isSynced = false;
-                                  if (!isDir) {
-                                    String cleanPath = file.path;
-                                    if (cleanPath.startsWith('/')) {
-                                      cleanPath = cleanPath.substring(1);
-                                    }
-                                    isSynced = _syncedPaths.contains(cleanPath) || _syncedPaths.contains(file.path);
-                                  }
-
-                                  return ListTile(
-                                    leading: Icon(
-                                      isDir ? Icons.folder : Icons.insert_drive_file,
-                                      color: isDir ? Colors.orange : Colors.blue,
-                                    ),
-                                    title: Text(file.name),
-                                    subtitle: isDir ? null : Row(
-                                      children: [
-                                        Text(FormatUtils.formatBytes(file.size)),
-                                        const SizedBox(width: 8),
-                                        if (isSynced)
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                                            decoration: BoxDecoration(
-                                              color: Colors.green.withOpacity(0.1),
-                                              borderRadius: BorderRadius.circular(4),
-                                              border: Border.all(color: Colors.green.withOpacity(0.5)),
-                                            ),
-                                            child: const Text('已同步', style: TextStyle(fontSize: 10, color: Colors.green)),
-                                          )
-                                        else
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                                            decoration: BoxDecoration(
-                                              color: Colors.grey.withOpacity(0.1),
-                                              borderRadius: BorderRadius.circular(4),
-                                              border: Border.all(color: Colors.grey.withOpacity(0.5)),
-                                            ),
-                                            child: const Text('未同步', style: TextStyle(fontSize: 10, color: Colors.grey)),
-                                          ),
-                                      ],
-                                    ),
-                                    onTap: isDir ? () => _navigateTo(file.name) : null,
-                                    trailing: PopupMenuButton<String>(
-                                      onSelected: (value) {
-                                        if (value == 'rename') {
-                                          _renameItem(file);
-                                        } else if (value == 'delete') {
-                                          _deleteItem(file);
-                                        }
-                                      },
-                                      itemBuilder: (context) => [
-                                        const PopupMenuItem(
-                                          value: 'rename',
-                                          child: Text('重命名'),
-                                        ),
-                                        const PopupMenuItem(
-                                          value: 'delete',
-                                          child: Text('删除', style: TextStyle(color: Colors.red)),
-                                        ),
-                                      ],
-                                    ),
-                                  );
-                                },
-                              ),
-                      ),
-          ),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          showModalBottomSheet(
-            context: context,
-            builder: (context) => SafeArea(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  ListTile(
-                    leading: const Icon(Icons.create_new_folder),
-                    title: const Text('新建文件夹'),
-                    onTap: () {
-                      Navigator.pop(context);
-                      _createFolder();
-                    },
-                  ),
-                  ListTile(
-                    leading: const Icon(Icons.upload_file),
-                    title: const Text('上传文件'),
-                    onTap: () {
-                      Navigator.pop(context);
-                      _uploadFile();
-                    },
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
-        child: const Icon(Icons.add),
-      ),
+      body: body,
+      floatingActionButton: floatingActionButton,
     );
   }
 }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'services/stats_service.dart';
+import 'utils/format_utils.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -70,14 +71,14 @@ class _HomePageState extends State<HomePage> {
                               child: _Indicator(
                                 color: Colors.green,
                                 text: '已加密',
-                                subtext: statsService.formatBytes(encryptedBytes),
+                                subtext: FormatUtils.formatBytes(encryptedBytes),
                               ),
                             ),
                             Expanded(
                               child: _Indicator(
                                 color: Colors.red,
                                 text: '未加密',
-                                subtext: statsService.formatBytes(unencryptedBytes),
+                                subtext: FormatUtils.formatBytes(unencryptedBytes),
                               ),
                             ),
                           ],

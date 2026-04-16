@@ -9,6 +9,7 @@ import 'cloud_drive/cloud_drive_page.dart';
 import 'encryption/encryption_page.dart';
 import 'cloud_drive/cloud_drive_progress_manager.dart';
 import 'cloud_drive/cloud_drive_progress_panel.dart';
+import 'cloud_drive/webdav_state_manager.dart';
 import 'error_reporter.dart';
 import 'about_page.dart';
 import 'home_page.dart';
@@ -103,7 +104,7 @@ class TianyanApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: Listenable.merge([appTheme, BackgroundSettings.instance]),
+      listenable: Listenable.merge([appTheme, BackgroundSettings.instance, WebDAVStateManager.instance]),
       builder: (context, _) {
         final theme = appTheme.value;
         final bg = BackgroundSettings.instance;

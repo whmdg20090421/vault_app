@@ -4,7 +4,7 @@ import '../main.dart';
 import 'security_detector.dart';
 import 'security_level.dart';
 import 'webdav_config.dart';
-import 'webdav_browser_page.dart';
+import 'webdav_dashboard_page.dart';
 import 'webdav_edit_page.dart';
 import 'webdav_storage.dart';
 
@@ -241,7 +241,7 @@ class _CloudDrivePageState extends State<CloudDrivePage> {
                             onTap: () {
                               Navigator.of(context).push(
                                 MaterialPageRoute(
-                                  builder: (_) => WebDavBrowserPage(config: item),
+                                  builder: (_) => WebDAVDashboardPage(config: item),
                                 ),
                               );
                             },
