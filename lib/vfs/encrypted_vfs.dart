@@ -340,7 +340,7 @@ class EncryptedVfs implements VirtualFileSystem {
     }
   }
 
-  Iterable<List<int>> _sliceAndYield(Uint8List plainChunk, int currentOffset, int plainStart, int? plainEnd) sync* {
+  Stream<List<int>> _sliceAndYield(Uint8List plainChunk, int currentOffset, int plainStart, int? plainEnd) async* {
     int chunkStart = currentOffset;
     int chunkEnd = currentOffset + plainChunk.length - 1;
 
