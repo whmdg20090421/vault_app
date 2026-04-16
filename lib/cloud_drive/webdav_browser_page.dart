@@ -55,10 +55,12 @@ class _WebDavBrowserPageState extends State<WebDavBrowserPage> {
 
       await _loadCurrentPath();
     } catch (e) {
-      setState(() {
-        _isLoading = false;
-        _error = '初始化客户端失败: $e';
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _error = '初始化客户端失败：${translateWebDavError(e)}';
+        });
+      }
     }
   }
 
@@ -81,15 +83,19 @@ class _WebDavBrowserPageState extends State<WebDavBrowserPage> {
         return a.isDirectory ? -1 : 1;
       });
 
-      setState(() {
-        _files = list;
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _files = list;
+          _isLoading = false;
+        });
+      }
     } catch (e) {
-      setState(() {
-        _isLoading = false;
-        _error = '加载目录失败: $e';
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _error = '加载目录失败：${translateWebDavError(e)}';
+        });
+      }
     }
   }
 
@@ -141,7 +147,7 @@ class _WebDavBrowserPageState extends State<WebDavBrowserPage> {
           ),
         ],
       ),
-    );
+    ).whenComplete(() => nameController.dispose());
 
     if (name != null && name.trim().isNotEmpty) {
       setState(() => _isLoading = true);
@@ -151,9 +157,9 @@ class _WebDavBrowserPageState extends State<WebDavBrowserPage> {
         await _loadCurrentPath();
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('创建文件夹失败: $e')));
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('创建文件夹失败：${translateWebDavError(e)}')));
+          setState(() => _isLoading = false);
         }
-        setState(() => _isLoading = false);
       }
     }
   }
@@ -171,9 +177,9 @@ class _WebDavBrowserPageState extends State<WebDavBrowserPage> {
         await _loadCurrentPath();
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('上传文件失败: $e')));
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('上传文件失败：${translateWebDavError(e)}')));
+          setState(() => _isLoading = false);
         }
-        setState(() => _isLoading = false);
       }
     }
   }
@@ -204,9 +210,9 @@ class _WebDavBrowserPageState extends State<WebDavBrowserPage> {
         await _loadCurrentPath();
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('删除失败: $e')));
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('删除失败：${translateWebDavError(e)}')));
+          setState(() => _isLoading = false);
         }
-        setState(() => _isLoading = false);
       }
     }
   }
@@ -233,7 +239,7 @@ class _WebDavBrowserPageState extends State<WebDavBrowserPage> {
           ),
         ],
       ),
-    );
+    ).whenComplete(() => nameController.dispose());
 
     if (newName != null && newName.trim().isNotEmpty && newName != file.name) {
       setState(() => _isLoading = true);
@@ -254,9 +260,9 @@ class _WebDavBrowserPageState extends State<WebDavBrowserPage> {
         await _loadCurrentPath();
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('重命名失败: $e')));
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('重命名失败：${translateWebDavError(e)}')));
+          setState(() => _isLoading = false);
         }
-        setState(() => _isLoading = false);
       }
     }
   }

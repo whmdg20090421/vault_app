@@ -12,6 +12,7 @@ import 'models/vault_config.dart';
 import 'utils/crypto_utils.dart';
 import 'vault_config_page.dart';
 import 'vault_explorer_page.dart';
+import 'services/encryption_task_manager.dart';
 
 class EncryptionPage extends StatefulWidget {
   const EncryptionPage({super.key});
@@ -63,13 +64,17 @@ class _EncryptionPageState extends State<EncryptionPage> {
         }
       }
 
-      setState(() {
-        _vaults = loaded;
-      });
+      if (mounted) {
+        setState(() {
+          _vaults = loaded;
+        });
+      }
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -230,7 +235,7 @@ class _EncryptionPageState extends State<EncryptionPage> {
           },
         );
       },
-    );
+    ).whenComplete(() => passwordController.dispose());
   }
 
   Future<void> _removeVault(int index) async {
@@ -240,9 +245,11 @@ class _EncryptionPageState extends State<EncryptionPage> {
     paths.remove(path);
     await prefs.setStringList('vault_paths', paths);
 
-    setState(() {
-      _vaults.removeAt(index);
-    });
+    if (mounted) {
+      setState(() {
+        _vaults.removeAt(index);
+      });
+    }
   }
 
   @override
@@ -408,35 +415,153 @@ class EncryptionProgressPanel extends StatelessWidget {
           ),
           Divider(height: 1, color: theme.colorScheme.outlineVariant),
           Expanded(
-            child: SingleChildScrollView(
-              controller: scrollController,
-              child: Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(32.0),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const SizedBox(height: 32),
-                      Icon(
-                        Icons.inbox_outlined,
-                        size: 64,
-                        color: theme.colorScheme.onSurface.withOpacity(0.2),
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        '暂无数据',
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          color: theme.colorScheme.onSurface.withOpacity(0.5),
+            child: ListenableBuilder(
+              listenable: EncryptionTaskManager(),
+              builder: (context, child) {
+                final tasks = EncryptionTaskManager().tasks;
+                if (tasks.isEmpty) {
+                  return SingleChildScrollView(
+                    controller: scrollController,
+                    child: Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(32.0),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const SizedBox(height: 32),
+                            Icon(
+                              Icons.inbox_outlined,
+                              size: 64,
+                              color: theme.colorScheme.onSurface.withOpacity(0.2),
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              '暂无数据',
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                color: theme.colorScheme.onSurface.withOpacity(0.5),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                    ],
-                  ),
-                ),
-              ),
+                    ),
+                  );
+                }
+
+                return ListView.builder(
+                  controller: scrollController,
+                  padding: const EdgeInsets.all(16),
+                  itemCount: tasks.length,
+                  itemBuilder: (context, index) {
+                    final task = tasks[index];
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      elevation: isCyberpunk ? 0 : 1,
+                      shape: isCyberpunk
+                          ? const RoundedRectangleBorder(
+                              borderRadius: BorderRadius.zero,
+                              side: BorderSide(color: Color(0xFF00E5FF), width: 1.0),
+                            )
+                          : RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                      color: isCyberpunk ? theme.colorScheme.surfaceContainer : theme.colorScheme.surface,
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    task.name,
+                                    style: const TextStyle(fontWeight: FontWeight.bold),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                _buildStatusBadge(theme, task.status),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            LinearProgressIndicator(
+                              value: task.progress,
+                              backgroundColor: theme.colorScheme.surfaceContainerHighest,
+                              color: _getStatusColor(theme, task.status),
+                            ),
+                            const SizedBox(height: 8),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  '${(task.progress * 100).toStringAsFixed(1)}%',
+                                  style: theme.textTheme.bodySmall,
+                                ),
+                                Text(
+                                  '${_formatBytes(task.processedBytes)} / ${_formatBytes(task.totalBytes)}',
+                                  style: theme.textTheme.bodySmall?.copyWith(fontFamily: 'monospace'),
+                                ),
+                              ],
+                            ),
+                            if (task.error != null) ...[
+                              const SizedBox(height: 8),
+                              Text(
+                                task.error!,
+                                style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.error),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                );
+              },
             ),
           ),
         ],
       ),
     );
+  }
+
+  Widget _buildStatusBadge(ThemeData theme, String status) {
+    Color color = _getStatusColor(theme, status);
+    String label = '';
+    switch (status) {
+      case 'pending': label = '等待中'; break;
+      case 'encrypting': label = '加密中'; break;
+      case 'completed': label = '已完成'; break;
+      case 'failed': label = '失败'; break;
+      default: label = status;
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: color.withOpacity(0.5)),
+      ),
+      child: Text(
+        label,
+        style: theme.textTheme.labelSmall?.copyWith(color: color, fontWeight: FontWeight.bold),
+      ),
+    );
+  }
+
+  Color _getStatusColor(ThemeData theme, String status) {
+    switch (status) {
+      case 'completed': return Colors.green;
+      case 'failed': return theme.colorScheme.error;
+      case 'encrypting': return theme.colorScheme.primary;
+      default: return Colors.grey;
+    }
+  }
+
+  String _formatBytes(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+    if (bytes < 1024 * 1024 * 1024) return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+    return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
   }
 }

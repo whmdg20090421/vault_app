@@ -8,6 +8,92 @@ import 'models/vault_config.dart';
 import '../vfs/virtual_file_system.dart';
 import '../vfs/local_vfs.dart';
 import '../vfs/encrypted_vfs.dart';
+import 'services/encryption_task_manager.dart';
+import 'dart:isolate';
+
+Future<void> _doImportFileIsolate(Map<String, dynamic> args) async {
+  final sendPort = args['sendPort'] as SendPort;
+  final files = args['files'] as List<Map<String, String>>;
+  final vaultDirectoryPath = args['vaultDirectoryPath'] as String;
+  final masterKey = args['masterKey'] as Uint8List;
+  final encryptFilename = args['encryptFilename'] as bool;
+  final taskId = args['taskId'] as String;
+
+  final localVfs = LocalVfs(rootPath: vaultDirectoryPath);
+  VirtualFileSystem vfs;
+  if (encryptFilename) {
+    final encryptedVfs = EncryptedVfs(baseVfs: localVfs, masterKey: masterKey);
+    await encryptedVfs.initEncryptedDomain('/');
+    vfs = encryptedVfs;
+  } else {
+    vfs = localVfs;
+  }
+
+  try {
+    int processedBytes = 0;
+    for (final fileInfo in files) {
+      final localPath = fileInfo['localPath']!;
+      final remotePath = fileInfo['remotePath']!;
+      final file = File(localPath);
+      if (await file.exists()) {
+        final size = await file.length();
+        await vfs.upload(localPath, remotePath);
+        processedBytes += size;
+        sendPort.send({'type': 'progress', 'taskId': taskId, 'bytes': processedBytes});
+      }
+    }
+    sendPort.send({'type': 'done', 'taskId': taskId});
+  } catch (e) {
+    sendPort.send({'type': 'error', 'taskId': taskId, 'error': e.toString()});
+  }
+}
+
+Future<void> _doImportFolderIsolate(Map<String, dynamic> args) async {
+  final sendPort = args['sendPort'] as SendPort;
+  final result = args['result'] as String;
+  final currentPath = args['currentPath'] as String;
+  final vaultDirectoryPath = args['vaultDirectoryPath'] as String;
+  final masterKey = args['masterKey'] as Uint8List;
+  final encryptFilename = args['encryptFilename'] as bool;
+  final taskId = args['taskId'] as String;
+
+  final localVfs = LocalVfs(rootPath: vaultDirectoryPath);
+  VirtualFileSystem vfs;
+  if (encryptFilename) {
+    final encryptedVfs = EncryptedVfs(baseVfs: localVfs, masterKey: masterKey);
+    await encryptedVfs.initEncryptedDomain('/');
+    vfs = encryptedVfs;
+  } else {
+    vfs = localVfs;
+  }
+
+  try {
+    final dir = Directory(result);
+    if (await dir.exists()) {
+      final baseName = p.basename(result);
+      final remoteDirPath = p.join(currentPath, baseName).replaceAll(r'\', '/');
+      await vfs.mkdir(remoteDirPath);
+
+      int processedBytes = 0;
+
+      await for (final entity in dir.list(recursive: true)) {
+        final relativePath = p.relative(entity.path, from: result);
+        final remotePath = p.join(remoteDirPath, relativePath).replaceAll(r'\', '/');
+        if (entity is File) {
+          final size = await entity.length();
+          await vfs.upload(entity.path, remotePath);
+          processedBytes += size;
+          sendPort.send({'type': 'progress', 'taskId': taskId, 'bytes': processedBytes});
+        } else if (entity is Directory) {
+          await vfs.mkdir(remotePath);
+        }
+      }
+    }
+    sendPort.send({'type': 'done', 'taskId': taskId});
+  } catch (e) {
+    sendPort.send({'type': 'error', 'taskId': taskId, 'error': e.toString()});
+  }
+}
 
 class VaultExplorerPage extends StatefulWidget {
   final VaultConfig vaultConfig;
@@ -60,10 +146,12 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
         if (!a.isDirectory && b.isDirectory) return 1;
         return a.name.compareTo(b.name);
       });
-      setState(() {
-        _files = files;
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _files = files;
+          _isLoading = false;
+        });
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -77,77 +165,164 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
   void _importFile() async {
     final result = await FilePicker.platform.pickFiles(allowMultiple: true);
     if (result != null) {
-      setState(() {
-        _isMenuOpen = false;
-        _isLoading = true;
-      });
       if (mounted) {
+        setState(() {
+          _isMenuOpen = false;
+          // _isLoading = false; 立即关闭加载动画，解阻塞 UI 线程
+        });
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('正在导入 ${result.files.length} 个文件...')),
+          SnackBar(content: Text('已将 ${result.files.length} 个文件添加到后台加密任务')),
         );
       }
       try {
+        int totalSize = 0;
+        final filesToProcess = <Map<String, String>>[];
         for (final file in result.files) {
           if (file.path != null) {
             final localPath = file.path!;
             final remotePath = p.join(_currentPath, file.name).replaceAll(r'\', '/');
-            await _vfs.upload(localPath, remotePath);
+            filesToProcess.add({'localPath': localPath, 'remotePath': remotePath});
+            totalSize += file.size;
           }
         }
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('文件导入成功')),
-          );
-        }
+
+        if (filesToProcess.isEmpty) return;
+
+        final taskId = DateTime.now().millisecondsSinceEpoch.toString();
+        final taskName = filesToProcess.length == 1 
+            ? p.basename(filesToProcess.first['localPath']!)
+            : '批量导入 ${filesToProcess.length} 个文件';
+
+        final task = EncryptionTask(
+          id: taskId,
+          name: taskName,
+          totalBytes: totalSize,
+          status: 'encrypting',
+        );
+
+        EncryptionTaskManager().addTask(task);
+
+        final receivePort = ReceivePort();
+        receivePort.listen((message) {
+          if (message is Map<String, dynamic>) {
+            final type = message['type'];
+            final tid = message['taskId'] as String;
+            if (type == 'progress') {
+              final bytes = message['bytes'] as int;
+              EncryptionTaskManager().updateTaskProgress(tid, bytes);
+            } else if (type == 'done') {
+              EncryptionTaskManager().updateTaskStatus(tid, 'completed');
+              if (mounted) {
+                _loadCurrentDirectory();
+              }
+              receivePort.close();
+            } else if (type == 'error') {
+              final error = message['error'] as String;
+              EncryptionTaskManager().updateTaskStatus(tid, 'failed', error: error);
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('导入文件失败: $error')),
+                );
+              }
+              receivePort.close();
+            }
+          }
+        });
+
+        final args = {
+          'sendPort': receivePort.sendPort,
+          'files': filesToProcess,
+          'vaultDirectoryPath': widget.vaultDirectoryPath,
+          'masterKey': widget.masterKey,
+          'encryptFilename': widget.vaultConfig.encryptFilename,
+          'taskId': taskId,
+        };
+
+        Isolate.run(() => _doImportFileIsolate(args));
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('导入文件失败: $e')),
           );
         }
-      } finally {
-        if (mounted) {
-          _loadCurrentDirectory();
-        }
       }
     } else {
-      setState(() => _isMenuOpen = false);
+      if (mounted) setState(() => _isMenuOpen = false);
     }
   }
 
   void _importFolder() async {
     final result = await FilePicker.platform.getDirectoryPath();
     if (result != null) {
-      setState(() {
-        _isMenuOpen = false;
-        _isLoading = true;
-      });
       if (mounted) {
+        setState(() {
+          _isMenuOpen = false;
+          // _isLoading = false; 立即关闭加载动画，解阻塞 UI 线程
+        });
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('正在导入文件夹...')),
+          const SnackBar(content: Text('已添加到后台加密任务，请在任务面板查看进度')),
         );
       }
       try {
         final dir = Directory(result);
         if (await dir.exists()) {
-          final baseName = p.basename(result);
-          final remoteDirPath = p.join(_currentPath, baseName).replaceAll(r'\', '/');
-          await _vfs.mkdir(remoteDirPath);
-
+          int totalSize = 0;
           await for (final entity in dir.list(recursive: true)) {
-            final relativePath = p.relative(entity.path, from: result);
-            final remotePath = p.join(remoteDirPath, relativePath).replaceAll(r'\', '/');
             if (entity is File) {
-              await _vfs.upload(entity.path, remotePath);
-            } else if (entity is Directory) {
-              await _vfs.mkdir(remotePath);
+              totalSize += await entity.length();
             }
           }
-        }
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('文件夹导入成功')),
+
+          final baseName = p.basename(result);
+          final taskId = DateTime.now().millisecondsSinceEpoch.toString();
+          
+          final task = EncryptionTask(
+            id: taskId,
+            name: baseName,
+            totalBytes: totalSize,
+            status: 'encrypting',
           );
+
+          EncryptionTaskManager().addTask(task);
+
+          final receivePort = ReceivePort();
+          receivePort.listen((message) {
+            if (message is Map<String, dynamic>) {
+              final type = message['type'];
+              final tid = message['taskId'] as String;
+              if (type == 'progress') {
+                final bytes = message['bytes'] as int;
+                EncryptionTaskManager().updateTaskProgress(tid, bytes);
+              } else if (type == 'done') {
+                EncryptionTaskManager().updateTaskStatus(tid, 'completed');
+                if (mounted) {
+                  _loadCurrentDirectory();
+                }
+                receivePort.close();
+              } else if (type == 'error') {
+                final error = message['error'] as String;
+                EncryptionTaskManager().updateTaskStatus(tid, 'failed', error: error);
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('导入文件夹失败: $error')),
+                  );
+                }
+                receivePort.close();
+              }
+            }
+          });
+
+          final args = {
+            'sendPort': receivePort.sendPort,
+            'result': result,
+            'currentPath': _currentPath,
+            'vaultDirectoryPath': widget.vaultDirectoryPath,
+            'masterKey': widget.masterKey,
+            'encryptFilename': widget.vaultConfig.encryptFilename,
+            'taskId': taskId,
+          };
+
+          Isolate.run(() => _doImportFolderIsolate(args));
         }
       } catch (e) {
         if (mounted) {
@@ -155,13 +330,9 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
             SnackBar(content: Text('导入文件夹失败: $e')),
           );
         }
-      } finally {
-        if (mounted) {
-          _loadCurrentDirectory();
-        }
       }
     } else {
-      setState(() => _isMenuOpen = false);
+      if (mounted) setState(() => _isMenuOpen = false);
     }
   }
 
@@ -242,7 +413,7 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
           ],
         );
       },
-    );
+    ).whenComplete(() => controller.dispose());
   }
 
   Widget _buildExpandableFab() {

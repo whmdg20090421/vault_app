@@ -50,39 +50,52 @@ class _HomePageState extends State<HomePage> {
                           ),
                           const SizedBox(height: 24),
                           Expanded(
-                            child: PieChart(
-                              PieChartData(
-                                sectionsSpace: 2,
-                                centerSpaceRadius: 50,
-                                sections: [
-                                  PieChartSectionData(
-                                    color: Colors.blueAccent,
-                                    value: encryptedBytes.toDouble(),
-                                    title: totalBytes > 0 ? '${encryptedPercentage.toStringAsFixed(1)}%' : '0%',
-                                    radius: 60,
-                                    showTitle: totalBytes > 0,
-                                    titleStyle: const TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.white,
-                                      fontFamily: 'monospace',
+                            child: LayoutBuilder(
+                              builder: (context, constraints) {
+                                final minDimension = constraints.maxWidth < constraints.maxHeight
+                                    ? constraints.maxWidth
+                                    : constraints.maxHeight;
+                                final radius = minDimension * 0.3;
+                                final centerRadius = minDimension * 0.25;
+
+                                return ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: PieChart(
+                                    PieChartData(
+                                      sectionsSpace: 2,
+                                      centerSpaceRadius: centerRadius,
+                                      sections: [
+                                        PieChartSectionData(
+                                          color: Colors.blueAccent,
+                                          value: encryptedBytes.toDouble(),
+                                          title: totalBytes > 0 ? '${encryptedPercentage.toStringAsFixed(1)}%' : '0%',
+                                          radius: radius,
+                                          showTitle: totalBytes > 0,
+                                          titleStyle: const TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.white,
+                                            fontFamily: 'monospace',
+                                          ),
+                                        ),
+                                        PieChartSectionData(
+                                          color: Colors.grey.shade300,
+                                          value: totalBytes == 0 ? 1.0 : unencryptedBytes.toDouble(),
+                                          title: totalBytes > 0 ? '${unencryptedPercentage.toStringAsFixed(1)}%' : '0%',
+                                          radius: radius,
+                                          showTitle: totalBytes > 0,
+                                          titleStyle: const TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.black54,
+                                            fontFamily: 'monospace',
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
-                                  PieChartSectionData(
-                                    color: Colors.grey.shade300,
-                                    value: totalBytes == 0 ? 1.0 : unencryptedBytes.toDouble(),
-                                    title: totalBytes > 0 ? '${unencryptedPercentage.toStringAsFixed(1)}%' : '0%',
-                                    radius: 60,
-                                    showTitle: totalBytes > 0,
-                                    titleStyle: const TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.black54,
-                                      fontFamily: 'monospace',
-                                    ),
-                                  ),
-                                ],
-                              ),
+                                );
+                              },
                             ),
                           ),
                           const SizedBox(height: 24),

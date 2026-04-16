@@ -174,7 +174,7 @@ class _SyncConfigPageState extends State<SyncConfigPage> {
           ],
         ),
       ),
-    );
+    ).whenComplete(() => pwdCtrl.dispose());
   }
 
   void _onVaultUnlocked(_VaultItem item, Uint8List key) async {
@@ -197,9 +197,11 @@ class _SyncConfigPageState extends State<SyncConfigPage> {
     _selectedLocalFolder = '/';
     await _loadLocalDirs();
     
-    setState(() {
-      _currentStep = 1;
-    });
+    if (mounted) {
+      setState(() {
+        _currentStep = 1;
+      });
+    }
   }
 
   // --- Step 2 Actions ---
@@ -257,7 +259,7 @@ class _SyncConfigPageState extends State<SyncConfigPage> {
       _selectedCloudFolder = '/';
       await _loadCloudDirs();
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('连接WebDAV失败: \$e')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('连接WebDAV失败：${translateWebDavError(e)}')));
     } finally {
       if (mounted) setState(() => _loadingCloudDirs = false);
     }
@@ -272,7 +274,7 @@ class _SyncConfigPageState extends State<SyncConfigPage> {
       dirs.sort((a, b) => a.name.compareTo(b.name));
       if (mounted) setState(() => _cloudDirs = dirs);
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('加载云端目录失败: \$e')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('加载云端目录失败：${translateWebDavError(e)}')));
     } finally {
       if (mounted) setState(() => _loadingCloudDirs = false);
     }
@@ -324,7 +326,7 @@ class _SyncConfigPageState extends State<SyncConfigPage> {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('自动匹配/创建成功')));
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('自动匹配失败: \$e')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('自动匹配失败：${translateWebDavError(e)}')));
     } finally {
       if (mounted) setState(() => _loadingCloudDirs = false);
     }
