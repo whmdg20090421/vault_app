@@ -352,10 +352,16 @@ class _BenchmarkDialogState extends State<BenchmarkDialog> {
       _result = '';
     });
 
+    File? inputFile;
+    File? outputFile;
+    IOSink? inputSink;
+    IOSink? outputSink;
+
     try {
       final tempDir = Directory.systemTemp;
-      final inputFile = File('${tempDir.path}/benchmark_in.tmp');
-      final outputFile = File('${tempDir.path}/benchmark_out.tmp');
+      final suffix = DateTime.now().millisecondsSinceEpoch.toString();
+      inputFile = File('${tempDir.path}/benchmark_in_$suffix.tmp');
+      outputFile = File('${tempDir.path}/benchmark_out_$suffix.tmp');
 
       const chunkSize = 1024 * 1024; // 1MB
       const totalChunks = 500; // 500MB
@@ -367,15 +373,16 @@ class _BenchmarkDialogState extends State<BenchmarkDialog> {
       }
 
       // 1. Write dummy data
-      final sink = inputFile.openWrite();
+      inputSink = inputFile.openWrite();
       for (int i = 0; i < totalChunks; i++) {
-        sink.add(chunkData);
+        inputSink.add(chunkData);
         if (i % 50 == 0) {
           setState(() => _progress = (i / totalChunks) * 0.2);
           await Future.delayed(Duration.zero);
         }
       }
-      await sink.close();
+      await inputSink.close();
+      inputSink = null;
 
       setState(() => _progress = 0.2);
 
@@ -395,12 +402,11 @@ class _BenchmarkDialogState extends State<BenchmarkDialog> {
       final params = pc.AEADParameters(pc.KeyParameter(key), 128, nonce, Uint8List(0));
 
       final inputStream = inputFile.openRead();
-      final outputSink = outputFile.openWrite();
+      outputSink = outputFile.openWrite();
 
       final stopwatch = Stopwatch()..start();
 
       int chunksProcessed = 0;
-      int bytesProcessed = 0;
 
       await for (final chunk in inputStream) {
         final uint8Chunk = chunk is Uint8List ? chunk : Uint8List.fromList(chunk);
@@ -410,7 +416,6 @@ class _BenchmarkDialogState extends State<BenchmarkDialog> {
         final encryptedChunk = cipher.process(uint8Chunk);
         outputSink.add(encryptedChunk);
 
-        bytesProcessed += chunk.length;
         chunksProcessed++;
 
         if (chunksProcessed % 10 == 0) {
@@ -422,6 +427,7 @@ class _BenchmarkDialogState extends State<BenchmarkDialog> {
       }
 
       await outputSink.close();
+      outputSink = null;
       stopwatch.stop();
 
       final seconds = stopwatch.elapsedMilliseconds / 1000.0;
@@ -431,15 +437,27 @@ class _BenchmarkDialogState extends State<BenchmarkDialog> {
         _progress = 1.0;
         _result = '速度 (Speed): ${speed.toStringAsFixed(2)} MB/s\n耗时 (Time): ${seconds.toStringAsFixed(2)} s';
       });
-
-      if (await inputFile.exists()) await inputFile.delete();
-      if (await outputFile.exists()) await outputFile.delete();
-
     } catch (e) {
       setState(() {
         _result = 'Error: $e';
       });
     } finally {
+      try {
+        await inputSink?.close();
+      } catch (_) {}
+      try {
+        await outputSink?.close();
+      } catch (_) {}
+      try {
+        if (inputFile != null && await inputFile.exists()) {
+          await inputFile.delete();
+        }
+      } catch (_) {}
+      try {
+        if (outputFile != null && await outputFile.exists()) {
+          await outputFile.delete();
+        }
+      } catch (_) {}
       setState(() {
         _isRunning = false;
       });
@@ -450,34 +468,36 @@ class _BenchmarkDialogState extends State<BenchmarkDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       title: const Text('性能测试 (Benchmark)'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Text('测试加密 500MB 数据的速度'),
-          const SizedBox(height: 16),
-          DropdownButtonFormField<String>(
-            value: _selectedAlgorithm,
-            decoration: const InputDecoration(labelText: '加密算法 (Algorithm)'),
-            items: _algorithms.map((algo) {
-              return DropdownMenuItem(value: algo, child: Text(algo));
-            }).toList(),
-            onChanged: _isRunning
-                ? null
-                : (v) {
-                    if (v != null) setState(() => _selectedAlgorithm = v);
-                  },
-          ),
-          const SizedBox(height: 16),
-          if (_isRunning) ...[
-            LinearProgressIndicator(value: _progress),
-            const SizedBox(height: 8),
-            Text('${(_progress * 100).toStringAsFixed(1)}%'),
-          ],
-          if (_result.isNotEmpty) ...[
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('测试加密 500MB 数据的速度'),
             const SizedBox(height: 16),
-            Text(_result, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.greenAccent)),
+            DropdownButtonFormField<String>(
+              value: _selectedAlgorithm,
+              decoration: const InputDecoration(labelText: '加密算法 (Algorithm)'),
+              items: _algorithms.map((algo) {
+                return DropdownMenuItem(value: algo, child: Text(algo));
+              }).toList(),
+              onChanged: _isRunning
+                  ? null
+                  : (v) {
+                      if (v != null) setState(() => _selectedAlgorithm = v);
+                    },
+            ),
+            const SizedBox(height: 16),
+            if (_isRunning) ...[
+              LinearProgressIndicator(value: _progress),
+              const SizedBox(height: 8),
+              Text('${(_progress * 100).toStringAsFixed(1)}%'),
+            ],
+            if (_result.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              Text(_result, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.greenAccent)),
+            ],
           ],
-        ],
+        ),
       ),
       actions: [
         TextButton(

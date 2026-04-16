@@ -137,22 +137,24 @@ class _EncryptionPageState extends State<EncryptionPage> {
           builder: (context, setStateDialog) {
             return AlertDialog(
               title: Text('解锁保险箱 (Unlock Vault)'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text('正在解锁: ${item.config!.name}'),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: passwordController,
-                    decoration: const InputDecoration(labelText: '请输入密码 (Password)'),
-                    obscureText: true,
-                    enabled: !isUnlocking,
-                  ),
-                  if (isUnlocking) ...[
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('正在解锁: ${item.config!.name}'),
                     const SizedBox(height: 16),
-                    const CircularProgressIndicator(),
+                    TextField(
+                      controller: passwordController,
+                      decoration: const InputDecoration(labelText: '请输入密码 (Password)'),
+                      obscureText: true,
+                      enabled: !isUnlocking,
+                    ),
+                    if (isUnlocking) ...[
+                      const SizedBox(height: 16),
+                      const CircularProgressIndicator(),
+                    ],
                   ],
-                ],
+                ),
               ),
               actions: [
                 TextButton(
