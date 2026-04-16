@@ -27,6 +27,7 @@ class CryptoUtils {
       final parameters = pc.Argon2Parameters(
         pc.Argon2Parameters.ARGON2_id,
         saltBytes,
+        desiredKeyLength: keyLength,
         version: pc.Argon2Parameters.ARGON2_VERSION_13,
         iterations: iterations,
         memory: memory,
@@ -36,7 +37,7 @@ class CryptoUtils {
         ..init(parameters);
       
       final out = Uint8List(keyLength);
-      derivator.generateBytes(passwordBytes, out, 0, out.length);
+      derivator.deriveKey(passwordBytes, 0, out, 0);
       return out;
     } else if (kdfType == 'Scrypt') {
       final n = kdfParams['N'] as int;
@@ -60,7 +61,7 @@ class CryptoUtils {
     final cipher = _getAEADCipher(algorithm);
     final params = pc.AEADParameters(pc.KeyParameter(key), 128, nonce, Uint8List(0));
     cipher.init(true, params);
-    return cipher.process(plaintext);
+    return _processAead(cipher, plaintext);
   }
 
   static Uint8List decrypt({
@@ -72,16 +73,23 @@ class CryptoUtils {
     final cipher = _getAEADCipher(algorithm);
     final params = pc.AEADParameters(pc.KeyParameter(key), 128, nonce, Uint8List(0));
     cipher.init(false, params);
-    return cipher.process(ciphertext);
+    return _processAead(cipher, ciphertext);
   }
 
   static pc.AEADCipher _getAEADCipher(String algorithm) {
     if (algorithm == 'AES-256-GCM') {
       return pc.GCMBlockCipher(pc.AESEngine());
     } else if (algorithm == 'ChaCha20-Poly1305') {
-      return pc.ChaCha20Poly1305();
+      return pc.ChaCha20Poly1305(pc.ChaCha7539Engine(), pc.Poly1305());
     } else {
       throw Exception('Unsupported algorithm: $algorithm');
     }
+  }
+
+  static Uint8List _processAead(pc.AEADCipher cipher, Uint8List input) {
+    final out = Uint8List(cipher.getOutputSize(input.length));
+    var outLen = cipher.processBytes(input, 0, input.length, out, 0);
+    outLen += cipher.doFinal(out, outLen);
+    return out.sublist(0, outLen);
   }
 }

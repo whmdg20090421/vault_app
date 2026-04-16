@@ -396,13 +396,20 @@ class _BenchmarkDialogState extends State<BenchmarkDialog> {
       if (_selectedAlgorithm == 'AES-256-GCM') {
         cipher = pc.GCMBlockCipher(pc.AESEngine());
       } else {
-        cipher = pc.ChaCha20Poly1305();
+        cipher = pc.ChaCha20Poly1305(pc.ChaCha7539Engine(), pc.Poly1305());
       }
 
       final params = pc.AEADParameters(pc.KeyParameter(key), 128, nonce, Uint8List(0));
 
       final inputStream = inputFile.openRead();
       outputSink = outputFile.openWrite();
+
+      Uint8List processChunk(Uint8List input) {
+        final out = Uint8List(cipher.getOutputSize(input.length));
+        var outLen = cipher.processBytes(input, 0, input.length, out, 0);
+        outLen += cipher.doFinal(out, outLen);
+        return out.sublist(0, outLen);
+      }
 
       final stopwatch = Stopwatch()..start();
 
@@ -413,7 +420,7 @@ class _BenchmarkDialogState extends State<BenchmarkDialog> {
         
         cipher.reset();
         cipher.init(true, params);
-        final encryptedChunk = cipher.process(uint8Chunk);
+        final encryptedChunk = processChunk(uint8Chunk);
         outputSink.add(encryptedChunk);
 
         chunksProcessed++;
