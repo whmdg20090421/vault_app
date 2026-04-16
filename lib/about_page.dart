@@ -26,7 +26,7 @@ class AboutPage extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            '版本: 1.1.2',
+            '版本: 1.1.3',
             style: Theme.of(context).textTheme.titleMedium,
             textAlign: TextAlign.center,
           ),
