@@ -21,13 +21,13 @@ fun guessKeyStoreType(file: File): String {
                     header[2] == 0xFE.toByte() &&
                     header[3] == 0xED.toByte()
             ) {
-                "jks"
+                "JKS"
             } else {
-                "pkcs12"
+                "PKCS12"
             }
         }
     } catch (_: Exception) {
-        "jks"
+        "JKS"
     }
 }
 
