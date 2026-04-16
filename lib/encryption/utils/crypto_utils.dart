@@ -121,6 +121,22 @@ class CryptoUtils {
     return out.sublist(0, outLen);
   }
 
+  static Future<Uint8List> deriveKeyAsync({
+    required String password,
+    required String saltBase64,
+    required String kdfType,
+    required Map<String, dynamic> kdfParams,
+  }) {
+    return Isolate.run(
+      () => deriveKey(
+        password: password,
+        saltBase64: saltBase64,
+        kdfType: kdfType,
+        kdfParams: kdfParams,
+      ),
+    );
+  }
+
   static Future<String> computeValidationCiphertextAsync({
     required String password,
     required String saltBase64,

@@ -175,7 +175,7 @@ class _EncryptionPageState extends State<EncryptionPage> {
                           try {
                             final config = item.config!;
                             // Derive key
-                            final derivedKey = CryptoUtils.deriveKey(
+                            final derivedKey = await CryptoUtils.deriveKeyAsync(
                               password: pwd,
                               saltBase64: config.salt,
                               kdfType: config.kdf,

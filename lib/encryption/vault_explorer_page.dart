@@ -1,7 +1,11 @@
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:path/path.dart' as p;
 import 'models/vault_config.dart';
+import '../vfs/virtual_file_system.dart';
+import '../vfs/local_vfs.dart';
+import '../vfs/encrypted_vfs.dart';
 
 class VaultExplorerPage extends StatefulWidget {
   final VaultConfig vaultConfig;
@@ -21,6 +25,52 @@ class VaultExplorerPage extends StatefulWidget {
 
 class _VaultExplorerPageState extends State<VaultExplorerPage> {
   bool _isMenuOpen = false;
+  late VirtualFileSystem _vfs;
+  String _currentPath = '/';
+  List<VfsNode> _files = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _initVfs();
+  }
+
+  void _initVfs() async {
+    final localVfs = LocalVfs(rootPath: widget.vaultDirectoryPath);
+    if (widget.vaultConfig.encryptFilename) {
+      final encryptedVfs = EncryptedVfs(baseVfs: localVfs, masterKey: widget.masterKey);
+      await encryptedVfs.initEncryptedDomain('/');
+      _vfs = encryptedVfs;
+    } else {
+      _vfs = localVfs;
+    }
+    _loadFiles();
+  }
+
+  Future<void> _loadFiles() async {
+    setState(() => _isLoading = true);
+    try {
+      final files = await _vfs.list(_currentPath);
+      // Sort: directories first, then files
+      files.sort((a, b) {
+        if (a.isDirectory && !b.isDirectory) return -1;
+        if (!a.isDirectory && b.isDirectory) return 1;
+        return a.name.compareTo(b.name);
+      });
+      setState(() {
+        _files = files;
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('加载失败: $e')),
+        );
+        setState(() => _isLoading = false);
+      }
+    }
+  }
 
   void _importFile() async {
     final result = await FilePicker.platform.pickFiles(allowMultiple: true);
@@ -43,10 +93,49 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
   }
 
   void _newFolder() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('新建文件夹功能开发中')),
-    );
     setState(() => _isMenuOpen = false);
+    final controller = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('新建文件夹'),
+          content: TextField(
+            controller: controller,
+            decoration: const InputDecoration(labelText: '文件夹名称'),
+            autofocus: true,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('取消'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                final name = controller.text.trim();
+                if (name.isNotEmpty) {
+                  try {
+                    final newPath = p.join(_currentPath, name).replaceAll(r'\', '/');
+                    await _vfs.mkdir(newPath);
+                    if (mounted) {
+                      Navigator.of(context).pop();
+                      _loadFiles();
+                    }
+                  } catch (e) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('创建失败: $e')),
+                      );
+                    }
+                  }
+                }
+              },
+              child: const Text('创建'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   Widget _buildExpandableFab() {
@@ -111,32 +200,71 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isCyberpunk = theme.brightness == Brightness.dark && 
-                        theme.colorScheme.secondary.value == 0xFF00F0FF;
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.vaultConfig.name),
+        title: Text(_currentPath == '/' ? widget.vaultConfig.name : p.basename(_currentPath)),
+        leading: _currentPath != '/'
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: () {
+                  setState(() {
+                    _currentPath = p.dirname(_currentPath).replaceAll(r'\', '/');
+                    if (_currentPath.isEmpty) _currentPath = '/';
+                  });
+                  _loadFiles();
+                },
+              )
+            : null,
       ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.folder_open,
-              size: 64,
-              color: theme.colorScheme.onSurface.withOpacity(0.2),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              '保险箱目前为空',
-              style: theme.textTheme.titleMedium?.copyWith(
-                color: theme.colorScheme.onSurface.withOpacity(0.5),
-              ),
-            ),
-          ],
-        ),
-      ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _files.isEmpty
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.folder_open,
+                        size: 64,
+                        color: theme.colorScheme.onSurface.withOpacity(0.2),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        '保险箱目前为空',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          color: theme.colorScheme.onSurface.withOpacity(0.5),
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              : ListView.builder(
+                  itemCount: _files.length,
+                  itemBuilder: (context, index) {
+                    final file = _files[index];
+                    return ListTile(
+                      leading: Icon(
+                        file.isDirectory ? Icons.folder : Icons.insert_drive_file,
+                        color: file.isDirectory ? theme.colorScheme.primary : theme.colorScheme.secondary,
+                      ),
+                      title: Text(file.name),
+                      subtitle: file.isDirectory ? null : Text('${file.size} bytes'),
+                      onTap: () {
+                        if (file.isDirectory) {
+                          setState(() {
+                            _currentPath = file.path;
+                          });
+                          _loadFiles();
+                        } else {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('文件读取功能开发中: ${file.name}')),
+                          );
+                        }
+                      },
+                    );
+                  },
+                ),
       floatingActionButton: _buildExpandableFab(),
     );
   }

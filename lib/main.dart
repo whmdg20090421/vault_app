@@ -2,6 +2,7 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
+import 'services/stats_service.dart';
 import 'cloud_drive/cloud_drive_page.dart';
 import 'encryption/encryption_page.dart';
 import 'error_reporter.dart';
@@ -15,6 +16,7 @@ final ValueNotifier<AppTheme> appTheme = ValueNotifier(AppTheme.defaultTheme);
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await ErrorReporter.instance.initialize();
+  await StatsService().init();
 
   FlutterError.onError = (details) {
     FlutterError.presentError(details);

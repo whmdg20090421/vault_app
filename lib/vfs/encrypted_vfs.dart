@@ -6,23 +6,24 @@ import 'dart:typed_data';
 
 import '../encryption/utils/base64url_utils.dart';
 import '../encryption/utils/crypto_utils.dart';
+import '../encryption/utils/chunk_crypto.dart';
 import 'virtual_file_system.dart';
 
 /// 加密版 VFS 实现
 /// 包装基础的 VFS，实现文件/目录名透明加解密与加密状态的拦截
 class EncryptedVfs implements VirtualFileSystem {
   static const String _markerFileName = '.vault_marker';
-  static const int _nonceLength = 12; // AES-GCM nonce length
   static const String _algorithm = 'AES-256-GCM';
 
   // Chunking constants for file content encryption
   static const int _chunkSize = 65536; // 64KB plaintext chunk
-  static const int _chunkNonceLength = 12;
   static const int _chunkMacLength = 16;
-  static const int _chunkCipherSize = _chunkSize + _chunkNonceLength + _chunkMacLength; // 65564
+  static const int _chunkCipherSize = _chunkSize + _chunkMacLength; // 65552
+  static const int _fileIdLength = 16;
 
   final VirtualFileSystem baseVfs;
   final Uint8List masterKey;
+  late final ChunkCrypto _chunkCrypto;
 
   // 缓存虚拟（解密）路径到真实（加密）路径的映射
   final Map<String, String> _virtualToReal = {'/': '/'};
@@ -38,6 +39,7 @@ class EncryptedVfs implements VirtualFileSystem {
     if (masterKey.length != 32) {
       throw ArgumentError('MasterKey must be 32 bytes for AES-256-GCM');
     }
+    _chunkCrypto = ChunkCrypto(masterKey: masterKey);
   }
 
   /// 规范化路径，确保以 '/' 开头且除了根目录外不以 '/' 结尾
@@ -119,8 +121,8 @@ class EncryptedVfs implements VirtualFileSystem {
     return currentReal;
   }
 
-  /// 生成随机 Nonce
-  Uint8List _generateNonce(int length) {
+  /// 生成随机字节
+  Uint8List _generateRandomBytes(int length) {
     final random = Random.secure();
     final bytes = Uint8List(length);
     for (int i = 0; i < length; i++) {
@@ -129,70 +131,63 @@ class EncryptedVfs implements VirtualFileSystem {
     return bytes;
   }
 
-  /// 加密文件名：Nonce + AES-GCM Ciphertext -> Base64Url
+  /// 确定性加密文件名：Fixed IV (12 bytes) + AES-GCM Ciphertext -> Base64Url
   String _encryptName(String plainName) {
-    final nonce = _generateNonce(_nonceLength);
+    final fixedNonce = Uint8List(12); // Deterministic encryption
     final plaintext = utf8.encode(plainName);
 
     final ciphertext = CryptoUtils.encrypt(
       key: masterKey,
-      nonce: nonce,
+      nonce: fixedNonce,
       plaintext: Uint8List.fromList(plaintext),
       algorithm: _algorithm,
     );
 
-    final combined = Uint8List(_nonceLength + ciphertext.length);
-    combined.setRange(0, _nonceLength, nonce);
-    combined.setRange(_nonceLength, combined.length, ciphertext);
-
-    return Base64UrlUtils.encode(combined);
+    return Base64UrlUtils.encode(ciphertext);
   }
 
-  /// 解密文件名：Base64Url -> Nonce + AES-GCM Ciphertext -> Plaintext
+  /// 确定性解密文件名：Base64Url -> AES-GCM Ciphertext -> Plaintext
   String _decryptName(String cipherName) {
     try {
-      final bytes = Base64UrlUtils.decode(cipherName);
-      if (bytes.length <= _nonceLength) {
-        throw Exception('Invalid ciphertext length');
-      }
-      final nonce = bytes.sublist(0, _nonceLength);
-      final ciphertext = bytes.sublist(_nonceLength);
+      final ciphertext = Base64UrlUtils.decode(cipherName);
+      final fixedNonce = Uint8List(12);
 
       final plaintext = CryptoUtils.decrypt(
         key: masterKey,
-        nonce: nonce,
+        nonce: fixedNonce,
         ciphertext: ciphertext,
         algorithm: _algorithm,
       );
 
       return utf8.decode(plaintext);
     } catch (e) {
-      // 解密失败时返回原名，可能是遗留明文文件或是其他不符合规则的文件名
+      // 解密失败时返回原名
       return cipherName;
     }
   }
 
   int _getPlaintextSize(int ciphertextSize) {
-    if (ciphertextSize == 0) return 0;
-    int fullChunks = ciphertextSize ~/ _chunkCipherSize;
-    int remainder = ciphertextSize % _chunkCipherSize;
+    if (ciphertextSize <= _fileIdLength) return 0;
+    int dataSize = ciphertextSize - _fileIdLength;
+    int fullChunks = dataSize ~/ _chunkCipherSize;
+    int remainder = dataSize % _chunkCipherSize;
     int size = fullChunks * _chunkSize;
     if (remainder > 0) {
-      if (remainder <= _chunkNonceLength + _chunkMacLength) {
+      if (remainder <= _chunkMacLength) {
         return size;
       }
-      size += remainder - _chunkNonceLength - _chunkMacLength;
+      size += remainder - _chunkMacLength;
     }
     return size;
   }
 
   int _getCiphertextSize(int plaintextSize) {
-    if (plaintextSize == 0) return 0;
+    if (plaintextSize == 0) return _fileIdLength;
     int fullChunks = plaintextSize ~/ _chunkSize;
     int remainder = plaintextSize % _chunkSize;
-    int size = fullChunks * _chunkCipherSize;
+    int size = _fileIdLength + fullChunks * _chunkCipherSize;
     if (remainder > 0) {
-      size += remainder + _chunkNonceLength + _chunkMacLength;
+      size += remainder + _chunkMacLength;
     }
     return size;
   }
@@ -271,23 +266,45 @@ class EncryptedVfs implements VirtualFileSystem {
     int? cipherStart;
     int? cipherEnd;
 
+    // To decrypt we always need the 16-byte fileId at the start of the file.
+    // So we need to read it first, or just include it in our cipher stream bounds?
+    // Let's read the fileId once by opening the first 16 bytes.
+    final headerStream = await baseVfs.open(realPath, start: 0, end: _fileIdLength - 1);
+    final fileId = await _readHeader(headerStream);
+
     if (start != null || end != null) {
       int safeStart = start ?? 0;
       int startChunk = safeStart ~/ _chunkSize;
-      cipherStart = startChunk * _chunkCipherSize;
+      cipherStart = _fileIdLength + startChunk * _chunkCipherSize;
 
       if (end != null) {
         int endChunk = end ~/ _chunkSize;
-        cipherEnd = (endChunk + 1) * _chunkCipherSize - 1;
+        cipherEnd = _fileIdLength + (endChunk + 1) * _chunkCipherSize - 1;
       }
+    } else {
+      cipherStart = _fileIdLength;
     }
 
     final cipherStream = await baseVfs.open(realPath, start: cipherStart, end: cipherEnd);
-    return _decryptStream(cipherStream, start ?? 0, end);
+    int startChunkIndex = (start ?? 0) ~/ _chunkSize;
+    return _decryptStream(cipherStream, fileId, startChunkIndex, start ?? 0, end);
   }
 
-  Stream<List<int>> _decryptStream(Stream<List<int>> cipherStream, int plainStart, int? plainEnd) async* {
-    int currentPlainOffset = (plainStart ~/ _chunkSize) * _chunkSize;
+  Future<Uint8List> _readHeader(Stream<List<int>> stream) async {
+    final buffer = <int>[];
+    await for (final chunk in stream) {
+      buffer.addAll(chunk);
+      if (buffer.length >= _fileIdLength) break;
+    }
+    if (buffer.length < _fileIdLength) {
+      throw Exception('Encrypted file is too short to contain a File ID');
+    }
+    return Uint8List.fromList(buffer.sublist(0, _fileIdLength));
+  }
+
+  Stream<List<int>> _decryptStream(Stream<List<int>> cipherStream, Uint8List fileId, int startChunkIndex, int plainStart, int? plainEnd) async* {
+    int currentPlainOffset = startChunkIndex * _chunkSize;
+    int currentChunkIndex = startChunkIndex;
     final buffer = <int>[];
 
     await for (final chunk in cipherStream) {
@@ -297,7 +314,13 @@ class EncryptedVfs implements VirtualFileSystem {
         final cipherChunk = Uint8List.fromList(buffer.sublist(0, _chunkCipherSize));
         buffer.removeRange(0, _chunkCipherSize);
 
-        final plainChunk = _decryptContentChunk(cipherChunk);
+        final plainChunk = await _chunkCrypto.decryptChunk(
+          chunkData: cipherChunk,
+          fileId: fileId,
+          chunkIndex: currentChunkIndex,
+        );
+        currentChunkIndex++;
+
         yield* _sliceAndYield(plainChunk, currentPlainOffset, plainStart, plainEnd);
         currentPlainOffset += plainChunk.length;
         
@@ -308,23 +331,13 @@ class EncryptedVfs implements VirtualFileSystem {
     }
 
     if (buffer.isNotEmpty) {
-      final plainChunk = _decryptContentChunk(Uint8List.fromList(buffer));
+      final plainChunk = await _chunkCrypto.decryptChunk(
+        chunkData: Uint8List.fromList(buffer),
+        fileId: fileId,
+        chunkIndex: currentChunkIndex,
+      );
       yield* _sliceAndYield(plainChunk, currentPlainOffset, plainStart, plainEnd);
     }
-  }
-
-  Uint8List _decryptContentChunk(Uint8List cipherChunk) {
-    if (cipherChunk.length <= _chunkNonceLength + _chunkMacLength) {
-      throw Exception('Invalid content chunk size');
-    }
-    final nonce = cipherChunk.sublist(0, _chunkNonceLength);
-    final ciphertext = cipherChunk.sublist(_chunkNonceLength);
-    return CryptoUtils.decrypt(
-      key: masterKey,
-      nonce: nonce,
-      ciphertext: ciphertext,
-      algorithm: _algorithm,
-    );
   }
 
   Iterable<List<int>> _sliceAndYield(Uint8List plainChunk, int currentOffset, int plainStart, int? plainEnd) sync* {
@@ -394,7 +407,8 @@ class EncryptedVfs implements VirtualFileSystem {
     final fileSize = await file.length();
     final cipherSize = _getCiphertextSize(fileSize);
 
-    final stream = _encryptStream(file.openRead());
+    final fileId = _generateRandomBytes(_fileIdLength);
+    final stream = _encryptStream(file.openRead(), fileId);
     return baseVfs.uploadStream(stream, cipherSize, realPath);
   }
 
@@ -412,12 +426,16 @@ class EncryptedVfs implements VirtualFileSystem {
     }
 
     final cipherSize = _getCiphertextSize(length);
-    final cipherStream = _encryptStream(stream);
+    final fileId = _generateRandomBytes(_fileIdLength);
+    final cipherStream = _encryptStream(stream, fileId);
     return baseVfs.uploadStream(cipherStream, cipherSize, realPath);
   }
 
-  Stream<List<int>> _encryptStream(Stream<List<int>> plainStream) async* {
+  Stream<List<int>> _encryptStream(Stream<List<int>> plainStream, Uint8List fileId) async* {
+    yield fileId;
+
     final buffer = <int>[];
+    int currentChunkIndex = 0;
 
     await for (final chunk in plainStream) {
       buffer.addAll(chunk);
@@ -425,32 +443,24 @@ class EncryptedVfs implements VirtualFileSystem {
       while (buffer.length >= _chunkSize) {
         final plainChunk = Uint8List.fromList(buffer.sublist(0, _chunkSize));
         buffer.removeRange(0, _chunkSize);
-        yield _encryptContentChunk(plainChunk);
+        yield await _chunkCrypto.encryptChunk(
+          chunkData: plainChunk,
+          fileId: fileId,
+          chunkIndex: currentChunkIndex,
+        );
+        currentChunkIndex++;
       }
     }
 
     if (buffer.isNotEmpty) {
-      yield _encryptContentChunk(Uint8List.fromList(buffer));
-    } else {
-      // If the file is exactly 0 bytes, we might need to handle it.
-      // But _getCiphertextSize(0) returns 0, and uploadStream with length 0
-      // works without yielding any chunks.
+      yield await _chunkCrypto.encryptChunk(
+        chunkData: Uint8List.fromList(buffer),
+        fileId: fileId,
+        chunkIndex: currentChunkIndex,
+      );
+    } else if (currentChunkIndex == 0) {
+      // For empty files, we just yield the fileId (which we already did)
     }
-  }
-
-  Uint8List _encryptContentChunk(Uint8List plainChunk) {
-    final nonce = _generateNonce(_chunkNonceLength);
-    final ciphertext = CryptoUtils.encrypt(
-      key: masterKey,
-      nonce: nonce,
-      plaintext: plainChunk,
-      algorithm: _algorithm,
-    );
-
-    final combined = Uint8List(_chunkNonceLength + ciphertext.length);
-    combined.setRange(0, _chunkNonceLength, nonce);
-    combined.setRange(_chunkNonceLength, combined.length, ciphertext);
-    return combined;
   }
 
   @override

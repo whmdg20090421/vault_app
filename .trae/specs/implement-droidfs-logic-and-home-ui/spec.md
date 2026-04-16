@@ -18,13 +18,17 @@
     2. 发生 WebDAV 云端同步时
     3. 用户手动触发（下拉刷新或点击刷新按钮）
   - **动态单位换算**：小于 1GB 格式化为 MB，大于等于 1GB 格式化为 GB。
+- **保险箱解锁速度优化与功能补全**
+  - **解锁性能优化**：分析并修复输入密码后打开空保险箱耗时超过一分钟的性能瓶颈（极有可能是 KDF 密钥派生函数在主线程阻塞或参数过重导致）。将耗时操作移入 Isolate，或优化 KDF 默认参数以达到安全与速度的平衡。
+  - **功能补全**：在保险箱内部文件浏览界面补充“添加文件夹”（新建目录）等基础文件管理功能。
 
 ## Impact
-- Affected specs: 核心加解密模块（EncryptedVFS）、文件操作服务、主页视图（HomePage）、数据统计服务。
+- Affected specs: 核心加解密模块（EncryptedVFS）、文件操作服务、主页视图（HomePage）、数据统计服务、保险箱管理视图。
 - Affected code: 
   - `lib/vfs/` 下的核心加密逻辑文件（如 `encrypted_vfs.dart`，`chunk_crypto.dart`）。
   - `lib/home_page.dart` UI 布局及状态管理。
   - 新增 `lib/services/stats_service.dart` 用于缓存与真实数据扫描。
+  - `lib/vault/` 下的保险箱解锁与内部浏览 UI 代码。
 
 ## ADDED Requirements
 ### Requirement: DroidFS-like 加密逻辑实现

@@ -34,13 +34,13 @@ class _VaultConfigPageState extends State<VaultConfigPage> {
   bool _encryptFilename = true;
 
   // KDF Parameters
-  int _pbkdf2Iterations = 600000;
+  int _pbkdf2Iterations = 100000;
   
   int _argon2Iterations = 3;
-  int _argon2Memory = 65536; // 64 MB
+  int _argon2Memory = 4096; // 4 MB
   int _argon2Parallelism = 4;
 
-  int _scryptN = 1048576; // 2^20
+  int _scryptN = 16384; // 2^14
   int _scryptR = 8;
   int _scryptP = 1;
 
