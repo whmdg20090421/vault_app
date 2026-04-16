@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 
 import 'cloud_drive/cloud_drive_page.dart';
+import 'encryption/encryption_page.dart';
 import 'error_reporter.dart';
 
 enum AppTheme { defaultTheme, cyberpunk }
@@ -107,7 +108,7 @@ class _MainShellState extends State<MainShell> {
     final pages = const [
       _TitlePage(title: '主页'),
       CloudDrivePage(),
-      _TitlePage(title: '加密'),
+      EncryptionPage(),
       SettingsPage(),
     ];
 

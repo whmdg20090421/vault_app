@@ -1,7 +1,9 @@
-- [ ] 已在 `pubspec.yaml` 中添加 `file_picker` 和 `permission_handler`
-- [ ] 已在 `AndroidManifest.xml` 中添加 Android 权限 (`READ/WRITE/MANAGE_EXTERNAL_STORAGE`)
-- [ ] `EncryptionPage` UI 视觉美观，且完美支持现有主题（默认主题、赛博朋克）
-- [ ] 权限仅在用户交互时（点击选择按钮时）请求，未在应用启动时请求
-- [ ] 系统文件和文件夹选择调用功能正常工作
-- [ ] 所选路径能在 UI 上清晰展示
-- [ ] “加密”导航栏已成功展示新的 `EncryptionPage` 以取代之前的占位符
+- [x] 旧任务（WebDAV 相关的配置管理、安全检测等）由于已经完成已从列表中移除
+- [x] 已在 `pubspec.yaml` 中添加 `file_picker` 和 `permission_handler`
+- [x] 已在 `AndroidManifest.xml` 中补充完整的 Android 权限 (`READ_EXTERNAL_STORAGE`、`WRITE_EXTERNAL_STORAGE`、`MANAGE_EXTERNAL_STORAGE`) 以保证各版本的兼容性
+- [x] `EncryptionPage` UI 视觉美观，完美支持现有主题（默认主题、赛博朋克）
+- [x] 权限请求具备兼容性：Android 11+ 请求所有文件访问权限，低版本请求普通存储权限
+- [x] 权限仅在用户交互时（点击选择按钮时）请求，严禁在应用启动时请求
+- [x] 系统文件选择和文件夹选择功能调用正常工作
+- [x] 所选路径能在 UI 上清晰展示
+- [x] “加密”导航栏已成功展示新的 `EncryptionPage` 以取代之前的占位符
