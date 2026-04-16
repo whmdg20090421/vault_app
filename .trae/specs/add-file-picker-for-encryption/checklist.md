@@ -1,0 +1,7 @@
+- [ ] `file_picker` and `permission_handler` are added to `pubspec.yaml`
+- [ ] Android permissions (`READ/WRITE/MANAGE_EXTERNAL_STORAGE`) are present in `AndroidManifest.xml`
+- [ ] `EncryptionPage` UI is visually appealing and supports both themes
+- [ ] Permissions are requested ONLY upon user interaction (clicking the pick buttons)
+- [ ] File and folder selection system calls work correctly
+- [ ] Selected path is clearly displayed in the UI
+- [ ] The "加密" navigation tab displays the new `EncryptionPage` instead of the placeholder

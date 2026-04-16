@@ -1,0 +1,11 @@
+# Tasks
+- [ ] Task 1: Add Dependencies & Permissions
+  - [ ] SubTask 1.1: Add `file_picker` and `permission_handler` to `pubspec.yaml`
+  - [ ] SubTask 1.2: Add `<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />`, `<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />`, and `<uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />` to `android/app/src/main/AndroidManifest.xml`
+- [ ] Task 2: Implement UI and Logic
+  - [ ] SubTask 2.1: Create `lib/encryption/encryption_page.dart` with a Stateful widget `EncryptionPage`.
+  - [ ] SubTask 2.2: Implement permission request logic in `EncryptionPage` using `permission_handler`.
+  - [ ] SubTask 2.3: Implement file and folder selection logic using `file_picker`.
+  - [ ] SubTask 2.4: Build a beautiful UI with buttons/cards for picking files/folders and displaying the selected path, supporting both default and cyberpunk themes.
+- [ ] Task 3: Integrate with Main Navigation
+  - [ ] SubTask 3.1: Replace the placeholder `_TitlePage(title: '加密')` in `lib/main.dart` with `EncryptionPage`.
