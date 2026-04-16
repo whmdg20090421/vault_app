@@ -34,14 +34,27 @@ class WebDavClientService {
     return _client.removeAll(path);
   }
 
-  /// PUT: Upload a file (can be a local path or byte data, webdav_client supports upload and uploadFile)
+  /// PUT: Upload a file
   Future<void> upload(String localFilePath, String remotePath) async {
-    return _client.uploadFile(localFilePath, remotePath);
+    final file = File(localFilePath);
+    final req = await createRequest('PUT', remotePath);
+    req.contentLength = await file.length();
+    await req.addStream(file.openRead());
+    final resp = await req.close();
+    if (resp.statusCode >= 400) {
+      throw Exception('Failed to upload file: ${resp.statusCode}');
+    }
   }
   
   /// PUT: Upload raw bytes
   Future<void> uploadData(List<int> data, String remotePath) async {
-    return _client.upload(data, remotePath);
+    final req = await createRequest('PUT', remotePath);
+    req.contentLength = data.length;
+    req.add(data);
+    final resp = await req.close();
+    if (resp.statusCode >= 400) {
+      throw Exception('Failed to upload data: ${resp.statusCode}');
+    }
   }
 
   /// Custom HttpClient for streaming and range requests
@@ -79,7 +92,16 @@ class WebDavClientService {
   
   /// GET: Read raw bytes
   Future<List<int>> readData(String remotePath) async {
-    return _client.read(remotePath);
+    final req = await createRequest('GET', remotePath);
+    final resp = await req.close();
+    if (resp.statusCode >= 400) {
+      throw Exception('Failed to read data: ${resp.statusCode}');
+    }
+    final builder = BytesBuilder();
+    await for (final chunk in resp) {
+      builder.add(chunk);
+    }
+    return builder.takeBytes();
   }
 
   /// MOVE: Rename or move a file/directory
