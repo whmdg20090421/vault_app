@@ -335,7 +335,7 @@ class _SyncConfigPageState extends State<SyncConfigPage> {
     if (_selectedVault == null || _selectedWebDav == null) return;
 
     final task = SyncTask(
-      id: const Uuid().v4(),
+        id: Uuid().v4(),
       direction: _direction,
       strategy: _strategy,
       items: [],
