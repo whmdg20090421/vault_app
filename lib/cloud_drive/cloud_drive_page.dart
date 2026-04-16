@@ -38,6 +38,9 @@ class _CloudDrivePageState extends State<CloudDrivePage> {
   }
 
   Future<void> _reload() async {
+    if (!mounted) {
+      return;
+    }
     setState(() => _loading = true);
     final configs = await _repository.listConfigs();
     final level = await _repository.readSecurityLevel();
