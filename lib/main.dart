@@ -49,34 +49,35 @@ class TianyanApp extends StatelessWidget {
 ThemeData _buildTheme(AppTheme theme) {
   if (theme == AppTheme.cyberpunk) {
     final scheme = ColorScheme.fromSeed(
-      seedColor: const Color(0xFF00E5FF),
+      seedColor: const Color(0xFFFCE205),
       brightness: Brightness.dark,
     ).copyWith(
-      secondary: const Color(0xFFFF2D95),
-      tertiary: const Color(0xFFB2FF59),
-      surface: const Color(0xFF120826),
-      surfaceContainer: const Color(0xFF1A0D33),
+      primary: const Color(0xFFFCE205),
+      secondary: const Color(0xFF00F0FF),
+      tertiary: const Color(0xFFFF003C),
+      surface: const Color(0xFF0A0A0A),
+      surfaceContainer: const Color(0xFF141414),
     );
 
     return ThemeData(
       useMaterial3: true,
       colorScheme: scheme,
-      scaffoldBackgroundColor: const Color(0xFF07020F),
+      scaffoldBackgroundColor: const Color(0xFF000000),
       navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: const Color(0xFF120826),
-        indicatorColor: const Color(0x3300E5FF),
+        backgroundColor: const Color(0xFF0A0A0A),
+        indicatorColor: const Color(0x33FCE205),
         labelTextStyle: WidgetStateProperty.resolveWith(
           (states) => TextStyle(
             fontWeight: FontWeight.w600,
             color: states.contains(WidgetState.selected)
-                ? const Color(0xFF00E5FF)
+                ? const Color(0xFFFCE205)
                 : scheme.onSurface.withValues(alpha: 0.75),
           ),
         ),
         iconTheme: WidgetStateProperty.resolveWith(
           (states) => IconThemeData(
             color: states.contains(WidgetState.selected)
-                ? const Color(0xFF00E5FF)
+                ? const Color(0xFFFCE205)
                 : scheme.onSurface.withValues(alpha: 0.75),
           ),
         ),
