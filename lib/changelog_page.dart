@@ -12,6 +12,21 @@ class ChangelogPage extends StatelessWidget {
       body: ListView(
         children: const [
           ExpansionTile(
+            title: Text('版本 1.2.3 (2026-04-16)'),
+            children: [
+              ListTile(
+                title: Text(
+                    '✨ Features & WebDAV Dashboard\n'
+                    '• WebDAV 仪表盘中枢：引入专业的同步管理仪表盘（Dashboard），包含概览、动态日志和文件浏览三大板块，彻底告别空壳 UI。\n'
+                    '• 全局状态管理：新增 WebDAVStateManager，在仪表盘各 Tab 间共享最后同步时间、同步状态、活动日志等数据。\n'
+                    '• 真实网络与同步逻辑：使用原生网络库复刻 WebDAV 协议（PROPFIND/DELETE），接入真实的删除逻辑与差异比对（Diffing）同步引擎。\n'
+                    '• 文件大小智能换算：新增 formatBytes 工具，自动换算 KB/MB/GB 并在所有文件列表中应用。\n'
+                    '• 缓存与无用文件清理：清理了旧版冗余的缓存目录与空文件夹，使项目结构更加清爽。'
+                ),
+              ),
+            ],
+          ),
+          ExpansionTile(
             title: Text('版本 1.1.4 (2026-04-16)'),
             children: [
               ListTile(
