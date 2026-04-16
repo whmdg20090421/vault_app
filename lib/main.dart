@@ -104,14 +104,11 @@ class _MainShellState extends State<MainShell> {
 
   @override
   Widget build(BuildContext context) {
-    final pages = [
-      const _TitlePage(title: '主页'),
-      const CloudDrivePage(),
-      const _TitlePage(title: '加密'),
-      SettingsPage(
-        theme: appTheme.value,
-        onThemeChanged: (next) => appTheme.value = next,
-      ),
+    final pages = const [
+      _TitlePage(title: '主页'),
+      CloudDrivePage(),
+      _TitlePage(title: '加密'),
+      SettingsPage(),
     ];
 
     final titles = const ['主页', '云盘', '加密', '设置'];
@@ -167,45 +164,43 @@ class _TitlePage extends StatelessWidget {
 }
 
 class SettingsPage extends StatelessWidget {
-  const SettingsPage({
-    super.key,
-    required this.theme,
-    required this.onThemeChanged,
-  });
-
-  final AppTheme theme;
-  final ValueChanged<AppTheme> onThemeChanged;
+  const SettingsPage({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        Text(
-          '主题',
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
-        ),
-        const SizedBox(height: 12),
-        SegmentedButton<AppTheme>(
-          segments: const [
-            ButtonSegment(
-              value: AppTheme.defaultTheme,
-              label: Text('默认主题'),
-              icon: Icon(Icons.auto_awesome_rounded),
+    return ValueListenableBuilder<AppTheme>(
+      valueListenable: appTheme,
+      builder: (context, theme, _) {
+        return ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            Text(
+              '主题',
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
             ),
-            ButtonSegment(
-              value: AppTheme.cyberpunk,
-              label: Text('赛博朋克'),
-              icon: Icon(Icons.bolt_rounded),
+            const SizedBox(height: 12),
+            SegmentedButton<AppTheme>(
+              segments: const [
+                ButtonSegment(
+                  value: AppTheme.defaultTheme,
+                  label: Text('默认主题'),
+                  icon: Icon(Icons.auto_awesome_rounded),
+                ),
+                ButtonSegment(
+                  value: AppTheme.cyberpunk,
+                  label: Text('赛博朋克'),
+                  icon: Icon(Icons.bolt_rounded),
+                ),
+              ],
+              selected: {theme},
+              onSelectionChanged: (selection) => appTheme.value = selection.first,
+              showSelectedIcon: true,
             ),
           ],
-          selected: {theme},
-          onSelectionChanged: (selection) => onThemeChanged(selection.first),
-          showSelectedIcon: true,
-        ),
-      ],
+        );
+      },
     );
   }
 }
