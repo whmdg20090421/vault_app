@@ -10,6 +10,7 @@ import '../vfs/virtual_file_system.dart';
 import '../vfs/standard_vfs.dart';
 import '../services/sync_storage_service.dart';
 import '../models/sync_task.dart';
+import '../utils/format_utils.dart';
 
 class WebDavBrowserPage extends StatefulWidget {
   const WebDavBrowserPage({
@@ -21,19 +22,7 @@ class WebDavBrowserPage extends StatefulWidget {
 
   @override
   State<WebDavBrowserPage> createState() => _WebDavBrowserPageState();
-}
 
-String _formatBytes(int bytes) {
-  if (bytes <= 0) return '0 B';
-  const suffixes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
-  int i = 0;
-  double d = bytes.toDouble();
-  while (d >= 1024 && i < suffixes.length - 1) {
-    d /= 1024;
-    i++;
-  }
-  return '${d.toStringAsFixed(2)} ${suffixes[i]}';
-}
 
 class _WebDavBrowserPageState extends State<WebDavBrowserPage> {
   VirtualFileSystem? _vfs;
@@ -407,7 +396,7 @@ class _WebDavBrowserPageState extends State<WebDavBrowserPage> {
                                     title: Text(file.name),
                                     subtitle: isDir ? null : Row(
                                       children: [
-                                        Text(_formatBytes(file.size)),
+                                        Text(FormatUtils.formatBytes(file.size)),
                                         const SizedBox(width: 8),
                                         if (isSynced)
                                           Container(

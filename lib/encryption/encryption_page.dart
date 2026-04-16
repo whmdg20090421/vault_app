@@ -9,7 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../main.dart';
 
 import 'models/vault_config.dart';
-import 'utils/crypto_utils.dart';
+import '../utils/format_utils.dart';
 import 'vault_config_page.dart';
 import 'vault_explorer_page.dart';
 import 'services/encryption_task_manager.dart';
@@ -501,7 +501,7 @@ class EncryptionProgressPanel extends StatelessWidget {
                                   style: theme.textTheme.bodySmall,
                                 ),
                                 Text(
-                                  '${_formatBytes(task.processedBytes)} / ${_formatBytes(task.totalBytes)}',
+                                  '${FormatUtils.formatBytes(task.processedBytes)} / ${FormatUtils.formatBytes(task.totalBytes)}',
                                   style: theme.textTheme.bodySmall?.copyWith(fontFamily: 'monospace'),
                                 ),
                               ],
@@ -560,10 +560,5 @@ class EncryptionProgressPanel extends StatelessWidget {
     }
   }
 
-  String _formatBytes(int bytes) {
-    if (bytes < 1024) return '$bytes B';
-    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
-    if (bytes < 1024 * 1024 * 1024) return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
-    return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
-  }
+
 }

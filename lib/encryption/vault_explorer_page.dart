@@ -5,6 +5,7 @@ import '../main.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as p;
 import 'models/vault_config.dart';
+import '../utils/format_utils.dart';
 import '../vfs/virtual_file_system.dart';
 import '../vfs/local_vfs.dart';
 import '../vfs/encrypted_vfs.dart';
