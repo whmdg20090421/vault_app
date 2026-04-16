@@ -41,14 +41,25 @@ flutter create \
 - `android/app/src/main/kotlin/com/tianyanmczj/vault/MainActivity.kt`
   - `package com.tianyanmczj.vault` 与目录结构保持一致（必要时移动文件路径）。
 
-### 3) 主界面：Material 3 + Bottom Navigation（4 Tab）
-**目标**：页面美观、Material 3 风格明显，4 个 Tab 可正常点击切换，每页只显示对应标题文字。
+### 3) 主界面：Material 3 + Bottom Navigation（4 Tab）+ 主题切换
+**目标**：页面美观、Material 3 风格明显，4 个 Tab 可正常点击切换；设置页提供主题切换（默认主题 / 赛博朋克主题），且为真实可运行代码落地。
 
 **修改文件**
 - `lib/main.dart`
 
 **实现要点（决策已锁定）**
-- 使用 `MaterialApp` + `ThemeData(useMaterial3: true, colorSchemeSeed: …)` 统一配色。
+- 在 App 顶层维护主题状态：
+  - `enum AppTheme { systemDefault, cyberpunk }`
+  - `ValueNotifier<AppTheme>` + `ValueListenableBuilder` 驱动 `MaterialApp` 重建（不引入第三方状态管理库，避免额外依赖）。
+- 默认主题：
+  - `ThemeData(useMaterial3: true, colorSchemeSeed: …)`（亮色为主，系统自适配暗色可不启用，以保持“默认主题”视觉稳定）
+- 赛博朋克主题（暗色 + 霓虹点缀，真实落地为自定义 `ColorScheme`）：
+  - `brightness: Brightness.dark`
+  - 背景：接近黑紫（例如 `#07020F`）
+  - 主色：霓虹青（例如 `#00E5FF`）
+  - 辅色：霓虹品红（例如 `#FF2D95`）
+  - 强调：荧光绿（例如 `#B2FF59`）
+  - `ThemeData(useMaterial3: true, colorScheme: ColorScheme(...))` 并定制 `NavigationBarThemeData` 的 `indicatorColor`/`labelTextStyle` 以增强赛博朋克质感。
 - 使用 `Scaffold` + Material 3 的 `NavigationBar`（而不是旧的 `BottomNavigationBar`）实现底部导航。
 - 4 个 `NavigationDestination`：
   - 主页：`Icons.home_rounded`
@@ -56,7 +67,9 @@ flutter create \
   - 加密：`Icons.lock_rounded`
   - 设置：`Icons.settings_rounded`
 - 内容区使用 `IndexedStack` 保持各 Tab 状态（即便当前只显示标题，也更符合真实 App 结构）。
-- 每个页面仅 `Center(Text('标题'))`，字体使用 `Theme.of(context).textTheme.headlineMedium` 并配合 `FontWeight.w600`，使视觉更精致。
+- 页面内容策略：
+  - 主页/云盘/加密：仅 `Center(Text('标题'))`，字体使用 `Theme.of(context).textTheme.headlineMedium` 并配合 `FontWeight.w600`。
+  - 设置：保留顶部标题，同时提供主题切换控件（Material 3 风格优先使用 `SegmentedButton<AppTheme>`，选项为“默认主题 / 赛博朋克”），切换后立即更新全局主题。
 
 ### 4) Android Release 签名（使用 GitHub Secrets）
 **目标**：本地不提交任何敏感信息；CI 构建时通过 Secrets 写入 keystore 与 key.properties 完成签名。
@@ -126,4 +139,3 @@ ls -lah build/app/outputs/flutter-apk/
 ### CI（GitHub Actions）
 - push 到 `main` 后，在 Actions 页面确认 workflow run 成功。
 - 下载 artifact，确认 APK 文件存在且可安装到 arm64 设备/模拟器。
-
