@@ -17,7 +17,7 @@ extension ThemeCyberpunk on ThemeData {
 
 enum AppTheme { defaultTheme, cyberpunk }
 
-class CyberpunkBorder extends ShapeBorder {
+class CyberpunkBorder extends OutlinedBorder {
   final Color color;
   final double borderWidth;
   final double thickBorderWidth;
@@ -28,7 +28,19 @@ class CyberpunkBorder extends ShapeBorder {
     this.borderWidth = 1.0,
     this.thickBorderWidth = 4.0,
     this.cornerLength = 10.0,
+    super.side = BorderSide.none,
   });
+
+  @override
+  OutlinedBorder copyWith({BorderSide? side}) {
+    return CyberpunkBorder(
+      color: color,
+      borderWidth: borderWidth,
+      thickBorderWidth: thickBorderWidth,
+      cornerLength: cornerLength,
+      side: side ?? this.side,
+    );
+  }
 
   @override
   EdgeInsetsGeometry get dimensions => EdgeInsets.fromLTRB(thickBorderWidth, borderWidth, borderWidth, borderWidth);
@@ -88,12 +100,13 @@ class CyberpunkBorder extends ShapeBorder {
   }
 
   @override
-  ShapeBorder scale(double t) {
+  OutlinedBorder scale(double t) {
     return CyberpunkBorder(
       color: color,
       borderWidth: borderWidth * t,
       thickBorderWidth: thickBorderWidth * t,
       cornerLength: cornerLength * t,
+      side: side.scale(t),
     );
   }
 }
@@ -174,7 +187,7 @@ ThemeData _buildTheme(AppTheme theme) {
         labelMedium: TextStyle(fontFamily: 'monospace'),
         labelSmall: TextStyle(fontFamily: 'monospace'),
       ),
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         color: scheme.surfaceContainer,
         shape: const CyberpunkBorder(),
         elevation: 8,
@@ -257,7 +270,7 @@ ThemeData _buildTheme(AppTheme theme) {
         backgroundColor: Color(0xFF1A242D),
         shape: CyberpunkBorder(thickBorderWidth: 4.0),
       ),
-      dialogTheme: DialogTheme(
+      dialogTheme: DialogThemeData(
         backgroundColor: scheme.surfaceContainer,
         shape: const CyberpunkBorder(thickBorderWidth: 4.0),
         titleTextStyle: const TextStyle(fontFamily: 'sans-serif', fontWeight: FontWeight.bold, letterSpacing: 1.5, color: Color(0xFF00E5FF), fontSize: 20),
