@@ -6,7 +6,30 @@ plugins {
 }
 
 import java.io.FileInputStream
+import java.io.File
 import java.util.Properties
+
+fun guessKeyStoreType(file: File): String {
+    return try {
+        FileInputStream(file).use { input ->
+            val header = ByteArray(4)
+            val read = input.read(header)
+            if (
+                read == 4 &&
+                    header[0] == 0xFE.toByte() &&
+                    header[1] == 0xED.toByte() &&
+                    header[2] == 0xFE.toByte() &&
+                    header[3] == 0xED.toByte()
+            ) {
+                "jks"
+            } else {
+                "pkcs12"
+            }
+        }
+    } catch (_: Exception) {
+        "jks"
+    }
+}
 
 val keystoreProperties = Properties()
 val keystorePropertiesFile = rootProject.file("key.properties")
@@ -46,8 +69,10 @@ android {
             if (hasKeystoreProperties) {
                 keyAlias = keystoreProperties.getProperty("keyAlias")
                 keyPassword = keystoreProperties.getProperty("keyPassword")
-                storeFile = rootProject.file(keystoreProperties.getProperty("storeFile"))
+                val store = rootProject.file(keystoreProperties.getProperty("storeFile"))
+                storeFile = store
                 storePassword = keystoreProperties.getProperty("storePassword")
+                storeType = keystoreProperties.getProperty("storeType") ?: guessKeyStoreType(store)
             }
         }
     }
