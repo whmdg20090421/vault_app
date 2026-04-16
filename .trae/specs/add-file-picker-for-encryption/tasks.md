@@ -1,11 +1,11 @@
-# Tasks
-- [ ] Task 1: Add Dependencies & Permissions
-  - [ ] SubTask 1.1: Add `file_picker` and `permission_handler` to `pubspec.yaml`
-  - [ ] SubTask 1.2: Add `<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />`, `<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />`, and `<uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />` to `android/app/src/main/AndroidManifest.xml`
-- [ ] Task 2: Implement UI and Logic
-  - [ ] SubTask 2.1: Create `lib/encryption/encryption_page.dart` with a Stateful widget `EncryptionPage`.
-  - [ ] SubTask 2.2: Implement permission request logic in `EncryptionPage` using `permission_handler`.
-  - [ ] SubTask 2.3: Implement file and folder selection logic using `file_picker`.
-  - [ ] SubTask 2.4: Build a beautiful UI with buttons/cards for picking files/folders and displaying the selected path, supporting both default and cyberpunk themes.
-- [ ] Task 3: Integrate with Main Navigation
-  - [ ] SubTask 3.1: Replace the placeholder `_TitlePage(title: '加密')` in `lib/main.dart` with `EncryptionPage`.
+# 任务列表 (Tasks)
+- [ ] 任务 1：添加依赖与权限
+  - [ ] 子任务 1.1：在 `pubspec.yaml` 中添加 `file_picker` 和 `permission_handler` 依赖
+  - [ ] 子任务 1.2：在 `android/app/src/main/AndroidManifest.xml` 中添加 `<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />`、`<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />` 以及 `<uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />` 权限
+- [ ] 任务 2：实现 UI 与逻辑
+  - [ ] 子任务 2.1：创建 `lib/encryption/encryption_page.dart` 并包含有状态的组件 `EncryptionPage`
+  - [ ] 子任务 2.2：在 `EncryptionPage` 中使用 `permission_handler` 实现权限请求逻辑，确保仅在点击按钮时请求
+  - [ ] 子任务 2.3：使用 `file_picker` 实现文件和文件夹选择逻辑
+  - [ ] 子任务 2.4：构建美观的 UI，包含选择文件、选择文件夹的按钮以及展示所选路径的区域，并确保完美适配现有的“默认”和“赛博朋克”两种主题
+- [ ] 任务 3：集成到主导航栏
+  - [ ] 子任务 3.1：将 `lib/main.dart` 中的占位符 `_TitlePage(title: '加密')` 替换为新编写的 `EncryptionPage`

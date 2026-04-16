@@ -1,7 +1,7 @@
-- [ ] `file_picker` and `permission_handler` are added to `pubspec.yaml`
-- [ ] Android permissions (`READ/WRITE/MANAGE_EXTERNAL_STORAGE`) are present in `AndroidManifest.xml`
-- [ ] `EncryptionPage` UI is visually appealing and supports both themes
-- [ ] Permissions are requested ONLY upon user interaction (clicking the pick buttons)
-- [ ] File and folder selection system calls work correctly
-- [ ] Selected path is clearly displayed in the UI
-- [ ] The "加密" navigation tab displays the new `EncryptionPage` instead of the placeholder
+- [ ] 已在 `pubspec.yaml` 中添加 `file_picker` 和 `permission_handler`
+- [ ] 已在 `AndroidManifest.xml` 中添加 Android 权限 (`READ/WRITE/MANAGE_EXTERNAL_STORAGE`)
+- [ ] `EncryptionPage` UI 视觉美观，且完美支持现有主题（默认主题、赛博朋克）
+- [ ] 权限仅在用户交互时（点击选择按钮时）请求，未在应用启动时请求
+- [ ] 系统文件和文件夹选择调用功能正常工作
+- [ ] 所选路径能在 UI 上清晰展示
+- [ ] “加密”导航栏已成功展示新的 `EncryptionPage` 以取代之前的占位符
