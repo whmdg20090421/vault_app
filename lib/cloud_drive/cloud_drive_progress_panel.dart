@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'cloud_drive_progress_manager.dart';
+import '../models/sync_task.dart';
 
 void showCloudDriveProgressPanel(BuildContext context) {
   showModalBottomSheet(
@@ -96,7 +97,11 @@ class _TaskItemNodeState extends State<_TaskItemNode> {
   @override
   Widget build(BuildContext context) {
     final task = widget.task;
-    final hasChildren = task.isFolder && task.children.isNotEmpty;
+    final hasChildren = task.items.isNotEmpty;
+
+    String taskTitle = task.direction == SyncDirection.cloudToLocal 
+        ? '下载: ${task.cloudFolderPath}' 
+        : '上传: ${task.localFolderPath}';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -106,11 +111,11 @@ class _TaskItemNodeState extends State<_TaskItemNode> {
             left: 16.0 + widget.level * 24.0,
             right: 16.0,
           ),
-          leading: Icon(
-            task.isFolder ? Icons.folder_rounded : Icons.insert_drive_file_rounded,
-            color: task.isFolder ? Colors.amber : Colors.blueAccent,
+          leading: const Icon(
+            Icons.sync_rounded,
+            color: Colors.amber,
           ),
-          title: Text(task.name),
+          title: Text(taskTitle),
           subtitle: _buildSubtitle(task),
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
@@ -131,8 +136,8 @@ class _TaskItemNodeState extends State<_TaskItemNode> {
           ),
         ),
         if (_expanded && hasChildren)
-          ...task.children.map((child) => _TaskItemNode(
-                task: child,
+          ...task.items.map((item) => _FileItemNode(
+                item: item,
                 level: widget.level + 1,
               )),
       ],
@@ -140,50 +145,85 @@ class _TaskItemNodeState extends State<_TaskItemNode> {
   }
 
   Widget _buildSubtitle(SyncTask task) {
-    if (task.isFolder) {
-      final total = task.children.length;
-      final completed = task.children.where((e) => e.status == SyncTaskStatus.completed).length;
-      return Text('文件数量: $completed / $total');
-    }
-
-    final percent = (task.progress * 100).toStringAsFixed(1);
-    final sizeStr = '${(task.transferredSize / 1024).toStringAsFixed(1)}KB / ${(task.totalSize / 1024).toStringAsFixed(1)}KB';
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('$sizeStr ($percent%)'),
-        const SizedBox(height: 4),
-        LinearProgressIndicator(
-          value: task.progress,
-          backgroundColor: Colors.grey.withOpacity(0.2),
-        ),
-      ],
-    );
+    final total = task.items.length;
+    final completed = task.items.where((e) => e.status == SyncStatus.completed).length;
+    return Text('文件数量: $completed / $total');
   }
 
   Widget _buildActionIcon(SyncTask task) {
-    if (task.isFolder) {
-      return const SizedBox.shrink();
-    }
-
     final manager = CloudDriveProgressManager.instance;
     switch (task.status) {
-      case SyncTaskStatus.running:
-      case SyncTaskStatus.pending:
+      case SyncStatus.syncing:
+      case SyncStatus.pending:
         return IconButton(
           icon: const Icon(Icons.pause_circle_filled_rounded, color: Colors.orange),
           onPressed: () => manager.pauseTask(task.id),
           tooltip: '暂停',
         );
-      case SyncTaskStatus.paused:
-      case SyncTaskStatus.failed:
+      case SyncStatus.paused:
+      case SyncStatus.failed:
         return IconButton(
           icon: const Icon(Icons.play_circle_filled_rounded, color: Colors.green),
           onPressed: () => manager.resumeTask(task.id),
           tooltip: '开始/恢复',
         );
-      case SyncTaskStatus.completed:
+      case SyncStatus.completed:
+        return const Icon(Icons.check_circle_rounded, color: Colors.green);
+    }
+  }
+}
+
+class _FileItemNode extends StatelessWidget {
+  const _FileItemNode({
+    required this.item,
+    required this.level,
+  });
+
+  final SyncFileItem item;
+  final int level;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      contentPadding: EdgeInsets.only(
+        left: 16.0 + level * 24.0,
+        right: 16.0,
+      ),
+      leading: const Icon(
+        Icons.insert_drive_file_rounded,
+        color: Colors.blueAccent,
+      ),
+      title: Text(item.name),
+      subtitle: _buildSubtitle(item),
+      trailing: _buildActionIcon(item),
+    );
+  }
+
+  Widget _buildSubtitle(SyncFileItem item) {
+    final sizeStr = '${(item.size / 1024).toStringAsFixed(1)}KB';
+    
+    if (item.status == SyncStatus.failed && item.errorMessage != null) {
+      return Text('$sizeStr - 失败: ${item.errorMessage}', style: const TextStyle(color: Colors.red));
+    }
+    
+    return Text(sizeStr);
+  }
+
+  Widget _buildActionIcon(SyncFileItem item) {
+    switch (item.status) {
+      case SyncStatus.syncing:
+        return const SizedBox(
+          width: 24,
+          height: 24,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        );
+      case SyncStatus.pending:
+        return const Icon(Icons.schedule_rounded, color: Colors.grey);
+      case SyncStatus.paused:
+        return const Icon(Icons.pause_circle_outline_rounded, color: Colors.orange);
+      case SyncStatus.failed:
+        return const Icon(Icons.error_outline_rounded, color: Colors.red);
+      case SyncStatus.completed:
         return const Icon(Icons.check_circle_rounded, color: Colors.green);
     }
   }

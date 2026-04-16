@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
@@ -75,21 +76,126 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
   void _importFile() async {
     final result = await FilePicker.platform.pickFiles(allowMultiple: true);
     if (result != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('已选择 ${result.files.length} 个文件，准备导入 (加密功能开发中)')),
-      );
+      setState(() {
+        _isMenuOpen = false;
+        _isLoading = true;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('正在导入 ${result.files.length} 个文件...')),
+        );
+      }
+      try {
+        for (final file in result.files) {
+          if (file.path != null) {
+            final localPath = file.path!;
+            final remotePath = p.join(_currentPath, file.name).replaceAll(r'\', '/');
+            await _vfs.upload(localPath, remotePath);
+          }
+        }
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('文件导入成功')),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('导入文件失败: $e')),
+          );
+        }
+      } finally {
+        if (mounted) {
+          _loadCurrentDirectory();
+        }
+      }
+    } else {
+      setState(() => _isMenuOpen = false);
     }
-    setState(() => _isMenuOpen = false);
   }
 
   void _importFolder() async {
     final result = await FilePicker.platform.getDirectoryPath();
     if (result != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('已选择文件夹: $result，准备导入 (加密功能开发中)')),
-      );
+      setState(() {
+        _isMenuOpen = false;
+        _isLoading = true;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('正在导入文件夹...')),
+        );
+      }
+      try {
+        final dir = Directory(result);
+        if (await dir.exists()) {
+          final baseName = p.basename(result);
+          final remoteDirPath = p.join(_currentPath, baseName).replaceAll(r'\', '/');
+          await _vfs.mkdir(remoteDirPath);
+
+          await for (final entity in dir.list(recursive: true)) {
+            final relativePath = p.relative(entity.path, from: result);
+            final remotePath = p.join(remoteDirPath, relativePath).replaceAll(r'\', '/');
+            if (entity is File) {
+              await _vfs.upload(entity.path, remotePath);
+            } else if (entity is Directory) {
+              await _vfs.mkdir(remotePath);
+            }
+          }
+        }
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('文件夹导入成功')),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('导入文件夹失败: $e')),
+          );
+        }
+      } finally {
+        if (mounted) {
+          _loadCurrentDirectory();
+        }
+      }
+    } else {
+      setState(() => _isMenuOpen = false);
     }
-    setState(() => _isMenuOpen = false);
+  }
+
+  void _loadCurrentDirectory() {
+    _loadFiles();
+  }
+
+  Future<void> _exportFile(VfsNode node) async {
+    try {
+      final selectedDir = await FilePicker.platform.getDirectoryPath();
+      if (selectedDir == null) return;
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('正在导出: ${node.name}...')),
+        );
+      }
+
+      final stream = await _vfs.open(node.path);
+      final outFile = File(p.join(selectedDir, node.name));
+      final sink = outFile.openWrite();
+      await stream.pipe(sink);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('导出成功: ${outFile.path}')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('导出失败: $e')),
+        );
+      }
+    }
   }
 
   void _newFolder() {
@@ -257,9 +363,7 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
                           });
                           _loadFiles();
                         } else {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('文件读取功能开发中: ${file.name}')),
-                          );
+                          _exportFile(file);
                         }
                       },
                     );

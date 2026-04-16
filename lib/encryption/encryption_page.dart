@@ -374,26 +374,6 @@ class EncryptionProgressPanel extends StatelessWidget {
     final isCyberpunk = theme.brightness == Brightness.dark && 
                         theme.colorScheme.secondary.value == 0xFF00F0FF;
 
-    final mockData = [
-      {
-        'root': '内部存储 (Internal Storage)',
-        'icon': Icons.smartphone,
-        'folders': [
-          {'name': 'DCIM/Camera', 'encrypted': 5, 'total': 10},
-          {'name': 'Pictures/Screenshots', 'encrypted': 12, 'total': 12},
-          {'name': 'Download', 'encrypted': 0, 'total': 8},
-        ]
-      },
-      {
-        'root': 'SD卡 (SD Card)',
-        'icon': Icons.sd_storage,
-        'folders': [
-          {'name': 'Movies', 'encrypted': 45, 'total': 100},
-          {'name': 'Music', 'encrypted': 2, 'total': 2},
-        ]
-      },
-    ];
-
     return Container(
       decoration: BoxDecoration(
         color: theme.scaffoldBackgroundColor,
@@ -425,80 +405,31 @@ class EncryptionProgressPanel extends StatelessWidget {
           ),
           Divider(height: 1, color: theme.colorScheme.outlineVariant),
           Expanded(
-            child: ListView.builder(
+            child: SingleChildScrollView(
               controller: scrollController,
-              itemCount: mockData.length,
-              itemBuilder: (context, index) {
-                final rootData = mockData[index];
-                final rootName = rootData['root'] as String;
-                final rootIcon = rootData['icon'] as IconData;
-                final folders = rootData['folders'] as List<Map<String, dynamic>>;
-
-                return ExpansionTile(
-                  leading: Icon(rootIcon, color: theme.colorScheme.primary),
-                  title: Text(
-                    rootName,
-                    style: const TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                  initiallyExpanded: index == 0,
-                  children: folders.map((folder) {
-                    final folderName = folder['name'] as String;
-                    final encrypted = folder['encrypted'] as int;
-                    final total = folder['total'] as int;
-                    final progress = total > 0 ? encrypted / total : 0.0;
-                    final progressPercent = (progress * 100).toStringAsFixed(1);
-
-                    return Padding(
-                      padding: const EdgeInsets.only(left: 48, right: 24, bottom: 16, top: 8),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              const Icon(Icons.folder_outlined, size: 16, color: Colors.grey),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  folderName,
-                                  style: const TextStyle(fontWeight: FontWeight.w500),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          LinearProgressIndicator(
-                            value: progress,
-                            minHeight: 1,
-                            backgroundColor: theme.colorScheme.surfaceContainerHighest,
-                            valueColor: AlwaysStoppedAnimation<Color>(
-                              isCyberpunk ? theme.colorScheme.secondary : theme.colorScheme.primary,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                '已加密 $encrypted / $total',
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: theme.colorScheme.onSurfaceVariant,
-                                ),
-                              ),
-                              Text(
-                                '$progressPercent%',
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: theme.colorScheme.onSurfaceVariant,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(32.0),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const SizedBox(height: 32),
+                      Icon(
+                        Icons.inbox_outlined,
+                        size: 64,
+                        color: theme.colorScheme.onSurface.withOpacity(0.2),
                       ),
-                    );
-                  }).toList(),
-                );
-              },
+                      const SizedBox(height: 16),
+                      Text(
+                        '暂无数据',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          color: theme.colorScheme.onSurface.withOpacity(0.5),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ),
           ),
         ],

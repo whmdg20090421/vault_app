@@ -1,120 +1,88 @@
 import 'package:flutter/material.dart';
-
-enum SyncTaskStatus { pending, running, paused, failed, completed }
-
-class SyncTask {
-  SyncTask({
-    required this.id,
-    required this.name,
-    required this.isFolder,
-    this.totalSize = 0,
-    this.transferredSize = 0,
-    this.status = SyncTaskStatus.pending,
-    this.children = const [],
-  });
-
-  final String id;
-  final String name;
-  final bool isFolder;
-  final int totalSize;
-  int transferredSize;
-  SyncTaskStatus status;
-  List<SyncTask> children;
-
-  double get progress {
-    if (totalSize == 0) return 0;
-    return transferredSize / totalSize;
-  }
-}
+import '../models/sync_task.dart';
+import '../services/sync_storage_service.dart';
+import '../services/sync_engine.dart';
 
 class CloudDriveProgressManager extends ChangeNotifier {
   CloudDriveProgressManager._() {
-    // For demo purposes, add some tasks initially
-    addDemoTasks();
+    _init();
   }
   static final instance = CloudDriveProgressManager._();
 
-  final List<SyncTask> _tasks = [];
+  final SyncStorageService _storageService = SyncStorageService();
+  final SyncEngine syncEngine = SyncEngine();
+
+  List<SyncTask> _tasks = [];
   List<SyncTask> get tasks => _tasks;
 
-  bool get hasActiveTasks => _tasks.any((t) => t.status == SyncTaskStatus.running);
+  bool get hasActiveTasks => _tasks.any((t) => t.status == SyncStatus.syncing);
 
-  void addTask(SyncTask task) {
+  Future<void> _init() async {
+    _tasks = await _storageService.loadTasks();
+    notifyListeners();
+
+    syncEngine.taskUpdates.listen((updatedTask) {
+      final index = _tasks.indexWhere((t) => t.id == updatedTask.id);
+      if (index >= 0) {
+        _tasks[index] = updatedTask;
+      } else {
+        _tasks.add(updatedTask);
+      }
+      notifyListeners();
+    });
+  }
+
+  Future<void> addTask(SyncTask task) async {
     _tasks.add(task);
+    await _storageService.saveTask(task);
     notifyListeners();
   }
 
   void pauseAll() {
     for (var t in _tasks) {
-      if (t.status == SyncTaskStatus.running || t.status == SyncTaskStatus.pending) {
-        t.status = SyncTaskStatus.paused;
+      if (t.status == SyncStatus.syncing || t.status == SyncStatus.pending) {
+        syncEngine.pauseTask(t.id);
+        t.status = SyncStatus.paused;
+        _storageService.saveTask(t);
       }
     }
     notifyListeners();
   }
 
   void startAll() {
+    // To actually start tasks, credentials are required. 
+    // Here we just mark them as pending for the UI.
     for (var t in _tasks) {
-      if (t.status == SyncTaskStatus.paused || t.status == SyncTaskStatus.failed) {
-        t.status = SyncTaskStatus.pending; // or running
+      if (t.status == SyncStatus.paused || t.status == SyncStatus.failed) {
+        t.status = SyncStatus.pending;
+        _storageService.saveTask(t);
       }
     }
     notifyListeners();
-  }
-
-  void startTask(String id) {
-    _setTaskStatus(id, SyncTaskStatus.running);
   }
 
   void pauseTask(String id) {
-    _setTaskStatus(id, SyncTaskStatus.paused);
+    syncEngine.pauseTask(id);
+    _setTaskStatus(id, SyncStatus.paused);
   }
 
   void resumeTask(String id) {
-    _setTaskStatus(id, SyncTaskStatus.running);
+    // Requires credentials to start via SyncEngine. Marking as pending for now.
+    _setTaskStatus(id, SyncStatus.pending);
+  }
+  
+  void cancelTask(String id) {
+    syncEngine.cancelTask(id);
+    _setTaskStatus(id, SyncStatus.failed);
   }
 
-  void _setTaskStatus(String id, SyncTaskStatus status) {
+  void _setTaskStatus(String id, SyncStatus status) {
     for (var t in _tasks) {
       if (t.id == id) {
         t.status = status;
+        _storageService.saveTask(t);
       }
     }
-    notifyListeners();
-  }
-  
-  // For demo
-  void addDemoTasks() {
-    if (_tasks.isNotEmpty) return;
-    _tasks.addAll([
-      SyncTask(
-        id: '1',
-        name: '照片备份',
-        isFolder: true,
-        status: SyncTaskStatus.running,
-        children: [
-          SyncTask(id: '1-1', name: 'IMG_001.jpg', isFolder: false, totalSize: 100, transferredSize: 50, status: SyncTaskStatus.running),
-          SyncTask(id: '1-2', name: 'IMG_002.jpg', isFolder: false, totalSize: 100, transferredSize: 0, status: SyncTaskStatus.pending),
-          SyncTask(id: '1-3', name: 'IMG_003.jpg', isFolder: false, totalSize: 100, transferredSize: 100, status: SyncTaskStatus.completed),
-        ]
-      ),
-      SyncTask(
-        id: '2',
-        name: '工作文档.pdf',
-        isFolder: false,
-        totalSize: 200,
-        transferredSize: 50,
-        status: SyncTaskStatus.paused,
-      ),
-      SyncTask(
-        id: '3',
-        name: '视频素材.mp4',
-        isFolder: false,
-        totalSize: 1000,
-        transferredSize: 100,
-        status: SyncTaskStatus.failed,
-      ),
-    ]);
     notifyListeners();
   }
 }
