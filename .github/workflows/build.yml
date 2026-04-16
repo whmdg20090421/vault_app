@@ -31,7 +31,6 @@ jobs:
           cache: true
 
       - name: Write Android signing files
-        if: ${{ secrets.KEY_STORE_BASE64 != '' && secrets.KEY_ALIAS != '' && secrets.KEY_PASSWORD != '' && secrets.STORE_PASSWORD != '' }}
         shell: bash
         env:
           KEY_STORE_BASE64: ${{ secrets.KEY_STORE_BASE64 }}
@@ -41,6 +40,11 @@ jobs:
           STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
         run: |
           set -euo pipefail
+          if [ -z "$KEY_STORE_BASE64" ] || [ -z "$KEY_ALIAS" ] || [ -z "$KEY_PASSWORD" ] || [ -z "$STORE_PASSWORD" ]; then
+            echo "Signing secrets not configured; skipping signing setup."
+            exit 0
+          fi
+
           mkdir -p android/app
           printf '%s' "$KEY_STORE_BASE64" | base64 --decode > android/app/keystore.src
 
