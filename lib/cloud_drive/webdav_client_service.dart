@@ -11,7 +11,7 @@ class WebDavClientService {
           url,
           user: username,
           password: password,
-          debug: true,
+          debug: false,
         );
 
   final String url;

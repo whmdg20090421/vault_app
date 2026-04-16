@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.1.2 (2026-04-16)
+
+### ✨ Features
+- 新增：WebDAV 文件浏览器基础架构（面包屑导航、目录列表、上传/新建/重命名/删除入口）。
+- 新增：WebDAV 端到端透明加密虚拟文件系统（Marker 递归继承、文件名/内容统一 AES-256-GCM、分块上传与 Range 按需下载 + 内存流式解密）。
+- 变更：GitHub Actions 构建/发布工作流仅支持手动触发（workflow_dispatch）。
+
+---
+
 ## 1.1.1 (2026-04-16)
 
 ### 🐛 Bug Fixes
