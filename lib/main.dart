@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'services/stats_service.dart';
 import 'cloud_drive/cloud_drive_page.dart';
 import 'encryption/encryption_page.dart';
+import 'cloud_drive/cloud_drive_progress_manager.dart';
+import 'cloud_drive/cloud_drive_progress_panel.dart';
 import 'error_reporter.dart';
 import 'about_page.dart';
 import 'home_page.dart';
@@ -127,21 +129,43 @@ class _MainShellState extends State<MainShell> {
       body: IndexedStack(index: _index, children: pages),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
-        onDestinationSelected: (value) => setState(() => _index = value),
-        destinations: const [
-          NavigationDestination(
+        onDestinationSelected: (value) {
+          if (value == 1 && _index == 1) {
+            showCloudDriveProgressPanel(context);
+          } else {
+            setState(() => _index = value);
+          }
+        },
+        destinations: [
+          const NavigationDestination(
             icon: Icon(Icons.home_rounded),
             label: '主页',
           ),
           NavigationDestination(
-            icon: Icon(Icons.cloud_rounded),
+            icon: ListenableBuilder(
+              listenable: CloudDriveProgressManager.instance,
+              builder: (context, _) {
+                final manager = CloudDriveProgressManager.instance;
+                if (manager.hasActiveTasks) {
+                  return const Badge(
+                    label: Icon(
+                      Icons.sync_rounded,
+                      size: 12,
+                      color: Colors.white,
+                    ),
+                    child: Icon(Icons.cloud_sync_rounded),
+                  );
+                }
+                return const Icon(Icons.cloud_rounded);
+              },
+            ),
             label: '云盘',
           ),
-          NavigationDestination(
+          const NavigationDestination(
             icon: Icon(Icons.lock_rounded),
             label: '加密',
           ),
-          NavigationDestination(
+          const NavigationDestination(
             icon: Icon(Icons.settings_rounded),
             label: '设置',
           ),
