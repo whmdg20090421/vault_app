@@ -65,7 +65,16 @@ class WebDavClientService {
 
   /// GET: Download a file to local path
   Future<void> download(String remotePath, String localFilePath) async {
-    return _client.download(remotePath, localFilePath);
+    final req = await createRequest('GET', remotePath);
+    final resp = await req.close();
+    if (resp.statusCode >= 400) {
+      throw Exception('Failed to download: ${resp.statusCode}');
+    }
+
+    final file = File(localFilePath);
+    await file.parent.create(recursive: true);
+    final sink = file.openWrite();
+    await resp.pipe(sink);
   }
   
   /// GET: Read raw bytes
@@ -75,9 +84,23 @@ class WebDavClientService {
 
   /// MOVE: Rename or move a file/directory
   Future<void> rename(String oldPath, String newPath) async {
-    // webdav_client move method
-    // In webdav_client, the signature is move(String source, String destination, {bool overwrite = false})
-    return _client.move(oldPath, newPath, overwrite: false);
+    String fullUrl = url;
+    if (fullUrl.endsWith('/')) {
+      fullUrl = fullUrl.substring(0, fullUrl.length - 1);
+    }
+    if (!newPath.startsWith('/')) {
+      newPath = '/$newPath';
+    }
+    final segments = newPath.split('/').map((s) => s.isEmpty ? '' : Uri.encodeComponent(s)).join('/');
+    final destination = fullUrl + segments;
+
+    final req = await createRequest('MOVE', oldPath);
+    req.headers.set('Destination', destination);
+    req.headers.set('Overwrite', 'F');
+    final resp = await req.close();
+    if (resp.statusCode >= 400) {
+      throw Exception('Failed to move: ${resp.statusCode}');
+    }
   }
   
   /// Get specific file info
