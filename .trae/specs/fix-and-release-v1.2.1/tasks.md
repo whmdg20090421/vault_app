@@ -1,0 +1,23 @@
+# 任务列表 (Tasks)
+- [ ] 任务 1: 优化 GitHub Actions 工作流。
+  - [ ] 子任务 1.1: 修改 `.github/workflows/` 下的构建文件，添加针对 Pub 依赖的缓存（以 OS 和 `pubspec.lock` hash 为 key）。
+  - [ ] 子任务 1.2: 添加 Android Gradle 构建和依赖缓存，明确排查和排除 `version.properties`。
+  - [ ] 子任务 1.3: 添加 `workflow_dispatch` 参数以支持手动触发时选择不使用缓存。
+- [ ] 任务 2: 修复 WebDAV 网络报错。
+  - [ ] 子任务 2.1: 检查 `AndroidManifest.xml` 是否包含 `INTERNET` 权限，若无则添加。
+  - [ ] 子任务 2.2: 在 WebDAV 连接处（如 `webdav_client_service.dart`）捕获 `SocketException` / `DioException` 等网络错误。
+  - [ ] 子任务 2.3: 在出错时返回/抛出友好的错误信息，并通过 SnackBar 或 Dialog 提示用户。
+- [ ] 任务 3: 修复主页 UI 布局溢出。
+  - [ ] 子任务 3.1: 审查 `home_page.dart` 中数据概览卡片的 UI 结构。
+  - [ ] 子任务 3.2: 使用约束或 `ClipRRect` 修复圆形图表溢出白色卡片边缘的问题。
+- [ ] 任务 4: 优化加密任务的交互与状态同步。
+  - [ ] 子任务 4.1: 修改加密选择文件夹后的逻辑，立即关闭加载动画和弹窗。
+  - [ ] 子任务 4.2: 将文件加密 IO 处理逻辑迁移到 `Isolate.run()` 或 `compute` 中执行。
+  - [ ] 子任务 4.3: 在后台任务开始前，将该任务状态初始化（0%）并加入到进度管理器，使 BottomSheet 面板能展示。
+- [ ] 任务 5: 全局代码自检。
+  - [ ] 子任务 5.1: 扫描核心 Widget 和 Controller，修复任何未 `dispose` 的潜在内存泄漏。
+  - [ ] 子任务 5.2: 检查并修复可能的 `setState()` 在 Widget `unmounted` 后调用的问题（增加 `if (mounted)` 检查）。
+- [ ] 任务 6: 本地编译、错误自愈与触发 1.2.1 发布。
+  - [ ] 子任务 6.1: 在终端执行 `flutter build apk --release` 进行本地构建。
+  - [ ] 子任务 6.2: 自动读取构建日志，如果有错误则自动修改代码并重试（最多 6 次）。
+  - [ ] 子任务 6.3: 确认无误后，更新版本号，使用 Git 提交并推送，触发/发布 1.2.1 正式版。
