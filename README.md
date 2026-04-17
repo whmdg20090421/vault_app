@@ -5,10 +5,13 @@
 ## 最新版本概览
 
 <!-- RELEASE_SUMMARY_START -->
-- 当前版本：1.3.3
-- **WebDAV Path Resolution**: 彻底修复 `WebDavParser` 导致服务器返回的绝对路径（`href`）与相对请求路径不匹配，从而使根目录无法正确过滤、产生额外 `webdav` 文件夹并造成 `404 Not Found` 的严重问题。
-- **Enhanced Error Logging**: 大幅增强 `WebDavErrorLoggerInterceptor`，在异常发生时，将完整且详细的请求头（Headers）、请求方法（Method）、请求体（Data）以及完整的响应头（Response Headers）和响应体记录至日志中，便于深度排查服务端参数问题。
-- 完整更新：https://github.com/whmdg20090421/vault_app/releases/tag/v1.3.3
+- 当前版本：1.3.6
+- 优化一键控制：在任务传输列表的最上方增加横向撑满的“一键开始/全部暂停”大按钮，可全局控制队列启停。
+- 修复状态重置：修复递归暂停任务时的状态误伤问题，防止已加密完成的任务在暂停并恢复后被重置为 pending。
+- 性能设置控制：优化并确认“性能设置”中对于多核并发的边界限制，支持根据滑块设置即时应用新并发线程数上限。
+- 自动同步展示：重构“关于”页面的版本读取，接入 `package_info_plus` 实现自动展示，并引入内嵌资源读取实现 `CHANGELOG.md` 自动同步展示。
+- 数据存储规范：全中文重命名整理应用数据目录，如 `应用配置/`、`主题背景/`、`加密任务记录/`、`运行日志/`，提高私有数据结构可读性。
+- 完整更新：https://github.com/whmdg20090421/vault_app/releases/tag/v1.3.6
 <!-- RELEASE_SUMMARY_END -->
 
 ## 更新历史 (Changelog)
