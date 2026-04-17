@@ -1,3 +1,9 @@
+# 版本 1.3.3 (2026-04-17)
+
+### 🐛 Bug Fixes & Diagnostics
+- **WebDAV Path Resolution**: 彻底修复 `WebDavParser` 导致服务器返回的绝对路径（`href`）与相对请求路径不匹配，从而使根目录无法正确过滤、产生额外 `webdav` 文件夹并造成 `404 Not Found` 的严重问题。
+- **Enhanced Error Logging**: 大幅增强 `WebDavErrorLoggerInterceptor`，在异常发生时，将完整且详细的请求头（Headers）、请求方法（Method）、请求体（Data）以及完整的响应头（Response Headers）和响应体记录至日志中，便于深度排查服务端参数问题。
+
 # 版本 1.3.2 (2026-04-17)
 
 ### ✨ Architecture & WebDAV Refactor
