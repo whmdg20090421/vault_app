@@ -12,6 +12,20 @@ class ChangelogPage extends StatelessWidget {
       body: ListView(
         children: const [
           ExpansionTile(
+            title: Text('版本 1.2.4 (2026-04-17)'),
+            children: [
+              ListTile(
+                title: Text(
+                    '🔒 Security & Performance\n'
+                    '• 修复加密任务管理器的结构性代码问题，避免运行期异常与进度面板失效。\n'
+                    '• WebDAV 错误日志写入时对潜在敏感字段进行脱敏处理，并限制日志数量，避免长时间运行导致内存膨胀。\n'
+                    '• 预览/分享临时解密文件改为可回收策略：页面销毁时回收，预览目录延迟清理。\n'
+                    '• 自定义背景图片持久化存储到内部私有目录并清理旧背景文件，避免存储泄漏。'
+                ),
+              ),
+            ],
+          ),
+          ExpansionTile(
             title: Text('版本 1.2.3 (2026-04-16)'),
             children: [
               ListTile(
