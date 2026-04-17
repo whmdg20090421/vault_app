@@ -4,12 +4,13 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:path/path.dart' as p;
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../main.dart';
 
 import 'models/vault_config.dart';
-import '../utils/crypto_utils.dart';
+import 'utils/crypto_utils.dart';
 import '../utils/format_utils.dart';
 import 'vault_config_page.dart';
 import 'vault_explorer_page.dart';

@@ -42,7 +42,7 @@ class WebDAVStateManager extends ChangeNotifier {
       final client = webdav.newClient(
         config.url,
         user: config.username,
-        password: config.password,
+        password: config.password ?? '',
       );
       
       // 测试连接
@@ -50,7 +50,7 @@ class WebDAVStateManager extends ChangeNotifier {
       addLog('成功连接到 WebDAV 服务器');
 
       // 获取云端文件列表 (PROPFIND)
-      final remotePath = config.path.isNotEmpty ? config.path : '/';
+      final remotePath = config.path?.isNotEmpty == true ? config.path! : '/';
       addLog('读取云端目录: $remotePath');
       final remoteFiles = await client.readDir(remotePath);
       addLog('云端目录读取成功，共 ${remoteFiles.length} 个文件/文件夹');
