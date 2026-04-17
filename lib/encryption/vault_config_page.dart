@@ -71,6 +71,9 @@ class _VaultConfigPageState extends State<VaultConfigPage> {
     setState(() {
       _isSaving = true;
     });
+    
+    // 强制让出执行权，让 UI 渲染出 CircularProgressIndicator
+    await Future.delayed(Duration.zero);
 
     try {
       final name = _nameController.text.trim();
@@ -353,12 +356,16 @@ class _BenchmarkDialogState extends State<BenchmarkDialog> {
   String _filePath = '';
   int _doneBytes = 0;
   int _totalBytes = 0;
+  bool _isCancelled = false;
 
   File? _benchmarkFile;
+  BenchmarkTask? _currentTask;
 
   Future<void> _runBenchmark() async {
+    if (!mounted) return;
     setState(() {
       _isRunning = true;
+      _isCancelled = false;
       _progress = 0.0;
       _result = '';
       _status = '';
@@ -392,6 +399,7 @@ class _BenchmarkDialogState extends State<BenchmarkDialog> {
       inputSink = inputFile.openWrite();
       var writtenBytes = 0;
       for (int i = 0; i < totalChunks; i++) {
+        if (!mounted || _isCancelled) return;
         inputSink.add(chunkData);
         writtenBytes += chunkSize;
         if (i % 10 == 0) {
@@ -406,6 +414,7 @@ class _BenchmarkDialogState extends State<BenchmarkDialog> {
       await inputSink.close();
       inputSink = null;
 
+      if (!mounted || _isCancelled) return;
       setState(() {
         _status = '正在加密测试文件 (Encrypting): 0 / 500 MB';
         _progress = 0.2;
@@ -422,8 +431,9 @@ class _BenchmarkDialogState extends State<BenchmarkDialog> {
       final configuredCores = prefs.getInt('benchmark_cores') ?? maxUsableCores;
       final workerCount = configuredCores.clamp(1, maxUsableCores);
 
+      _currentTask = BenchmarkTask();
       final stopwatch = Stopwatch()..start();
-      await _runParallelEncryption(
+      await _currentTask!.runParallelEncryption(
         filePath: inputFile.path,
         totalBytes: _totalBytes,
         chunkSize: chunkSize,
@@ -433,6 +443,7 @@ class _BenchmarkDialogState extends State<BenchmarkDialog> {
         key: key,
         baseNonce: baseNonce,
         onProgress: (bytesDone) {
+          if (!mounted) return;
           _doneBytes = bytesDone;
           final mbDone = _doneBytes / (1024 * 1024);
           setState(() {
@@ -443,6 +454,19 @@ class _BenchmarkDialogState extends State<BenchmarkDialog> {
       );
       stopwatch.stop();
 
+      if (!mounted) return;
+      
+      if (_isCancelled || _currentTask?.isCancelled == true) {
+        _currentTask = null;
+        setState(() {
+          _isRunning = false;
+          _status = '已取消 (Cancelled)';
+        });
+        return;
+      }
+      
+      _currentTask = null;
+
       final seconds = stopwatch.elapsedMilliseconds / 1000.0;
       final speed = 500.0 / seconds;
 
@@ -452,6 +476,7 @@ class _BenchmarkDialogState extends State<BenchmarkDialog> {
         _result = '速度 (Speed): ${speed.toStringAsFixed(2)} MB/s\n耗时 (Time): ${seconds.toStringAsFixed(2)} s';
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _result = 'Error: $e';
       });
@@ -459,14 +484,17 @@ class _BenchmarkDialogState extends State<BenchmarkDialog> {
       try {
         await inputSink?.close();
       } catch (_) {}
-      setState(() {
-        _isRunning = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isRunning = false;
+        });
+      }
     }
   }
 
   @override
   void dispose() {
+    _currentTask?.cancel();
     final file = _benchmarkFile;
     if (file != null) {
       file.exists().then((exists) {
@@ -526,8 +554,19 @@ class _BenchmarkDialogState extends State<BenchmarkDialog> {
       ),
       actions: [
         TextButton(
-          onPressed: _isRunning ? null : () => Navigator.of(context).pop(),
-          child: const Text('关闭 (Close)'),
+          onPressed: () {
+            if (_isRunning) {
+              _isCancelled = true;
+              _currentTask?.cancel();
+              setState(() {
+                _isRunning = false;
+                _status = '已取消 (Cancelled)';
+              });
+            } else {
+              Navigator.of(context).pop();
+            }
+          },
+          child: Text(_isRunning ? '取消 (Cancel)' : '关闭 (Close)'),
         ),
         ElevatedButton(
           onPressed: _isRunning ? null : _runBenchmark,
@@ -538,66 +577,88 @@ class _BenchmarkDialogState extends State<BenchmarkDialog> {
   }
 }
 
-Future<void> _runParallelEncryption({
-  required String filePath,
-  required int totalBytes,
-  required int chunkSize,
-  required int totalChunks,
-  required int workerCount,
-  required String algorithm,
-  required Uint8List key,
-  required Uint8List baseNonce,
-  required void Function(int bytesDone) onProgress,
-}) async {
-  final receivePort = ReceivePort();
+class BenchmarkTask {
+  final List<Isolate> _isolates = [];
+  bool isCancelled = false;
+  final Completer<void> _completer = Completer<void>();
 
-  final chunksPerWorker = (totalChunks / workerCount).ceil();
-  var bytesDone = 0;
-  var doneWorkers = 0;
-
-  final completer = Completer<void>();
-  final subscription = receivePort.listen((message) {
-    if (message is Map) {
-      final type = message['type'];
-      if (type == 'progress') {
-        final bytes = message['bytes'] as int;
-        bytesDone += bytes;
-        if (bytesDone > totalBytes) bytesDone = totalBytes;
-        onProgress(bytesDone);
-      } else if (type == 'done') {
-        doneWorkers += 1;
-        if (doneWorkers >= workerCount) {
-          completer.complete();
-        }
-      }
+  void cancel() {
+    isCancelled = true;
+    for (var isolate in _isolates) {
+      isolate.kill(priority: Isolate.immediate);
     }
-  });
-
-  for (int workerId = 0; workerId < workerCount; workerId++) {
-    final startChunk = workerId * chunksPerWorker;
-    if (startChunk >= totalChunks) {
-      receivePort.sendPort.send({'type': 'done'});
-      continue;
+    _isolates.clear();
+    if (!_completer.isCompleted) {
+      _completer.complete();
     }
-    final endChunk = min(totalChunks, startChunk + chunksPerWorker);
-
-    final args = <String, dynamic>{
-      'sendPort': receivePort.sendPort,
-      'filePath': filePath,
-      'startChunk': startChunk,
-      'endChunk': endChunk,
-      'chunkSize': chunkSize,
-      'algorithm': algorithm,
-      'key': key,
-      'baseNonce': baseNonce,
-    };
-
-    await Isolate.spawn(_benchmarkEncryptWorker, args);
   }
 
-  await completer.future;
-  await subscription.cancel();
-  receivePort.close();
+  Future<void> runParallelEncryption({
+    required String filePath,
+    required int totalBytes,
+    required int chunkSize,
+    required int totalChunks,
+    required int workerCount,
+    required String algorithm,
+    required Uint8List key,
+    required Uint8List baseNonce,
+    required void Function(int bytesDone) onProgress,
+  }) async {
+    final receivePort = ReceivePort();
+
+    final chunksPerWorker = (totalChunks / workerCount).ceil();
+    var bytesDone = 0;
+    var doneWorkers = 0;
+
+    final subscription = receivePort.listen((message) {
+      if (message is Map) {
+        final type = message['type'];
+        if (type == 'progress') {
+          final bytes = message['bytes'] as int;
+          bytesDone += bytes;
+          if (bytesDone > totalBytes) bytesDone = totalBytes;
+          onProgress(bytesDone);
+        } else if (type == 'done') {
+          doneWorkers += 1;
+          if (doneWorkers >= workerCount && !_completer.isCompleted) {
+            _completer.complete();
+          }
+        }
+      }
+    });
+
+    for (int workerId = 0; workerId < workerCount; workerId++) {
+      if (isCancelled) break;
+      final startChunk = workerId * chunksPerWorker;
+      if (startChunk >= totalChunks) {
+        receivePort.sendPort.send({'type': 'done'});
+        continue;
+      }
+      final endChunk = min(totalChunks, startChunk + chunksPerWorker);
+
+      final args = <String, dynamic>{
+        'sendPort': receivePort.sendPort,
+        'filePath': filePath,
+        'startChunk': startChunk,
+        'endChunk': endChunk,
+        'chunkSize': chunkSize,
+        'algorithm': algorithm,
+        'key': key,
+        'baseNonce': baseNonce,
+      };
+
+      final isolate = await Isolate.spawn(_benchmarkEncryptWorker, args);
+      if (isCancelled) {
+        isolate.kill(priority: Isolate.immediate);
+      } else {
+        _isolates.add(isolate);
+      }
+    }
+
+    await _completer.future;
+    await subscription.cancel();
+    receivePort.close();
+  }
 }
 
 Uint8List _nonceWithCounter(Uint8List base, int counter) {

@@ -18,7 +18,8 @@ import 'services/encryption_task_manager.dart';
 import 'dart:isolate';
 import '../theme/app_theme.dart';
 
-Future<void> _doImportFileIsolate(Map<String, dynamic> args) async {
+@visibleForTesting
+Future<void> doImportFileIsolate(Map<String, dynamic> args) async {
   final sendPort = args['sendPort'] as SendPort;
   final files = args['files'] as List<Map<String, String>>;
   final vaultDirectoryPath = args['vaultDirectoryPath'] as String;
@@ -71,7 +72,8 @@ Future<void> _doImportFileIsolate(Map<String, dynamic> args) async {
   }
 }
 
-Future<void> _doImportFolderIsolate(Map<String, dynamic> args) async {
+@visibleForTesting
+Future<void> doImportFolderIsolate(Map<String, dynamic> args) async {
   final sendPort = args['sendPort'] as SendPort;
   final result = args['result'] as String;
   final currentPath = args['currentPath'] as String;
@@ -166,7 +168,8 @@ Future<void> _doImportFolderIsolate(Map<String, dynamic> args) async {
   }
 }
 
-Future<void> _doExportFileIsolate(Map<String, dynamic> args) async {
+@visibleForTesting
+Future<void> doExportFileIsolate(Map<String, dynamic> args) async {
   final nodePath = args['nodePath'] as String;
   final outFilePath = args['outFilePath'] as String;
   final vaultDirectoryPath = args['vaultDirectoryPath'] as String;
@@ -408,7 +411,7 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
           'taskId': taskId,
         };
 
-        Isolate.run(() => _doImportFileIsolate(args));
+        Isolate.run(() => doImportFileIsolate(args));
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -499,7 +502,7 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
             'taskId': taskId,
           };
 
-          Isolate.run(() => _doImportFolderIsolate(args));
+          Isolate.run(() => doImportFolderIsolate(args));
         }
       } catch (e) {
         if (mounted) {
@@ -529,7 +532,7 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
       }
 
       final outFile = File(p.join(selectedDir, node.name));
-      await Isolate.run(() => _doExportFileIsolate({
+      await Isolate.run(() => doExportFileIsolate({
         'nodePath': node.path,
         'outFilePath': outFile.path,
         'vaultDirectoryPath': widget.vaultDirectoryPath,
@@ -732,7 +735,7 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
       _tempDirs.add(previewDir);
 
       final tempFile = File(p.join(previewDir.path, file.name));
-      await Isolate.run(() => _doExportFileIsolate({
+      await Isolate.run(() => doExportFileIsolate({
         'nodePath': file.path,
         'outFilePath': tempFile.path,
         'vaultDirectoryPath': widget.vaultDirectoryPath,
