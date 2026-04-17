@@ -1,0 +1,5 @@
+- [ ] WebDAV 针对具体文件的连接问题已修复。
+- [ ] WebDAV 相关的报错信息能够成功写入 `/storage/emulated/0/Android/data/com.tianyanmczj.vault/files/webdav_error_log.txt`。
+- [ ] 已在本地运行并验证 WebDAV 连接返回 401 权限不足。
+- [ ] 进入“关于”等子面板时，自定义背景保持常驻，不再发生重置或闪烁。
+- [ ] 新路由/子面板的页面背景已正确设置为透明，能够透出底层的全局背景。
