@@ -15,7 +15,6 @@ import '../vfs/encrypted_vfs.dart';
 import '../vfs/standard_vfs.dart';
 import 'webdav_config.dart';
 import 'webdav_storage.dart';
-import 'webdav_client_service.dart';
 
 class SyncConfigPage extends StatefulWidget {
   const SyncConfigPage({super.key});
@@ -250,19 +249,12 @@ class _SyncConfigPageState extends State<SyncConfigPage> {
       _loadingCloudDirs = true;
     });
     try {
-      final repo = WebDavConfigRepository();
-      final pwd = await repo.readPassword(config.id);
-      final client = WebDavService(
-        url: config.url,
-        username: config.username,
-        password: pwd ?? '',
-      );
-      _cloudVfs = StandardVfs(client: client);
+      _cloudVfs = StandardVfs();
       _cloudPath = '/';
       _selectedCloudFolder = '/';
       await _loadCloudDirs();
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('连接WebDAV失败：${translateWebDavError(e)}')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('连接WebDAV失败：${e.toString()}')));
     } finally {
       if (mounted) setState(() => _loadingCloudDirs = false);
     }
@@ -277,7 +269,7 @@ class _SyncConfigPageState extends State<SyncConfigPage> {
       dirs.sort((a, b) => a.name.compareTo(b.name));
       if (mounted) setState(() => _cloudDirs = dirs);
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('加载云端目录失败：${translateWebDavError(e)}')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('加载云端目录失败：${e.toString()}')));
     } finally {
       if (mounted) setState(() => _loadingCloudDirs = false);
     }
@@ -329,7 +321,7 @@ class _SyncConfigPageState extends State<SyncConfigPage> {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('自动匹配/创建成功')));
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('自动匹配失败：${translateWebDavError(e)}')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('自动匹配失败：${e.toString()}')));
     } finally {
       if (mounted) setState(() => _loadingCloudDirs = false);
     }

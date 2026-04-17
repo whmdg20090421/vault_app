@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:dio/dio.dart';
 
 import 'webdav_config.dart';
-import 'webdav_client_service.dart';
 import 'webdav_storage.dart';
 
 class WebDavEditResult {
@@ -133,29 +131,12 @@ class _WebDavEditPageState extends State<WebDavEditPage> {
     });
 
     try {
-      final url = _urlController.text.trim();
-      final username = _usernameController.text.trim();
-      String password = _passwordController.text;
-
-      if (_isEdit && password.isEmpty) {
-        final repo = WebDavConfigRepository();
-        final storedPassword = await repo.readPassword(widget.initial!.id);
-        if (storedPassword != null) {
-          password = storedPassword;
-        }
-      }
-
-      final service = WebDavService(
-        url: url,
-        username: username,
-        password: password,
-      );
-
-      await service.readDir('/');
-
+      // 网络连接逻辑已被移除，待重构
+      // 这里模拟直接提交
+      await Future.delayed(const Duration(milliseconds: 500));
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('连接成功')),
+          const SnackBar(content: Text('测试跳过：网络底层重构中，直接保存')),
         );
         _submit();
       }
@@ -165,7 +146,7 @@ class _WebDavEditPageState extends State<WebDavEditPage> {
           context: context,
           builder: (context) => AlertDialog(
             title: const Text('连接失败'),
-            content: Text(translateWebDavError(e)),
+            content: Text(e.toString()),
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(context).pop(),
@@ -192,25 +173,13 @@ class _WebDavEditPageState extends State<WebDavEditPage> {
     });
 
     try {
-      final dio = Dio(BaseOptions(
-        connectTimeout: const Duration(seconds: 5),
-        receiveTimeout: const Duration(seconds: 5),
-      ));
-      // 访问一个高度可用且位于国内的网站，用以验证设备是否有外网访问权限
-      final response = await dio.get('https://www.baidu.com');
-      
+      // 网络连接逻辑已被移除，待重构
+      await Future.delayed(const Duration(milliseconds: 500));
       if (mounted) {
-        if (response.statusCode != null && response.statusCode! >= 200 && response.statusCode! < 400) {
-          setState(() {
-            _networkTestResult = '网络连接正常 (Internet OK)';
-            _networkTestColor = Colors.green;
-          });
-        } else {
-          setState(() {
-            _networkTestResult = '网络异常: 状态码 ${response.statusCode}';
-            _networkTestColor = Colors.orange;
-          });
-        }
+        setState(() {
+          _networkTestResult = '模拟网络连接已被移除（待重构）';
+          _networkTestColor = Colors.orange;
+        });
       }
     } catch (e) {
       if (mounted) {

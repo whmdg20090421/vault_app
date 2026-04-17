@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import 'webdav_config.dart';
 import 'webdav_storage.dart';
-import 'webdav_client_service.dart';
 
 import '../vfs/virtual_file_system.dart';
 import '../vfs/standard_vfs.dart';
@@ -72,23 +71,15 @@ class _WebDavBrowserPageState extends State<WebDavBrowserPage> {
 
   Future<void> _initClient() async {
     try {
-      final repo = WebDavConfigRepository();
-      final password = await repo.readPassword(widget.config.id);
-      
-      final client = WebDavService(
-        url: widget.config.url,
-        username: widget.config.username,
-        password: password ?? '',
-      );
-      
-      _vfs = StandardVfs(client: client);
+      // 网络逻辑被移除，替换为使用空实现的 StandardVfs 占位
+      _vfs = StandardVfs();
 
       await _loadCurrentPath();
     } catch (e) {
       if (mounted) {
         setState(() {
           _isLoading = false;
-          _error = '初始化客户端失败：${translateWebDavError(e)}';
+          _error = '初始化客户端失败：${e.toString()}';
         });
       }
     }
@@ -96,7 +87,7 @@ class _WebDavBrowserPageState extends State<WebDavBrowserPage> {
 
   Future<void> _loadCurrentPath() async {
     if (_vfs == null) return;
-    
+
     if (mounted) {
       setState(() {
         _isLoading = true;
@@ -107,7 +98,7 @@ class _WebDavBrowserPageState extends State<WebDavBrowserPage> {
     try {
       await _loadSyncStatus();
       final list = await _vfs!.list(_currentPath);
-      
+
       // Sort: folders first, then alphabetically
       list.sort((a, b) {
         if (a.isDirectory == b.isDirectory) {
@@ -126,7 +117,7 @@ class _WebDavBrowserPageState extends State<WebDavBrowserPage> {
       if (mounted) {
         setState(() {
           _isLoading = false;
-          _error = '加载目录失败：${translateWebDavError(e)}';
+          _error = '加载目录失败：${e.toString()}';
         });
       }
     }
