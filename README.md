@@ -5,13 +5,11 @@
 ## 最新版本概览
 
 <!-- RELEASE_SUMMARY_START -->
-- 当前版本：1.3.0
-- **WebDAV 网络诊断**：在添加网盘页面新增“模拟网络连接”功能，用于主动测试设备的互联网连通性，排查 DNS 与网络权限拦截问题。
-- **强制连接校验**：WebDAV 配置页面现在强制要求通过“测试/连接”校验后才允许保存。
-- **底层加密引擎修复**：重构 `EncryptedVfs`，修复了当关闭“加密文件名”时，导入文件夹导致文件内容也完全不被加密且进度条卡死的严重漏洞。
-- **同步进度快捷入口**：在加密文件夹内部（VaultExplorerPage）的右上角新增了同步进度快捷查看按钮。
-- **UI 精简**：暂时去除了 WebDAV 浏览页面中复杂的高级功能（如上传、删除、重命名），仅保留纯净的目录展示以防止误操作。
-- 完整更新：https://github.com/whmdg20090421/vault_app/releases/tag/v1.3.0
+- 当前版本：1.3.1
+- 恢复 Android 默认 `flutter.compileSdkVersion` 配置，修复因强制指定 SDK 版本 34 导致的构建冲突。
+- 提供基于 `dart:io` 原生 Socket 与 NetworkInterface 的终极网络诊断脚本。
+- 新增 `network_security_config.xml` 配置信任系统/用户证书。
+- 完整更新：https://github.com/whmdg20090421/vault_app/releases/tag/v1.3.1
 <!-- RELEASE_SUMMARY_END -->
 
 ## 更新历史 (Changelog)
