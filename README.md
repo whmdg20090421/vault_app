@@ -5,10 +5,11 @@
 ## 最新版本概览
 
 <!-- RELEASE_SUMMARY_START -->
-- 当前版本：1.2.7
-- 修复当关闭自定义背景时导致 UI 黑屏的问题，恢复主题默认背景。
-- 补充 WebDAV 原生网络连接与测试文档说明，证明底层网络连接健康。
-- 完整更新：https://github.com/whmdg20090421/vault_app/releases/tag/v1.2.7
+- 当前版本：1.2.8
+- 修复全局自定义背景在路由/重绘时的闪烁问题（图片层启用 gaplessPlayback，背景层稳定挂载）。
+- 修复关闭背景图时因 Scaffold 透明导致的黑屏问题（增加全局兜底底色）。
+- WebDAV 模块重构为 dio + xml 分层实现（Client/Parser/Service），移除对第三方 webdav_client 的依赖，并提供基于 ETag 的增量同步骨架。
+- 完整更新：https://github.com/whmdg20090421/vault_app/releases/tag/v1.2.8
 <!-- RELEASE_SUMMARY_END -->
 
 ## 更新历史 (Changelog)
