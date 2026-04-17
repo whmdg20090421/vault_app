@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:dio/dio.dart';
 
 import 'webdav_config.dart';
 import 'webdav_client_service.dart';
@@ -40,6 +41,9 @@ class _WebDavEditPageState extends State<WebDavEditPage> {
   bool get _isEdit => widget.initial != null;
 
   bool _isTesting = false;
+  bool _isTestingNetwork = false;
+  String? _networkTestResult;
+  Color? _networkTestColor;
 
   String? get _passwordStatusText {
     if (!_isEdit) {
@@ -180,6 +184,50 @@ class _WebDavEditPageState extends State<WebDavEditPage> {
     }
   }
 
+  Future<void> _testNetwork() async {
+    setState(() {
+      _isTestingNetwork = true;
+      _networkTestResult = '正在测试...';
+      _networkTestColor = Colors.grey;
+    });
+
+    try {
+      final dio = Dio(BaseOptions(
+        connectTimeout: const Duration(seconds: 5),
+        receiveTimeout: const Duration(seconds: 5),
+      ));
+      // 访问一个高度可用且位于国内的网站，用以验证设备是否有外网访问权限
+      final response = await dio.get('https://www.baidu.com');
+      
+      if (mounted) {
+        if (response.statusCode != null && response.statusCode! >= 200 && response.statusCode! < 400) {
+          setState(() {
+            _networkTestResult = '网络连接正常 (Internet OK)';
+            _networkTestColor = Colors.green;
+          });
+        } else {
+          setState(() {
+            _networkTestResult = '网络异常: 状态码 ${response.statusCode}';
+            _networkTestColor = Colors.orange;
+          });
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _networkTestResult = '无法连接互联网: ${e.toString().split('\n').first}';
+          _networkTestColor = Colors.red;
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isTestingNetwork = false;
+        });
+      }
+    }
+  }
+
   void _submit() {
     final form = _formKey.currentState;
     if (form == null || !form.validate()) {
@@ -281,6 +329,32 @@ class _WebDavEditPageState extends State<WebDavEditPage> {
                 ),
               ),
             ],
+            const SizedBox(height: 32),
+            Row(
+              children: [
+                ElevatedButton.icon(
+                  onPressed: _isTestingNetwork ? null : _testNetwork,
+                  icon: _isTestingNetwork
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.language),
+                  label: const Text('模拟网络连接'),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Text(
+                    _networkTestResult ?? '用于排除应用是否能连接互联网',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: _networkTestColor ?? theme.colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ],
         ),
       ),
