@@ -31,7 +31,7 @@ ThemeData buildTheme(AppTheme theme, bool bgEnabled, double uiOpacity) {
     return ThemeData(
       useMaterial3: true,
       colorScheme: scheme,
-      scaffoldBackgroundColor: bgEnabled ? Colors.transparent : scheme.surface,
+      scaffoldBackgroundColor: Colors.transparent,
       cardTheme: CardThemeData(
         color: applyUiOpacity(scheme.surfaceContainer),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -92,7 +92,7 @@ ThemeData buildTheme(AppTheme theme, bool bgEnabled, double uiOpacity) {
     return ThemeData(
       useMaterial3: true,
       colorScheme: scheme,
-      scaffoldBackgroundColor: bgEnabled ? Colors.transparent : scheme.surfaceContainer,
+      scaffoldBackgroundColor: Colors.transparent,
       cardTheme: CardThemeData(
         color: applyUiOpacity(scheme.surfaceContainer),
         shape: RoundedRectangleBorder(
@@ -163,7 +163,7 @@ ThemeData buildTheme(AppTheme theme, bool bgEnabled, double uiOpacity) {
   return ThemeData(
     useMaterial3: true,
     colorScheme: scheme,
-    scaffoldBackgroundColor: bgEnabled ? Colors.transparent : scheme.surfaceContainer,
+    scaffoldBackgroundColor: Colors.transparent,
     appBarTheme: AppBarTheme(
       backgroundColor: applyUiOpacity(scheme.surface),
       foregroundColor: scheme.onSurface,

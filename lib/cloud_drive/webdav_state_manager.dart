@@ -1,5 +1,5 @@
 import 'package:flutter/foundation.dart';
-import 'webdav_client_service.dart';
+import 'webdav_service.dart';
 import 'package:intl/intl.dart';
 import 'webdav_config.dart';
 import 'package:path_provider/path_provider.dart';
@@ -46,7 +46,7 @@ class WebDAVStateManager extends ChangeNotifier {
       final repository = WebDavConfigRepository();
       final password = await repository.readPassword(config.id) ?? '';
 
-      final client = WebDavClientService(
+      final client = WebDavService(
         url: config.url,
         username: config.username,
         password: password,

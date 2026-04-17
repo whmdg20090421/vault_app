@@ -1,0 +1,6 @@
+- [x] 背景组件已被放置在 `MaterialApp.builder` 的 `Stack` 中，并且最底层拥有 `Theme.of(context).scaffoldBackgroundColor` 作为兜底色。
+- [x] 背景图片（`Image.file` / `Image.asset` 等）正确启用了 `gaplessPlayback: true` 属性。
+- [x] 应用中业务页面的 Scaffold 和相关弹窗背景被设置为 `Colors.transparent`，透出全局背景层。
+- [x] 基于 `dio` 和 `xml` 包的 `WebDavClient` 及 `WebDavParser` 被成功创建，且包含 Basic Auth 拦截器与全局错误捕获机制。
+- [x] 核心类 `WebDavService` 实现了 `list`、`upload`、`download` 和 `move` 等基础 API，并支持路径解码（`Uri.decodeFull`）等边界处理。
+- [x] 提供了一套基于 ETag 和并发控制的增量同步逻辑（`SyncEngine`）骨架。

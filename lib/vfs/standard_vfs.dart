@@ -4,7 +4,7 @@ import '../cloud_drive/webdav_client_service.dart';
 import 'virtual_file_system.dart';
 
 class StandardVfs implements VirtualFileSystem {
-  final WebDavClientService client;
+  final WebDavService client;
 
   StandardVfs({required this.client});
 

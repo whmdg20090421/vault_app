@@ -131,49 +131,41 @@ class _BackgroundShellState extends State<_BackgroundShell> {
 
   @override
   Widget build(BuildContext context) {
+    // 决定底层的垫片颜色
+    Color baseColor;
+    if (widget.theme == AppTheme.cyberpunk) {
+      baseColor = const Color(0xFF1A242D); // scheme.surfaceContainer
+    } else if (widget.theme == AppTheme.pureBlack) {
+      baseColor = Colors.black; // scheme.surface
+    } else {
+      baseColor = const Color(0xFFF8F9FA); // scheme.surfaceContainer
+    }
+
     return Stack(
       fit: StackFit.expand,
       children: [
+        // 1. 底层：始终铺设一层当前主题的兜底色（作为垫片防止黑屏）
+        Positioned.fill(
+          child: ColoredBox(
+            key: const ValueKey('app_background_base_layer'),
+            color: baseColor,
+          ),
+        ),
+        // 2. 背景图片层：如果在开启状态下则渲染
         if (widget.enabled && _imageProvider != null)
           Positioned.fill(
             child: Opacity(
               opacity: widget.imageOpacity,
               child: Image(
-                key: const ValueKey('app_background_layer'),
+                key: const ValueKey('app_background_image_layer'),
                 image: _imageProvider!,
                 fit: BoxFit.cover,
                 gaplessPlayback: true,
                 filterQuality: FilterQuality.low,
               ),
             ),
-          )
-        else if (widget.theme == AppTheme.cyberpunk)
-          Positioned.fill(
-            child: Container(
-              key: const ValueKey('app_background_layer'),
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Color(0xFF0F1418), Color(0xFF1A242D)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-              ),
-            ),
-          )
-        else if (widget.theme == AppTheme.pureBlack)
-          const Positioned.fill(
-            child: ColoredBox(
-              key: ValueKey('app_background_layer'),
-              color: Colors.black,
-            ),
-          )
-        else
-          const Positioned.fill(
-            child: ColoredBox(
-              key: ValueKey('app_background_layer'),
-              color: Color(0xFFF8F9FA),
-            ),
           ),
+        // 3. 顶层：业务内容
         widget.child,
       ],
     );

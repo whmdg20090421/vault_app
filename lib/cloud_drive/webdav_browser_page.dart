@@ -78,7 +78,7 @@ class _WebDavBrowserPageState extends State<WebDavBrowserPage> {
       final repo = WebDavConfigRepository();
       final password = await repo.readPassword(widget.config.id);
       
-      final client = WebDavClientService(
+      final client = WebDavService(
         url: widget.config.url,
         username: widget.config.username,
         password: password ?? '',

@@ -15,7 +15,7 @@ import '../vfs/encrypted_vfs.dart';
 import '../vfs/standard_vfs.dart';
 import 'webdav_config.dart';
 import 'webdav_storage.dart';
-import 'webdav_client_service.dart';
+import 'webdav_service.dart';
 
 class SyncConfigPage extends StatefulWidget {
   const SyncConfigPage({super.key});
@@ -249,7 +249,7 @@ class _SyncConfigPageState extends State<SyncConfigPage> {
     try {
       final repo = WebDavConfigRepository();
       final pwd = await repo.readPassword(config.id);
-      final client = WebDavClientService(
+      final client = WebDavService(
         url: config.url,
         username: config.username,
         password: pwd ?? '',
