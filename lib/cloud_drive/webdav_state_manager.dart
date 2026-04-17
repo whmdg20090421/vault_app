@@ -1,6 +1,5 @@
 import 'package:flutter/foundation.dart';
-import 'webdav_service.dart';
-import 'package:intl/intl.dart';
+import 'webdav_client_service.dart';
 import 'webdav_config.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';

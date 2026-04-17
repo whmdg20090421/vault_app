@@ -131,27 +131,24 @@ class _BackgroundShellState extends State<_BackgroundShell> {
 
   @override
   Widget build(BuildContext context) {
-    // 决定底层的垫片颜色
     Color baseColor;
     if (widget.theme == AppTheme.cyberpunk) {
-      baseColor = const Color(0xFF1A242D); // scheme.surfaceContainer
+      baseColor = const Color(0xFF1A242D);
     } else if (widget.theme == AppTheme.pureBlack) {
-      baseColor = Colors.black; // scheme.surface
+      baseColor = Colors.black;
     } else {
-      baseColor = const Color(0xFFF8F9FA); // scheme.surfaceContainer
+      baseColor = const Color(0xFFF8F9FA);
     }
 
     return Stack(
       fit: StackFit.expand,
       children: [
-        // 1. 底层：始终铺设一层当前主题的兜底色（作为垫片防止黑屏）
         Positioned.fill(
           child: ColoredBox(
             key: const ValueKey('app_background_base_layer'),
             color: baseColor,
           ),
         ),
-        // 2. 背景图片层：如果在开启状态下则渲染
         if (widget.enabled && _imageProvider != null)
           Positioned.fill(
             child: Opacity(
@@ -165,7 +162,6 @@ class _BackgroundShellState extends State<_BackgroundShell> {
               ),
             ),
           ),
-        // 3. 顶层：业务内容
         widget.child,
       ],
     );

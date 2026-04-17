@@ -1,3 +1,11 @@
+# 版本 1.2.8 (2026-04-17)
+
+### 🧩 UI & WebDAV
+- 修复全局自定义背景在路由/重绘时的闪烁问题（图片层启用 gaplessPlayback，背景层稳定挂载）。
+- 修复关闭背景图时因 Scaffold 透明导致的黑屏问题（增加全局兜底底色）。
+- WebDAV 模块重构为 dio + xml 分层实现（Client/Parser/Service），移除对第三方 webdav_client 的依赖，并提供基于 ETag 的增量同步骨架。
+
+
 # 版本 1.2.7 (2026-04-17)
 
 ### 🧩 UI & Bug Fixes
