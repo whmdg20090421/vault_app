@@ -5,11 +5,12 @@
 ## 最新版本概览
 
 <!-- RELEASE_SUMMARY_START -->
-- 当前版本：1.3.1
-- 恢复 Android 默认 `flutter.compileSdkVersion` 配置，修复因强制指定 SDK 版本 34 导致的构建冲突。
-- 提供基于 `dart:io` 原生 Socket 与 NetworkInterface 的终极网络诊断脚本。
-- 新增 `network_security_config.xml` 配置信任系统/用户证书。
-- 完整更新：https://github.com/whmdg20090421/vault_app/releases/tag/v1.3.1
+- 当前版本：1.3.2
+- 彻底重构 WebDAV 核心通信库：基于 Clean Architecture，拆分为 `WebDavClient`、`WebDavParser`、`WebDavService` 三层。
+- 新增 `WebDavErrorLoggerInterceptor` 全流程拦截器：精确捕获并区分 `SocketException` (DNS失败)、`TlsException`、`HttpException`，将所有底层报错上下文完整写入 `/storage/emulated/0/Android/data/com.tianyanmczj.vault/files/webdav_error_log.txt`。
+- 新增 `SyncEngine`：提供基于 ETag/Last-Modified 与 `Future.wait` 并发控制的高性能双向增量同步草案。
+- 将应用 UI（WebDAV配置页、云盘浏览页）与 `StandardVfs` 重新对接至全新的 `WebDavService`。
+- 完整更新：https://github.com/whmdg20090421/vault_app/releases/tag/v1.3.2
 <!-- RELEASE_SUMMARY_END -->
 
 ## 更新历史 (Changelog)
