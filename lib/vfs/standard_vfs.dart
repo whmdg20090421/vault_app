@@ -56,7 +56,8 @@ class StandardVfs implements VirtualFileSystem {
 
     if (response.statusCode == 207 && response.data != null) {
       // Pass empty string for requestedPath to avoid filtering out the root node itself
-      final files = WebDavParser.parseMultiStatus(response.data!, '');
+      final baseUrlPath = Uri.parse(service.client.dio.options.baseUrl).path;
+      final files = WebDavParser.parseMultiStatus(response.data!, '', baseUrlPath);
       if (files.isNotEmpty) {
         final f = files.first;
         return VfsNode(

@@ -6,7 +6,7 @@ class WebDavParser {
   /// 解析 WebDAV 的 207 Multi-Status 响应
   /// [xmlString] 为响应体 XML 字符串
   /// [requestedPath] 为请求的路径，用于过滤掉当前目录自身的返回节点
-  static List<WebDavFile> parseMultiStatus(String xmlString, String requestedPath) {
+  static List<WebDavFile> parseMultiStatus(String xmlString, String requestedPath, String baseUrlPath) {
     final List<WebDavFile> files = [];
     XmlDocument document;
     
@@ -35,8 +35,33 @@ class WebDavParser {
       // 处理 URL 编码的路径
       href = Uri.decodeFull(href);
 
+      // 如果包含 host，提取 path 部分
+      if (href.startsWith('http://') || href.startsWith('https://')) {
+        try {
+          href = Uri.parse(href).path;
+        } catch (_) {}
+      }
+
+      // 剥离 baseUrlPath
+      String b = baseUrlPath;
+      if (b.endsWith('/')) b = b.substring(0, b.length - 1);
+      
+      String relativePath = href;
+      if (b.isNotEmpty) {
+        if (relativePath == b || relativePath == b + '/') {
+          relativePath = '/';
+        } else if (relativePath.startsWith(b + '/')) {
+          relativePath = relativePath.substring(b.length);
+        }
+      }
+      
+      // 确保以 / 开头，符合 _currentPath 风格
+      if (!relativePath.startsWith('/')) {
+        relativePath = '/' + relativePath;
+      }
+
       // 过滤掉请求的目录自身
-      if (_isSamePath(href, requestedPath)) {
+      if (_isSamePath(relativePath, requestedPath)) {
         continue;
       }
 
@@ -72,7 +97,7 @@ class WebDavParser {
       final isCollection = resourceTypeElement?.descendants
               .whereType<XmlElement>()
               .any((e) => e.name.local == 'collection') ?? false;
-      final isDirectory = isCollection || href.endsWith('/');
+      final isDirectory = isCollection || relativePath.endsWith('/');
 
       // 解析大小
       int size = 0;
@@ -93,15 +118,15 @@ class WebDavParser {
       // 获取 ETag
       final eTag = eTagElement?.innerText;
 
-      // 从 href 提取名称
+      // 从 relativePath 提取名称
       String name = '';
-      final pathSegments = Uri.parse(href).pathSegments.where((s) => s.isNotEmpty).toList();
+      final pathSegments = Uri.parse(relativePath).pathSegments.where((s) => s.isNotEmpty).toList();
       if (pathSegments.isNotEmpty) {
         name = pathSegments.last;
       }
 
       files.add(WebDavFile(
-        path: href,
+        path: relativePath,
         name: name,
         isDirectory: isDirectory,
         size: size,

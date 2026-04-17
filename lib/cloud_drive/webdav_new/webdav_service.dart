@@ -20,7 +20,8 @@ class WebDavService {
     );
 
     if (response.statusCode == 207 && response.data != null) {
-      return WebDavParser.parseMultiStatus(response.data!, path);
+      final baseUrlPath = Uri.parse(client.dio.options.baseUrl).path;
+      return WebDavParser.parseMultiStatus(response.data!, path, baseUrlPath);
     } else {
       throw Exception('Failed to read directory: ${response.statusCode}');
     }
