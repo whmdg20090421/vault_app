@@ -3,11 +3,58 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:vault/main.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  testWidgets('Background stays during route and overlays', (WidgetTester tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    await tester.pumpWidget(const TianyanApp());
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('app_background_layer')), findsOneWidget);
+
+    final rootContext = tester.element(find.byType(MainShell));
+
+    showDialog<void>(
+      context: rootContext,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Dialog'),
+          content: const Text('Content'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        );
+      },
+    );
+
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('app_background_layer')), findsOneWidget);
+
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('app_background_layer')), findsOneWidget);
+
+    showModalBottomSheet<void>(
+      context: rootContext,
+      builder: (context) => const SizedBox(height: 80, child: Center(child: Text('Sheet'))),
+    );
+
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('app_background_layer')), findsOneWidget);
+
+    Navigator.of(rootContext).pop();
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('app_background_layer')), findsOneWidget);
+  });
 
   testWidgets('Cloud drive WebDAV CRUD (basic)', (WidgetTester tester) async {
     final tempDir = await Directory.systemTemp.createTemp('vault_test_');

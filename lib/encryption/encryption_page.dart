@@ -274,9 +274,12 @@ class _EncryptionPageState extends State<EncryptionPage> {
               showModalBottomSheet(
                 context: context,
                 isScrollControlled: true,
+                backgroundColor: Colors.transparent,
+                barrierColor: theme.colorScheme.scrim.withValues(alpha: 0.6),
                 shape: theme.isCyberpunk 
                     ? const RoundedRectangleBorder(borderRadius: BorderRadius.zero)
                     : const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+                clipBehavior: Clip.antiAlias,
                 builder: (context) => DraggableScrollableSheet(
                   initialChildSize: 0.6,
                   minChildSize: 0.4,
@@ -388,10 +391,13 @@ class EncryptionProgressPanel extends StatelessWidget {
     final theme = Theme.of(context);
     final isCyberpunk = theme.brightness == Brightness.dark && 
                         theme.colorScheme.primary.value == 0xFF00E5FF;
+    final surfaceColor = theme.dialogTheme.backgroundColor ??
+        theme.cardTheme.color ??
+        theme.colorScheme.surface;
 
     return Container(
       decoration: BoxDecoration(
-        color: theme.scaffoldBackgroundColor,
+        color: surfaceColor,
         borderRadius: isCyberpunk ? BorderRadius.zero : const BorderRadius.vertical(top: Radius.circular(16)),
         border: isCyberpunk
             ? Border(top: BorderSide(color: theme.colorScheme.primary, width: 2))

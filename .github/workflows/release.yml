@@ -24,6 +24,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -125,6 +127,25 @@ jobs:
       - name: Pub get
         run: flutter pub get
 
+      - name: Prepare release notes
+        run: dart run tool/release/release_prepare.dart --check --require-changelog --write-release-notes release_notes.md
+
+      - name: Update README summary on main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          git checkout main
+          dart run tool/release/release_prepare.dart --apply --check
+          if ! git diff --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add README.md android/app/build.gradle.kts || true
+            git commit -m "docs: update release summary for $GITHUB_REF_NAME" || true
+            git push origin HEAD:main
+          fi
+          git checkout "$GITHUB_REF_NAME"
+
       - name: Build APK (arm64-v8a)
         run: flutter build apk --release --target-platform android-arm64
 
@@ -132,5 +153,5 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           name: ${{ github.ref_name }}
-          body_path: CHANGELOG.md
+          body_path: release_notes.md
           files: build/app/outputs/flutter-apk/app-release.apk

@@ -66,6 +66,11 @@ ThemeData buildTheme(AppTheme theme, bool bgEnabled, double uiOpacity) {
         backgroundColor: applyUiOpacity(scheme.surfaceContainer),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       ),
+      bottomSheetTheme: const BottomSheetThemeData(
+        backgroundColor: Colors.transparent,
+        modalBackgroundColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+      ),
     );
   }
 
@@ -127,6 +132,11 @@ ThemeData buildTheme(AppTheme theme, bool bgEnabled, double uiOpacity) {
           borderRadius: BorderRadius.circular(8),
           side: const BorderSide(color: Color(0xFF00E5FF), width: 1),
         ),
+      ),
+      bottomSheetTheme: const BottomSheetThemeData(
+        backgroundColor: Colors.transparent,
+        modalBackgroundColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
       ),
       dividerTheme: const DividerThemeData(
         color: Color(0xFF00E5FF),
@@ -199,6 +209,11 @@ ThemeData buildTheme(AppTheme theme, bool bgEnabled, double uiOpacity) {
       backgroundColor: applyUiOpacity(scheme.surface),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       elevation: 8,
+    ),
+    bottomSheetTheme: const BottomSheetThemeData(
+      backgroundColor: Colors.transparent,
+      modalBackgroundColor: Colors.transparent,
+      surfaceTintColor: Colors.transparent,
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,

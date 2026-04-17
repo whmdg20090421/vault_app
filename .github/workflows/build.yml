@@ -126,6 +126,9 @@ jobs:
       - name: Pub get
         run: flutter pub get
 
+      - name: Release prepare check
+        run: dart run tool/release/release_prepare.dart --check
+
       - name: Build APK (arm64-v8a)
         run: flutter build apk --release --target-platform android-arm64
 

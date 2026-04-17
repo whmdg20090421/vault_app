@@ -48,58 +48,146 @@ class TianyanApp extends StatelessWidget {
         final theme = appTheme.value;
         final bg = BackgroundSettings.instance;
         return MaterialApp(
-          debugShowCheckedModeBanner: false,
-          title: '天眼·艨艟战舰',
-          theme: buildTheme(theme, bg.enabled, bg.uiOpacity),
-          builder: (context, child) {
-            return Stack(
-              children: [
-                if (bg.enabled && bg.imagePath != null)
-                  Positioned.fill(
-                    child: Opacity(
-                      opacity: bg.imageOpacity,
-                      child: Image.file(
-                        File(bg.imagePath!),
-                        fit: BoxFit.cover,
-                      ),
-                    ),
-                  )
-                else if (theme == AppTheme.cyberpunk)
-                  Positioned.fill(
-                    child: Container(
-                      decoration: const BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [Color(0xFF0F1418), Color(0xFF1A242D)],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                      ),
-                    ),
-                  )
-                else if (theme == AppTheme.pureBlack)
-                  Positioned.fill(
-                    child: Container(color: Colors.black),
-                  )
-                else
-                  Positioned.fill(
-                    child: Container(color: Color(0xFFF8F9FA)),
-                  ),
-                if (child != null) child,
-              ],
-            );
-          },
-          home: const MainShell(),
+        return _BackgroundShell(
+          theme: theme,
+          enabled: bg.enabled,
+          imagePath: bg.imagePath,
+          imageOpacity: bg.imageOpacity,
+          child: MaterialApp(
+            debugShowCheckedModeBanner: false,
+            title: '天眼·艨艟战舰',
+            theme: buildTheme(theme, bg.enabled, bg.uiOpacity),
+            builder: (context, child) => child ?? const SizedBox.shrink(),
+            home: const MainShell(),
+          ),
         );
-      },
     );
   }
 }
 
 class MainShell extends StatefulWidget {
+class _BackgroundShell extends StatefulWidget {
+  const _BackgroundShell({
+    required this.theme,
+    required this.enabled,
+    required this.imagePath,
+    required this.imageOpacity,
+    required this.child,
+  });
+
+  final AppTheme theme;
+  final bool enabled;
+  final String? imagePath;
+  final double imageOpacity;
+  final Widget child;
+
+  @override
+  State<_BackgroundShell> createState() => _BackgroundShellState();
+}
+
+class _BackgroundShellState extends State<_BackgroundShell> {
+  ImageProvider? _imageProvider;
+
+  @override
+  void initState() {
+    super.initState();
+    _syncImageProvider();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _precacheIfNeeded());
+  }
+
+  @override
+  void didUpdateWidget(covariant _BackgroundShell oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.enabled != widget.enabled || oldWidget.imagePath != widget.imagePath) {
+      _syncImageProvider();
+      WidgetsBinding.instance.addPostFrameCallback((_) => _precacheIfNeeded());
+    }
+  }
+
+  void _syncImageProvider() {
+    if (!widget.enabled || widget.imagePath == null) {
+      _imageProvider = null;
+      return;
+    }
+
+    final file = File(widget.imagePath!);
+    if (!file.existsSync()) {
+      _imageProvider = null;
+      return;
+    }
+
+    _imageProvider = FileImage(file);
+  }
+
+  Future<void> _precacheIfNeeded() async {
+    if (!mounted) return;
+    final provider = _imageProvider;
+    if (provider == null) return;
+    try {
+      await precacheImage(provider, context);
+      assert(() {
+        debugPrint('Background precache ok');
+        return true;
+      }());
+    } catch (_) {}
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        if (widget.enabled && _imageProvider != null)
+          Positioned.fill(
+            child: Opacity(
+              opacity: widget.imageOpacity,
+              child: Image(
+                key: const ValueKey('app_background_layer'),
+                image: _imageProvider!,
+                fit: BoxFit.cover,
+                gaplessPlayback: true,
+                filterQuality: FilterQuality.low,
+              ),
+            ),
+          )
+        else if (widget.theme == AppTheme.cyberpunk)
+          Positioned.fill(
+            child: Container(
+              key: const ValueKey('app_background_layer'),
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Color(0xFF0F1418), Color(0xFF1A242D)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+              ),
+            ),
+          )
+        else if (widget.theme == AppTheme.pureBlack)
+          const Positioned.fill(
+            child: ColoredBox(
+              key: ValueKey('app_background_layer'),
+              color: Colors.black,
+            ),
+          )
+        else
+          const Positioned.fill(
+            child: ColoredBox(
+              key: ValueKey('app_background_layer'),
+              color: Color(0xFFF8F9FA),
+            ),
+          ),
+        widget.child,
+      ],
+    );
+  }
+}
+
   const MainShell({super.key});
 
   @override
   State<MainShell> createState() => _MainShellState();
+}
 }
 
 class _MainShellState extends State<MainShell> {

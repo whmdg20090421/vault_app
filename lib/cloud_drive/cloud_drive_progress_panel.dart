@@ -3,9 +3,12 @@ import 'cloud_drive_progress_manager.dart';
 import '../models/sync_task.dart';
 
 void showCloudDriveProgressPanel(BuildContext context) {
+  final theme = Theme.of(context);
   showModalBottomSheet(
     context: context,
     isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    barrierColor: theme.colorScheme.scrim.withValues(alpha: 0.6),
     builder: (context) => const CloudDriveProgressPanel(),
   );
 }
@@ -20,6 +23,14 @@ class CloudDriveProgressPanel extends StatelessWidget {
       builder: (context, _) {
         final manager = CloudDriveProgressManager.instance;
         final tasks = manager.tasks;
+        final theme = Theme.of(context);
+        final surfaceColor = theme.dialogTheme.backgroundColor ??
+            theme.cardTheme.color ??
+            theme.colorScheme.surface;
+        final surfaceShape = theme.dialogTheme.shape ??
+            const RoundedRectangleBorder(
+              borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+            );
 
         return DraggableScrollableSheet(
           expand: false,
@@ -27,22 +38,27 @@ class CloudDriveProgressPanel extends StatelessWidget {
           minChildSize: 0.4,
           maxChildSize: 0.9,
           builder: (context, scrollController) {
-            return Column(
-              children: [
-                _buildHeader(context, manager),
-                const Divider(height: 1),
-                Expanded(
-                  child: tasks.isEmpty
-                      ? const Center(child: Text('暂无传输任务'))
-                      : ListView.builder(
-                          controller: scrollController,
-                          itemCount: tasks.length,
-                          itemBuilder: (context, index) {
-                            return _TaskItemNode(task: tasks[index], level: 0);
-                          },
-                        ),
-                ),
-              ],
+            return Material(
+              color: surfaceColor,
+              shape: surfaceShape,
+              clipBehavior: Clip.antiAlias,
+              child: Column(
+                children: [
+                  _buildHeader(context, manager),
+                  const Divider(height: 1),
+                  Expanded(
+                    child: tasks.isEmpty
+                        ? const Center(child: Text('暂无传输任务'))
+                        : ListView.builder(
+                            controller: scrollController,
+                            itemCount: tasks.length,
+                            itemBuilder: (context, index) {
+                              return _TaskItemNode(task: tasks[index], level: 0);
+                            },
+                          ),
+                  ),
+                ],
+              ),
             );
           },
         );

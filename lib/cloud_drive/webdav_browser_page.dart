@@ -498,29 +498,44 @@ class _WebDavBrowserPageState extends State<WebDavBrowserPage> {
 
     final floatingActionButton = FloatingActionButton(
       onPressed: () {
+        final theme = Theme.of(context);
+        final surfaceColor = theme.dialogTheme.backgroundColor ??
+            theme.cardTheme.color ??
+            theme.colorScheme.surface;
+        final surfaceShape = theme.dialogTheme.shape ??
+            const RoundedRectangleBorder(
+              borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+            );
         showModalBottomSheet(
           context: context,
+          backgroundColor: Colors.transparent,
+          barrierColor: theme.colorScheme.scrim.withValues(alpha: 0.6),
           builder: (context) => SafeArea(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                ListTile(
-                  leading: const Icon(Icons.create_new_folder),
-                  title: const Text('新建文件夹'),
-                  onTap: () {
-                    Navigator.pop(context);
-                    _createFolder();
-                  },
-                ),
-                ListTile(
-                  leading: const Icon(Icons.upload_file),
-                  title: const Text('上传文件'),
-                  onTap: () {
-                    Navigator.pop(context);
-                    _uploadFile();
-                  },
-                ),
-              ],
+            child: Material(
+              color: surfaceColor,
+              shape: surfaceShape,
+              clipBehavior: Clip.antiAlias,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ListTile(
+                    leading: const Icon(Icons.create_new_folder),
+                    title: const Text('新建文件夹'),
+                    onTap: () {
+                      Navigator.pop(context);
+                      _createFolder();
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.upload_file),
+                    title: const Text('上传文件'),
+                    onTap: () {
+                      Navigator.pop(context);
+                      _uploadFile();
+                    },
+                  ),
+                ],
+              ),
             ),
           ),
         );
