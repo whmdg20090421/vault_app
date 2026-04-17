@@ -80,7 +80,7 @@ class WebDavClientService {
   WebDavClientService({
     required this.url,
     required this.username,
-    required this.password,
+    required String password,
   }) {
     final authHeader = 'Basic ${base64Encode(utf8.encode('$username:$password'))}';
     _dio = Dio(BaseOptions(
@@ -287,6 +287,23 @@ class WebDavClientService {
     );
   }
 
+  /// PUT: Upload stream with known length
+  Future<void> uploadStream(Stream<List<int>> stream, int length, String remotePath) async {
+    final uri = Uri.parse(url);
+    final hostHeader = '${uri.host}${uri.hasPort ? ':${uri.port}' : ''}';
+
+    await _dio.put(
+      _buildUrl(remotePath),
+      data: stream,
+      options: Options(
+        headers: {
+          HttpHeaders.contentLengthHeader: length,
+          'Host': hostHeader,
+        },
+      ),
+    );
+  }
+
   /// GET: Download a file to local path
   Future<void> download(String remotePath, String localFilePath) async {
     final uri = Uri.parse(url);
@@ -311,6 +328,28 @@ class WebDavClientService {
       options: Options(
         responseType: ResponseType.bytes,
         headers: {'Host': hostHeader},
+      ),
+    );
+    return response.data ?? [];
+  }
+
+  Future<List<int>> readDataWithRange(String remotePath, {int? start, int? end}) async {
+    final uri = Uri.parse(url);
+    final hostHeader = '${uri.host}${uri.hasPort ? ':${uri.port}' : ''}';
+
+    String rangeHeader = 'bytes=';
+    if (start != null) rangeHeader += '$start';
+    rangeHeader += '-';
+    if (end != null) rangeHeader += '$end';
+
+    final response = await _dio.get<List<int>>(
+      _buildUrl(remotePath),
+      options: Options(
+        responseType: ResponseType.bytes,
+        headers: {
+          'Host': hostHeader,
+          'Range': rangeHeader,
+        },
       ),
     );
     return response.data ?? [];

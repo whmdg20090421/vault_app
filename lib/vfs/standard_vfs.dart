@@ -29,19 +29,10 @@ class StandardVfs implements VirtualFileSystem {
   @override
   Future<Stream<List<int>>> open(String path, {int? start, int? end}) async {
     if (start != null || end != null) {
-      final req = await client.createRequest('GET', path);
-      String rangeHeader = 'bytes=';
-      if (start != null) rangeHeader += '$start';
-      rangeHeader += '-';
-      if (end != null) rangeHeader += '$end';
-      req.headers.add('Range', rangeHeader);
-      final resp = await req.close();
-      if (resp.statusCode >= 400) {
-        throw Exception('Failed to fetch range: ${resp.statusCode}');
-      }
-      return resp;
+      final data = await client.readDataWithRange(path, start: start, end: end);
+      return Stream.value(data);
     }
-    
+
     final data = await client.readData(path);
     return Stream.value(data);
   }
@@ -59,13 +50,7 @@ class StandardVfs implements VirtualFileSystem {
 
   @override
   Future<void> uploadStream(Stream<List<int>> stream, int length, String remotePath) async {
-    final req = await client.createRequest('PUT', remotePath);
-    req.contentLength = length;
-    await req.addStream(stream);
-    final resp = await req.close();
-    if (resp.statusCode >= 400) {
-      throw Exception('Failed to upload stream: ${resp.statusCode}');
-    }
+    await client.uploadStream(stream, length, remotePath);
   }
 
   @override

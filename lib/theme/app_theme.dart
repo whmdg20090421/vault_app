@@ -62,7 +62,7 @@ ThemeData buildTheme(AppTheme theme, bool bgEnabled, double uiOpacity) {
         iconColor: scheme.primary,
         textColor: scheme.onSurface,
       ),
-      dialogTheme: DialogTheme(
+      dialogTheme: DialogThemeData(
         backgroundColor: applyUiOpacity(scheme.surfaceContainer),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       ),
@@ -121,7 +121,7 @@ ThemeData buildTheme(AppTheme theme, bool bgEnabled, double uiOpacity) {
         iconColor: scheme.primary,
         textColor: scheme.onSurface,
       ),
-      dialogTheme: DialogTheme(
+      dialogTheme: DialogThemeData(
         backgroundColor: applyUiOpacity(scheme.surfaceContainer),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(8),
@@ -195,7 +195,7 @@ ThemeData buildTheme(AppTheme theme, bool bgEnabled, double uiOpacity) {
       textColor: scheme.onSurface,
       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
     ),
-    dialogTheme: DialogTheme(
+    dialogTheme: DialogThemeData(
       backgroundColor: applyUiOpacity(scheme.surface),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       elevation: 8,
