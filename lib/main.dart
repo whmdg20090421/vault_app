@@ -47,7 +47,6 @@ class TianyanApp extends StatelessWidget {
       builder: (context, _) {
         final theme = appTheme.value;
         final bg = BackgroundSettings.instance;
-        return MaterialApp(
         return _BackgroundShell(
           theme: theme,
           enabled: bg.enabled,
@@ -61,11 +60,11 @@ class TianyanApp extends StatelessWidget {
             home: const MainShell(),
           ),
         );
+      },
     );
   }
 }
 
-class MainShell extends StatefulWidget {
 class _BackgroundShell extends StatefulWidget {
   const _BackgroundShell({
     required this.theme,
@@ -125,10 +124,6 @@ class _BackgroundShellState extends State<_BackgroundShell> {
     if (provider == null) return;
     try {
       await precacheImage(provider, context);
-      assert(() {
-        debugPrint('Background precache ok');
-        return true;
-      }());
     } catch (_) {}
   }
 
@@ -183,11 +178,11 @@ class _BackgroundShellState extends State<_BackgroundShell> {
   }
 }
 
+class MainShell extends StatefulWidget {
   const MainShell({super.key});
 
   @override
   State<MainShell> createState() => _MainShellState();
-}
 }
 
 class _MainShellState extends State<MainShell> {
@@ -257,8 +252,6 @@ class _MainShellState extends State<MainShell> {
     );
   }
 }
-
-
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});
 
