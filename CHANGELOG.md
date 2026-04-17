@@ -1,3 +1,8 @@
+# 版本 1.3.4 (2026-04-17)
+
+### ✨ Features
+- **Resume Encryption**: 实现了后台加密队列的保存、重启恢复与断点续传功能。
+
 # 版本 1.3.3 (2026-04-17)
 
 ### 🐛 Bug Fixes & Diagnostics
