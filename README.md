@@ -5,7 +5,10 @@
 ## 最新版本概览
 
 <!-- RELEASE_SUMMARY_START -->
-- 当前版本：待生成
+- 当前版本：1.2.6
+- 修复弹窗 / 底部面板 / 页面跳转时的背景闪回默认底色问题，背景层保持稳定无闪烁。
+- 新增发布准备脚本与 CI gate：构建/发布前自动校验版本一致性，并生成 README 版本摘要与 Release notes。
+- 完整更新：https://github.com/whmdg20090421/vault_app/releases/tag/v1.2.6
 <!-- RELEASE_SUMMARY_END -->
 
 ## 更新历史 (Changelog)
