@@ -5,11 +5,12 @@
 ## 最新版本概览
 
 <!-- RELEASE_SUMMARY_START -->
-- 当前版本：1.2.8
-- 修复全局自定义背景在路由/重绘时的闪烁问题（图片层启用 gaplessPlayback，背景层稳定挂载）。
-- 修复关闭背景图时因 Scaffold 透明导致的黑屏问题（增加全局兜底底色）。
-- WebDAV 模块重构为 dio + xml 分层实现（Client/Parser/Service），移除对第三方 webdav_client 的依赖，并提供基于 ETag 的增量同步骨架。
-- 完整更新：https://github.com/whmdg20090421/vault_app/releases/tag/v1.2.8
+- 当前版本：1.2.9
+- 修复 WebDAV 客户端在连接和加载目录时抛出 `Unknown Dio error (Status: null)` 的问题。
+- 修复了 WebDAV 具体文件的连接逻辑，成功解决因路径构造和拦截器导致的连接失败。
+- 新增全局 WebDAV 错误日志记录机制，便于将报错详情输出到本地供调试排查。
+- 彻底解决开启全局自定义背景时，导航进入子面板（如“关于”页面）造成的背景闪烁与重置问题（修改所有页面路由的过渡动画与纯色底色）。
+- 完整更新：https://github.com/whmdg20090421/vault_app/releases/tag/v1.2.9
 <!-- RELEASE_SUMMARY_END -->
 
 ## 更新历史 (Changelog)
