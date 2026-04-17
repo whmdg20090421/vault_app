@@ -1,2 +1,0 @@
-- [x] `_BackgroundShell` 已经成功被移动到了 `MaterialApp.builder` 内部，而不是外层包裹。
-- [x] `buildTheme` 中的 `scaffoldBackgroundColor` 属性已经根据 `bgEnabled` 状态实现了条件判断式的透明/不透明切换。
