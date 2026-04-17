@@ -112,7 +112,31 @@ class _EncryptionPageState extends State<EncryptionPage> {
       final result = await FilePicker.platform.getDirectoryPath();
       
       if (result != null && mounted) {
-        // 跳转到配置页面
+        // 检查是否已有 vault_config.json
+        final configFile = File('$result/vault_config.json');
+        if (await configFile.exists()) {
+          final prefs = await SharedPreferences.getInstance();
+          final vaultPaths = prefs.getStringList('vault_paths') ?? [];
+          if (!vaultPaths.contains(result)) {
+            vaultPaths.add(result);
+            await prefs.setStringList('vault_paths', vaultPaths);
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('检测到已有保险箱，已自动导入配置')),
+              );
+            }
+          } else {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('该保险箱已存在于列表中')),
+              );
+            }
+          }
+          _loadVaults();
+          return;
+        }
+
+        // 跳转到配置页面创建新保险箱
         await Navigator.of(context).push(
           MaterialPageRoute(
             builder: (context) => VaultConfigPage(vaultDirectoryPath: result),
@@ -636,7 +660,14 @@ class _TaskCardState extends State<_TaskCard> {
         return;
       }
       isolateArgs['files'] = remainingFiles;
-      Isolate.run(() => doImportFileIsolate(isolateArgs));
+      spawnImportFile(isolateArgs).catchError((e) {
+        EncryptionTaskManager().updateTaskStatus(widget.task.id, 'failed', error: e.toString());
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Isolate启动失败或运行异常: $e')),
+          );
+        }
+      });
     } else if (args['type'] == 'import_folder') {
       final List<String> skipFileIds = [];
       
@@ -651,7 +682,14 @@ class _TaskCardState extends State<_TaskCard> {
       findCompletedFiles(widget.task);
       
       isolateArgs['skipFileIds'] = skipFileIds;
-      Isolate.run(() => doImportFolderIsolate(isolateArgs));
+      spawnImportFolder(isolateArgs).catchError((e) {
+        EncryptionTaskManager().updateTaskStatus(widget.task.id, 'failed', error: e.toString());
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Isolate启动失败或运行异常: $e')),
+          );
+        }
+      });
     }
   }
 

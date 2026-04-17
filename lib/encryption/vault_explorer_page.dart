@@ -19,6 +19,11 @@ import 'dart:isolate';
 import '../theme/app_theme.dart';
 import 'encryption_page.dart';
 
+Future<void> spawnImportFile(Map<String, dynamic> args) => Isolate.run(() => doImportFileIsolate(args));
+Future<void> spawnImportFolder(Map<String, dynamic> args) => Isolate.run(() => doImportFolderIsolate(args));
+Future<void> spawnExportFile(Map<String, dynamic> args) => Isolate.run(() => doExportFileIsolate(args));
+Future<void> spawnShareFiles(Map<String, dynamic> args) => Isolate.run(() => _doShareFilesIsolate(args));
+
 Future<void> doImportFileIsolate(Map<String, dynamic> args) async {
   final sendPort = args['sendPort'] as SendPort;
   final files = args['files'] as List<Map<String, String>>;
@@ -78,6 +83,7 @@ Future<void> doImportFileIsolate(Map<String, dynamic> args) async {
   }
 }
 
+@visibleForTesting
 Future<void> doImportFolderIsolate(Map<String, dynamic> args) async {
   final sendPort = args['sendPort'] as SendPort;
   final result = args['result'] as String;
@@ -132,7 +138,7 @@ Future<void> doImportFolderIsolate(Map<String, dynamic> args) async {
       }
 
       final treeMap = buildTree(dir, taskId);
-      sendPort.send({'type': 'tree', 'tree': treeMap});
+      sendPort.send({'type': 'tree', 'taskId': taskId, 'tree': treeMap});
 
       // Now traverse the tree and process files
       Future<void> processTree(Map<String, dynamic> node, String currentRemotePath) async {
@@ -421,7 +427,14 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
           'taskId': taskId,
         };
 
-        Isolate.run(() => doImportFileIsolate(args));
+        spawnImportFile(args).catchError((e) {
+          EncryptionTaskManager().updateTaskStatus(taskId, 'failed', error: e.toString());
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Isolate启动失败或运行异常: $e')),
+            );
+          }
+        });
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -522,7 +535,14 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
             'taskId': taskId,
           };
 
-          Isolate.run(() => doImportFolderIsolate(args));
+          spawnImportFolder(args).catchError((e) {
+            EncryptionTaskManager().updateTaskStatus(taskId, 'failed', error: e.toString());
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Isolate启动失败或运行异常: $e')),
+              );
+            }
+          });
         }
       } catch (e) {
         if (mounted) {
@@ -552,13 +572,13 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
       }
 
       final outFile = File(p.join(selectedDir, node.name));
-      await Isolate.run(() => doExportFileIsolate({
+      await spawnExportFile({
         'nodePath': node.path,
         'outFilePath': outFile.path,
         'vaultDirectoryPath': widget.vaultDirectoryPath,
         'masterKey': widget.masterKey,
         'encryptFilename': widget.vaultConfig.encryptFilename,
-      }));
+      });
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -707,7 +727,7 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
           'masterKey': widget.masterKey,
           'encryptFilename': widget.vaultConfig.encryptFilename,
         };
-        await Isolate.run(() => _doShareFilesIsolate(args));
+        await spawnShareFiles(args);
       }
 
       if (mounted) {
@@ -755,15 +775,15 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
       _tempDirs.add(previewDir);
 
       final tempFile = File(p.join(previewDir.path, file.name));
-      await Isolate.run(() => doExportFileIsolate({
+      await spawnExportFile({
         'nodePath': file.path,
         'outFilePath': tempFile.path,
         'vaultDirectoryPath': widget.vaultDirectoryPath,
         'masterKey': widget.masterKey,
-        'encryptFilename': widget.vaultConfig.encryptFilename,
-      }));
+          'encryptFilename': widget.vaultConfig.encryptFilename,
+        });
 
-      if (mounted) {
+        if (mounted) {
         Navigator.of(context).pop(); // Close loading
         final result = await OpenFilex.open(tempFile.path);
         if (result.type != ResultType.done) {
