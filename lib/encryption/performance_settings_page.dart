@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'services/encryption_task_manager.dart';
 
 class PerformanceSettingsPage extends StatefulWidget {
   const PerformanceSettingsPage({super.key});
@@ -11,7 +12,7 @@ class PerformanceSettingsPage extends StatefulWidget {
 }
 
 class _PerformanceSettingsPageState extends State<PerformanceSettingsPage> {
-  static const _prefsKeyBenchmarkCores = 'benchmark_cores';
+  static const _prefsKeyEncryptionCores = 'encryption_cores';
 
   late final TextEditingController _coresController;
   int _totalCores = 1;
@@ -36,8 +37,8 @@ class _PerformanceSettingsPageState extends State<PerformanceSettingsPage> {
     _totalCores = Platform.numberOfProcessors;
     _maxUsableCores = (_totalCores - 1).clamp(1, _totalCores);
 
-    final saved = prefs.getInt(_prefsKeyBenchmarkCores);
-    _selectedCores = (saved ?? _maxUsableCores).clamp(1, _maxUsableCores);
+    final saved = prefs.getInt(_prefsKeyEncryptionCores);
+    _selectedCores = (saved ?? (_totalCores ~/ 2)).clamp(1, _maxUsableCores);
     _coresController.text = _selectedCores.toString();
 
     if (mounted) setState(() {});
@@ -45,7 +46,8 @@ class _PerformanceSettingsPageState extends State<PerformanceSettingsPage> {
 
   Future<void> _persist(int value) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt(_prefsKeyBenchmarkCores, value);
+    await prefs.setInt(_prefsKeyEncryptionCores, value);
+    EncryptionTaskManager().pumpQueue();
   }
 
   void _setCores(int value) {
@@ -68,7 +70,7 @@ class _PerformanceSettingsPageState extends State<PerformanceSettingsPage> {
         padding: const EdgeInsets.all(16),
         children: [
           Text(
-            '加密核心数量 (${_selectedCores}/${_totalCores})',
+            '加密CPU数量 (${_selectedCores}/${_totalCores})',
             style: Theme.of(context).textTheme.titleMedium,
           ),
           const SizedBox(height: 12),
@@ -91,7 +93,7 @@ class _PerformanceSettingsPageState extends State<PerformanceSettingsPage> {
             controller: _coresController,
             keyboardType: TextInputType.number,
             decoration: InputDecoration(
-              labelText: '核心数量',
+              labelText: '加密CPU数量',
               helperText: '范围: 1 ~ $_maxUsableCores',
             ),
             onSubmitted: (v) => _setCores(int.tryParse(v) ?? _selectedCores),

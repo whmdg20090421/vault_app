@@ -17,6 +17,7 @@ import 'home_page.dart';
 import 'theme/app_theme.dart';
 import 'theme/background_settings.dart';
 import 'settings/theme_settings_page.dart';
+import 'encryption/performance_settings_page.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -259,6 +260,19 @@ class SettingsPage extends StatelessWidget {
             Navigator.push(
               context,
               MaterialPageRoute(builder: (context) => const ThemeSettingsPage()),
+            );
+          },
+        ),
+        const Divider(),
+        ListTile(
+          leading: const Icon(Icons.speed_rounded),
+          title: const Text('性能设置'),
+          trailing: const Icon(Icons.chevron_right_rounded),
+          contentPadding: EdgeInsets.zero,
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const PerformanceSettingsPage()),
             );
           },
         ),

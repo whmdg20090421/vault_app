@@ -5,12 +5,10 @@
 ## 最新版本概览
 
 <!-- RELEASE_SUMMARY_START -->
-- 当前版本：1.3.5
-- 修复了因为 `Isolate` 不可发送对象导致的闭包捕获崩溃问题。
-- 修复了空文件夹或文件导致进度永远停留在 0% 的异常。
-- 实现了完善的自检与崩溃检测报告。
-- 实现了存在已有保险箱时自动识别配置而非覆盖的问题。
-- 完整更新：https://github.com/whmdg20090421/vault_app/releases/tag/v1.3.5
+- 当前版本：1.3.3
+- **WebDAV Path Resolution**: 彻底修复 `WebDavParser` 导致服务器返回的绝对路径（`href`）与相对请求路径不匹配，从而使根目录无法正确过滤、产生额外 `webdav` 文件夹并造成 `404 Not Found` 的严重问题。
+- **Enhanced Error Logging**: 大幅增强 `WebDavErrorLoggerInterceptor`，在异常发生时，将完整且详细的请求头（Headers）、请求方法（Method）、请求体（Data）以及完整的响应头（Response Headers）和响应体记录至日志中，便于深度排查服务端参数问题。
+- 完整更新：https://github.com/whmdg20090421/vault_app/releases/tag/v1.3.3
 <!-- RELEASE_SUMMARY_END -->
 
 ## 更新历史 (Changelog)

@@ -1,9 +1,43 @@
 import 'package:flutter/material.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import 'changelog_page.dart';
 
-class AboutPage extends StatelessWidget {
+class AboutPage extends StatefulWidget {
   const AboutPage({super.key});
+
+  @override
+  State<AboutPage> createState() => _AboutPageState();
+}
+
+class _AboutPageState extends State<AboutPage> {
+  String _version = '加载中...';
+  String _packageName = '加载中...';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPackageInfo();
+  }
+
+  Future<void> _loadPackageInfo() async {
+    try {
+      final info = await PackageInfo.fromPlatform();
+      if (mounted) {
+        setState(() {
+          _version = '${info.version}+${info.buildNumber}';
+          _packageName = info.packageName;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _version = '未知版本';
+          _packageName = '未知包名';
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -26,13 +60,13 @@ class AboutPage extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            '版本: 1.2.3',
+            '版本: $_version',
             style: Theme.of(context).textTheme.titleMedium,
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 8),
           Text(
-            '包名: com.tianyan.vault',
+            '包名: $_packageName',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: Colors.grey,
                 ),

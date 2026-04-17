@@ -112,31 +112,7 @@ class _EncryptionPageState extends State<EncryptionPage> {
       final result = await FilePicker.platform.getDirectoryPath();
       
       if (result != null && mounted) {
-        // 检查是否已有 vault_config.json
-        final configFile = File('$result/vault_config.json');
-        if (await configFile.exists()) {
-          final prefs = await SharedPreferences.getInstance();
-          final vaultPaths = prefs.getStringList('vault_paths') ?? [];
-          if (!vaultPaths.contains(result)) {
-            vaultPaths.add(result);
-            await prefs.setStringList('vault_paths', vaultPaths);
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('检测到已有保险箱，已自动导入配置')),
-              );
-            }
-          } else {
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('该保险箱已存在于列表中')),
-              );
-            }
-          }
-          _loadVaults();
-          return;
-        }
-
-        // 跳转到配置页面创建新保险箱
+        // 跳转到配置页面
         await Navigator.of(context).push(
           MaterialPageRoute(
             builder: (context) => VaultConfigPage(vaultDirectoryPath: result),
@@ -406,15 +382,36 @@ class _EncryptionPageState extends State<EncryptionPage> {
   }
 }
 
-class EncryptionProgressPanel extends StatelessWidget {
+class EncryptionProgressPanel extends StatefulWidget {
   final ScrollController scrollController;
 
   const EncryptionProgressPanel({super.key, required this.scrollController});
 
   @override
+  State<EncryptionProgressPanel> createState() => _EncryptionProgressPanelState();
+}
+
+class _EncryptionProgressPanelState extends State<EncryptionProgressPanel> {
+  final List<String> _navigationStack = [];
+
+  void _navigateBack() {
+    if (_navigationStack.isNotEmpty) {
+      setState(() {
+        _navigationStack.removeLast();
+      });
+    }
+  }
+
+  void _navigateTo(String taskId) {
+    setState(() {
+      _navigationStack.add(taskId);
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isCyberpunk = theme.brightness == Brightness.dark && 
+    final isCyberpunk = theme.brightness == Brightness.dark &&
                         theme.colorScheme.primary.value == 0xFF00E5FF;
     final surfaceColor = theme.dialogTheme.backgroundColor ??
         theme.cardTheme.color ??
@@ -428,454 +425,294 @@ class EncryptionProgressPanel extends StatelessWidget {
             ? Border(top: BorderSide(color: theme.colorScheme.primary, width: 2))
             : null,
       ),
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(24, 16, 16, 16),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  '加密任务进度',
-                  style: theme.textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: isCyberpunk ? theme.colorScheme.secondary : null,
-                  ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.close),
-                  onPressed: () => Navigator.of(context).pop(),
-                ),
-              ],
-            ),
-          ),
-          Divider(height: 1, color: theme.colorScheme.outlineVariant),
-          Expanded(
-            child: ListenableBuilder(
-              listenable: EncryptionTaskManager(),
-              builder: (context, child) {
-                final tasks = EncryptionTaskManager().tasks;
-                if (tasks.isEmpty) {
-                  return SingleChildScrollView(
-                    controller: scrollController,
-                    child: Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(32.0),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const SizedBox(height: 32),
-                            Icon(
-                              Icons.inbox_outlined,
-                              size: 64,
-                              color: theme.colorScheme.onSurface.withOpacity(0.2),
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              '暂无数据',
-                              style: theme.textTheme.titleMedium?.copyWith(
-                                color: theme.colorScheme.onSurface.withOpacity(0.5),
-                              ),
-                            ),
-                          ],
+      child: ListenableBuilder(
+        listenable: EncryptionTaskManager(),
+        builder: (context, _) {
+          final manager = EncryptionTaskManager();
+          
+          EncryptionTask? currentParent;
+          List<EncryptionTask> currentTasks = manager.tasks;
+          String title = '加密任务进度';
+          
+          if (_navigationStack.isNotEmpty) {
+            final parentId = _navigationStack.last;
+            currentParent = manager.findTask(parentId);
+            if (currentParent != null) {
+              currentTasks = currentParent.children;
+              title = currentParent.name;
+            } else {
+              // If parent was deleted (cancelled), pop it
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                _navigateBack();
+              });
+            }
+          }
+
+          return Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+                child: Row(
+                  children: [
+                    if (_navigationStack.isNotEmpty)
+                      IconButton(
+                        icon: const Icon(Icons.arrow_back),
+                        onPressed: _navigateBack,
+                      ),
+                    Expanded(
+                      child: Text(
+                        title,
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: isCyberpunk ? theme.colorScheme.secondary : null,
                         ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                  );
-                }
-
-                return ListView.builder(
-                  controller: scrollController,
-                  padding: const EdgeInsets.all(16),
-                  itemCount: tasks.length,
-                  itemBuilder: (context, index) {
-                    final task = tasks[index];
-                    return _TaskCard(task: task, isCyberpunk: isCyberpunk, theme: theme);
-                  },
-                );
-              },
-            ),
-          ),
-        ],
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.of(context).pop(),
+                    ),
+                  ],
+                ),
+              ),
+              if (isCyberpunk)
+                Divider(height: 1, color: theme.colorScheme.primary.withOpacity(0.5)),
+              if (manager.tasks.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        backgroundColor: manager.hasActiveTasks ? Colors.orange.withOpacity(0.8) : theme.colorScheme.primary,
+                        foregroundColor: Colors.white,
+                      ),
+                      icon: Icon(manager.hasActiveTasks ? Icons.pause_circle_filled : Icons.play_circle_filled),
+                      label: Text(
+                        manager.hasActiveTasks ? '一键全部暂停' : '一键全部开始',
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      ),
+                      onPressed: () {
+                        if (manager.hasActiveTasks) {
+                          manager.pauseAll();
+                        } else {
+                          manager.resumeAll();
+                        }
+                      },
+                    ),
+                  ),
+                ),
+              Expanded(
+                child: currentTasks.isEmpty
+                    ? Center(
+                        child: Text(
+                          '当前没有任务',
+                          style: TextStyle(color: theme.colorScheme.onSurface.withOpacity(0.5)),
+                        ),
+                      )
+                    : ListView.builder(
+                        controller: widget.scrollController,
+                        padding: const EdgeInsets.all(16),
+                        itemCount: currentTasks.length,
+                        itemBuilder: (context, index) {
+                          return _TaskCard(
+                            task: currentTasks[index],
+                            onFolderTap: _navigateTo,
+                          );
+                        },
+                      ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
 }
 
-class _TaskCard extends StatefulWidget {
+class _TaskCard extends StatelessWidget {
   final EncryptionTask task;
-  final bool isCyberpunk;
-  final ThemeData theme;
-  final int depth;
+  final ValueChanged<String> onFolderTap;
 
   const _TaskCard({
     required this.task,
-    required this.isCyberpunk,
-    required this.theme,
-    this.depth = 0,
+    required this.onFolderTap,
   });
 
-  @override
-  State<_TaskCard> createState() => _TaskCardState();
-}
-
-class _TaskCardState extends State<_TaskCard> {
-  bool _isExpanded = false;
-
-  void _resumeTask(BuildContext context) async {
-    final args = widget.task.taskArgs!;
-    final vaultDir = args['vaultDirectoryPath'] as String;
-    final configFile = File('$vaultDir/vault_config.json');
-    if (!await configFile.exists()) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Vault config not found!')));
-      return;
+  String _formatEta(int seconds) {
+    if (seconds <= 0) return '';
+    if (seconds > 60) {
+      final mins = seconds ~/ 60;
+      final secs = seconds % 60;
+      return ' (剩余 ${mins}分${secs}秒)';
     }
-    final configStr = await configFile.readAsString();
-    final config = VaultConfig.fromJson(jsonDecode(configStr));
+    return ' (剩余 ${seconds}秒)';
+  }
 
-    String? password;
-    await showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) {
-        final pwdController = TextEditingController();
-        bool isUnlocking = false;
-        return StatefulBuilder(
-          builder: (context, setStateDialog) => AlertDialog(
-            title: const Text('解锁保险箱 (Unlock)'),
-            content: TextField(
-              controller: pwdController,
-              decoration: const InputDecoration(labelText: '密码 (Password)'),
-              obscureText: true,
-              enabled: !isUnlocking,
-            ),
-            actions: [
-              TextButton(
-                onPressed: isUnlocking ? null : () => Navigator.pop(context),
-                child: const Text('取消 (Cancel)'),
-              ),
-              ElevatedButton(
-                onPressed: isUnlocking
-                    ? null
-                    : () async {
-                        setStateDialog(() => isUnlocking = true);
-                        try {
-                            final derivedKey = await CryptoUtils.deriveKeyAsync(
-                              password: pwdController.text,
-                              saltBase64: config.salt,
-                              kdfType: config.kdf,
-                              kdfParams: config.kdfParams,
-                            );
-                            
-                            final ciphertextBytes = base64Decode(config.validationCiphertext);
-                            final nonceBytes = base64Url.decode(config.nonce);
-                            
-                            final decryptedBytes = CryptoUtils.decrypt(
-                              key: derivedKey,
-                              nonce: nonceBytes,
-                              ciphertext: ciphertextBytes,
-                              algorithm: config.algorithm,
-                            );
-
-                            final decryptedString = utf8.decode(decryptedBytes);
-                            if (decryptedString != 'vault_magic_encrypted') {
-                              throw Exception('Wrong password');
-                            }
-                            password = pwdController.text;
-                            Navigator.pop(context);
-                          } catch (e) {
-                            setStateDialog(() => isUnlocking = false);
-                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('错误 (Error): 密码错误或解密失败')));
-                          }
-                      },
-                child: isUnlocking ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('确定 (OK)'),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-
-    if (password == null) return;
-
-    final masterKey = await CryptoUtils.deriveKeyAsync(
-      password: password!,
-      saltBase64: config.salt,
-      kdfType: config.kdf,
-      kdfParams: config.kdfParams,
-    );
-
-    EncryptionTaskManager().updateTaskStatus(widget.task.id, 'encrypting', error: null);
-
-    final receivePort = ReceivePort();
-    receivePort.listen((message) {
-      if (message is Map<String, dynamic>) {
-        final type = message['type'];
-        final tid = message['taskId'] as String;
-        if (type == 'progress') {
-          final bytes = message['bytes'] as int;
-          EncryptionTaskManager().updateTaskProgress(tid, bytes);
-        } else if (type == 'add_child') {
-          final childMap = message['child'] as Map<String, dynamic>;
-          final child = EncryptionTask(
-            id: childMap['id'] as String,
-            name: childMap['name'] as String,
-            isDirectory: childMap['isDirectory'] as bool? ?? false,
-            totalBytes: childMap['totalBytes'] as int,
-          );
-          EncryptionTaskManager().addChild(tid, child);
-        } else if (type == 'tree') {
-          final treeMap = message['tree'] as Map<String, dynamic>;
-          EncryptionTaskManager().updateTaskTree(tid, treeMap);
-        } else if (type == 'done') {
-          EncryptionTaskManager().updateTaskStatus(tid, 'completed');
-          receivePort.close();
-        } else if (type == 'error') {
-          final error = message['error'] as String;
-          EncryptionTaskManager().updateTaskStatus(tid, 'failed', error: error);
-          receivePort.close();
-        }
-      }
-    });
-
-    final isolateArgs = Map<String, dynamic>.from(args);
-    isolateArgs['sendPort'] = receivePort.sendPort;
-    isolateArgs['masterKey'] = masterKey;
-    isolateArgs['encryptFilename'] = config.encryptFilename;
-
-    if (args['type'] == 'import_files') {
-      final allFiles = (args['files'] as List<dynamic>).map((e) => Map<String, String>.from(e as Map)).toList();
-      final List<Map<String, String>> remainingFiles = [];
-      
-      for (final f in allFiles) {
-        final childId = '${widget.task.id}/${p.basename(f['localPath']!)}';
-        final childTask = widget.task.children.where((c) => c.id == childId).firstOrNull;
-        if (childTask == null || childTask.status != 'completed') {
-          remainingFiles.add(f);
-        }
-      }
-      
-      if (remainingFiles.isEmpty) {
-        EncryptionTaskManager().updateTaskStatus(widget.task.id, 'completed');
-        return;
-      }
-      isolateArgs['files'] = remainingFiles;
-      spawnImportFile(isolateArgs).catchError((e) {
-        EncryptionTaskManager().updateTaskStatus(widget.task.id, 'failed', error: e.toString());
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Isolate启动失败或运行异常: $e')),
-          );
-        }
-      });
-    } else if (args['type'] == 'import_folder') {
-      final List<String> skipFileIds = [];
-      
-      void findCompletedFiles(EncryptionTask t) {
-        if (!t.isDirectory && t.status == 'completed') {
-          skipFileIds.add(t.id);
-        }
-        for (final c in t.children) {
-          findCompletedFiles(c);
-        }
-      }
-      findCompletedFiles(widget.task);
-      
-      isolateArgs['skipFileIds'] = skipFileIds;
-      spawnImportFolder(isolateArgs).catchError((e) {
-        EncryptionTaskManager().updateTaskStatus(widget.task.id, 'failed', error: e.toString());
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Isolate启动失败或运行异常: $e')),
-          );
-        }
-      });
-    }
+  String _formatSpeed(double bytesPerSec) {
+    if (bytesPerSec <= 0) return '';
+    return ' (速度: ${FormatUtils.formatBytes(bytesPerSec.round())}/s)';
   }
 
   @override
   Widget build(BuildContext context) {
-    final hasChildren = widget.task.children.isNotEmpty;
-    final padding = EdgeInsets.only(
-      left: widget.depth == 0 ? 0 : 16.0,
-      bottom: widget.depth == 0 ? 12.0 : 0.0,
-    );
+    final theme = Theme.of(context);
+    final isCyberpunk = theme.brightness == Brightness.dark &&
+                        theme.colorScheme.primary.value == 0xFF00E5FF;
+    
+    final statusColor = _getStatusColor(task.status, theme);
+    final statusText = _getStatusText(task.status);
+    final progress = task.progress;
 
-    final content = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        InkWell(
-          onTap: hasChildren ? () => setState(() => _isExpanded = !_isExpanded) : null,
-          child: Padding(
-            padding: EdgeInsets.all(widget.depth == 0 ? 16.0 : 8.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    if (hasChildren)
-                      Icon(
-                        _isExpanded ? Icons.folder_open : Icons.folder,
-                        size: 20,
-                        color: widget.theme.colorScheme.primary,
-                      )
-                    else if (widget.depth > 0)
-                      Icon(Icons.insert_drive_file, size: 16, color: widget.theme.colorScheme.secondary),
-                    if (hasChildren || widget.depth > 0) const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        widget.task.name,
-                        style: TextStyle(
-                          fontWeight: widget.depth == 0 ? FontWeight.bold : FontWeight.normal,
-                          fontSize: widget.depth == 0 ? 16 : 14,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      shape: isCyberpunk
+          ? RoundedRectangleBorder(
+              side: BorderSide(color: theme.colorScheme.primary.withOpacity(0.3)),
+              borderRadius: BorderRadius.zero,
+            )
+          : null,
+      child: InkWell(
+        onTap: task.isDirectory && task.children.isNotEmpty
+            ? () => onFolderTap(task.id)
+            : null,
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    task.isDirectory ? Icons.folder : Icons.insert_drive_file,
+                    color: isCyberpunk ? theme.colorScheme.primary : theme.colorScheme.secondary,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      task.name,
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    _buildStatusBadge(widget.theme, widget.task.status),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                LinearProgressIndicator(
-                  value: widget.task.progress,
-                  backgroundColor: widget.theme.colorScheme.surfaceContainerHighest,
-                  color: _getStatusColor(widget.theme, widget.task.status),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      '${(widget.task.progress * 100).toStringAsFixed(1)}%',
-                      style: widget.theme.textTheme.bodySmall,
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: statusColor.withOpacity(0.1),
+                      border: Border.all(color: statusColor.withOpacity(0.5)),
+                      borderRadius: isCyberpunk ? BorderRadius.zero : BorderRadius.circular(12),
                     ),
-                    Text(
-                      '${FormatUtils.formatBytes(widget.task.processedBytes)} / ${FormatUtils.formatBytes(widget.task.totalBytes)}',
-                      style: widget.theme.textTheme.bodySmall?.copyWith(fontFamily: 'monospace'),
+                    child: Text(
+                      statusText,
+                      style: TextStyle(color: statusColor, fontSize: 12),
                     ),
-                  ],
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              ClipRRect(
+                borderRadius: isCyberpunk ? BorderRadius.zero : BorderRadius.circular(4),
+                child: LinearProgressIndicator(
+                  value: progress,
+                  backgroundColor: theme.colorScheme.onSurface.withOpacity(0.1),
+                  valueColor: AlwaysStoppedAnimation<Color>(statusColor),
+                  minHeight: isCyberpunk ? 2 : 4,
                 ),
-                if (widget.task.error != null) ...[
-                  const SizedBox(height: 8),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
                   Text(
-                    widget.task.error!,
-                    style: widget.theme.textTheme.bodySmall?.copyWith(color: widget.theme.colorScheme.error),
+                    '${(progress * 100).toStringAsFixed(1)}%${(task.status == 'encrypting' || task.status == 'pending') ? _formatEta(task.etaSeconds) : ''}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: theme.colorScheme.onSurface.withOpacity(0.7),
+                      fontFamily: isCyberpunk ? 'Courier' : null,
+                    ),
                   ),
-                ],
-                if (widget.depth == 0 && widget.task.status == 'paused' && widget.task.taskArgs != null) ...[
-                  const SizedBox(height: 8),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: ElevatedButton.icon(
-                      onPressed: () => _resumeTask(context),
-                      icon: const Icon(Icons.play_arrow, size: 16),
-                      label: const Text('继续加密 (Resume)'),
-                      style: ElevatedButton.styleFrom(
-                        visualDensity: VisualDensity.compact,
-                      ),
+                  Text(
+                    '${FormatUtils.formatBytes(task.processedBytes)} / ${FormatUtils.formatBytes(task.totalBytes)}${(task.status == 'encrypting' || task.status == 'pending') ? _formatSpeed(task.currentSpeed) : ''}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: theme.colorScheme.onSurface.withOpacity(0.7),
+                      fontFamily: isCyberpunk ? 'Courier' : null,
                     ),
                   ),
                 ],
-              ],
-            ),
-          ),
-        ),
-        if (hasChildren && _isExpanded)
-          Column(
-            children: widget.task.children.map((child) {
-              return _TaskCard(
-                task: child,
-                isCyberpunk: widget.isCyberpunk,
-                theme: widget.theme,
-                depth: widget.depth + 1,
-              );
-            }).toList(),
-          ),
-      ],
-    );
-
-    if (widget.depth == 0) {
-      return Padding(
-        padding: padding,
-        child: Card(
-          elevation: widget.isCyberpunk ? 0 : 1,
-          shape: widget.isCyberpunk
-              ? const RoundedRectangleBorder(
-                  borderRadius: BorderRadius.zero,
-                  side: BorderSide(color: Color(0xFF00E5FF), width: 1.0),
-                )
-              : RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+              ),
+              if (task.error != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  task.error!,
+                  style: TextStyle(color: theme.colorScheme.error, fontSize: 12),
                 ),
-          color: widget.isCyberpunk ? widget.theme.colorScheme.surfaceContainer : widget.theme.colorScheme.surface,
-          child: content,
-        ),
-      );
-    } else {
-      return Padding(
-        padding: padding,
-        child: content,
-      );
-    }
-  }
-
-  Widget _buildStatusBadge(ThemeData theme, String status) {
-    Color color;
-    String text;
-    switch (status) {
-      case 'completed':
-        color = theme.colorScheme.primary;
-        text = '完成';
-        break;
-      case 'encrypting':
-        color = theme.colorScheme.secondary;
-        text = '加密中';
-        break;
-      case 'paused':
-        color = theme.colorScheme.tertiary;
-        text = '已暂停';
-        break;
-      case 'failed':
-        color = theme.colorScheme.error;
-        text = '失败';
-        break;
-      default:
-        color = theme.colorScheme.outline;
-        text = '等待中';
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.5)),
-      ),
-      child: Text(
-        text,
-        style: theme.textTheme.labelSmall?.copyWith(
-          color: color,
-          fontWeight: FontWeight.bold,
+              ],
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  if (task.status == 'encrypting' || task.status == 'pending')
+                    IconButton(
+                      icon: const Icon(Icons.pause, size: 20),
+                      onPressed: () => EncryptionTaskManager().pauseTask(task.id),
+                      tooltip: '暂停',
+                    ),
+                  if (task.status == 'paused' || task.status == 'failed')
+                    IconButton(
+                      icon: const Icon(Icons.play_arrow, size: 20),
+                      onPressed: () => EncryptionTaskManager().updateTaskStatus(task.id, 'pending'),
+                      tooltip: '继续',
+                    ),
+                  if (task.status != 'completed')
+                    IconButton(
+                      icon: const Icon(Icons.close, size: 20),
+                      onPressed: () => EncryptionTaskManager().removeTask(task.id),
+                      tooltip: '取消',
+                    ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Color _getStatusColor(ThemeData theme, String status) {
+  Color _getStatusColor(String status, ThemeData theme) {
     switch (status) {
       case 'completed':
-        return theme.colorScheme.primary;
-      case 'encrypting':
-        return theme.colorScheme.secondary;
-      case 'paused':
-        return theme.colorScheme.tertiary;
+        return Colors.green;
       case 'failed':
         return theme.colorScheme.error;
+      case 'encrypting':
+        return theme.colorScheme.primary;
+      case 'paused':
+        return Colors.orange;
+      case 'pending':
       default:
-        return theme.colorScheme.outline;
+        return theme.colorScheme.onSurface.withOpacity(0.5);
     }
   }
 
-
+  String _getStatusText(String status) {
+    switch (status) {
+      case 'completed':
+        return '完成';
+      case 'failed':
+        return '失败';
+      case 'encrypting':
+        return '加密中';
+      case 'paused':
+        return '已暂停';
+      case 'pending':
+      default:
+        return '等待中';
+    }
+  }
 }

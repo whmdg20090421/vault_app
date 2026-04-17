@@ -87,7 +87,7 @@ class WebDavConfigRepository {
 
   Future<File> _file() async {
     final dir = await _directoryProvider();
-    return File('${dir.path}/webdav_configs.json');
+    return File('${dir.path}/应用配置/webdav_configs.json');
   }
 
   Future<WebDavFileData> readAll() async {

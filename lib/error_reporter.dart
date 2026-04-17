@@ -17,9 +17,9 @@ class ErrorReporter {
         return;
       }
 
-      final debugDir = Directory('${dir.path}/debug');
+      final debugDir = Directory('${dir.path}/运行日志');
       await debugDir.create(recursive: true);
-      _logFile = File('${debugDir.path}/~.txt');
+      _logFile = File('${debugDir.path}/错误日志.txt');
     } catch (_) {}
   }
 

@@ -1,8 +1,11 @@
+import '../../encryption/vault_explorer_page.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class EncryptionTask {
   final String id;
@@ -13,7 +16,12 @@ class EncryptionTask {
   String _status; // 'pending', 'encrypting', 'completed', 'failed', 'paused'
   String? error;
   final List<EncryptionTask> children;
-  final Map<String, dynamic>? taskArgs;
+  Map<String, dynamic>? taskArgs;
+
+  int _lastReportTime = 0;
+  int _lastProcessedBytes = 0;
+  double _currentSpeed = 0;
+  int _etaSeconds = 0;
 
   EncryptionTask({
     required this.id,
@@ -30,17 +38,24 @@ class EncryptionTask {
         _status = status,
         children = children ?? [];
 
-  Map<String, dynamic> toJson() => {
-        'id': id,
-        'name': name,
-        'isDirectory': isDirectory,
-        'totalBytes': _totalBytes,
-        'processedBytes': _processedBytes,
-        'status': _status,
-        'error': error,
-        'children': children.map((c) => c.toJson()).toList(),
-        'taskArgs': taskArgs,
-      };
+  Map<String, dynamic> toJson() {
+    final safeArgs = taskArgs == null ? null : Map<String, dynamic>.from(taskArgs!);
+    if (safeArgs != null) {
+      safeArgs.remove('masterKey');
+      safeArgs.remove('sendPort');
+    }
+    return {
+      'id': id,
+      'name': name,
+      'isDirectory': isDirectory,
+      'totalBytes': _totalBytes,
+      'processedBytes': _processedBytes,
+      'status': _status,
+      'error': error,
+      'children': children.map((c) => c.toJson()).toList(),
+      'taskArgs': safeArgs,
+    };
+  }
 
   factory EncryptionTask.fromJson(Map<String, dynamic> json) {
     return EncryptionTask(
@@ -69,7 +84,59 @@ class EncryptionTask {
   }
 
   set totalBytes(int value) => _totalBytes = value;
-  set processedBytes(int value) => _processedBytes = value;
+  set processedBytes(int value) {
+    if (children.isEmpty) {
+      final now = DateTime.now().millisecondsSinceEpoch;
+      if (_lastReportTime > 0 && now > _lastReportTime) {
+        final diffTime = (now - _lastReportTime) / 1000.0;
+        final diffBytes = value - _lastProcessedBytes;
+        if (diffTime > 0) {
+          final speed = diffBytes / diffTime;
+          if (_currentSpeed == 0) {
+            _currentSpeed = speed;
+          } else {
+            _currentSpeed = _currentSpeed * 0.7 + speed * 0.3;
+          }
+          final remainingBytes = _totalBytes - value;
+          if (_currentSpeed > 0) {
+            _etaSeconds = (remainingBytes / _currentSpeed).round();
+          }
+        }
+      } else {
+        _lastReportTime = DateTime.now().millisecondsSinceEpoch;
+      }
+      _lastReportTime = now;
+      _lastProcessedBytes = value;
+    }
+    _processedBytes = value;
+  }
+
+  double get currentSpeed {
+    if (children.isEmpty) {
+      return (_status == 'encrypting' || _status == 'pending') ? _currentSpeed : 0;
+    }
+    return children.fold(0.0, (sum, child) => sum + child.currentSpeed);
+  }
+
+  int get etaSeconds {
+    if (children.isEmpty) {
+      return (_status == 'encrypting' || _status == 'pending') ? _etaSeconds : 0;
+    }
+    final speed = currentSpeed;
+    if (speed <= 0) return 0;
+    final remainingBytes = totalBytes - processedBytes;
+    return (remainingBytes / speed).round();
+  }
+
+  void resetSpeed() {
+    _lastReportTime = 0;
+    _lastProcessedBytes = 0;
+    _currentSpeed = 0;
+    _etaSeconds = 0;
+    for (var child in children) {
+      child.resetSpeed();
+    }
+  }
 
   String get status {
     if (children.isEmpty) {
@@ -113,7 +180,12 @@ class EncryptionTask {
     return _status;
   }
 
-  set status(String value) => _status = value;
+  set status(String value) {
+    _status = value;
+    if (value != 'encrypting' && value != 'pending') {
+      resetSpeed();
+    }
+  }
 
   double get progress => totalBytes == 0 ? 0 : processedBytes / totalBytes;
 
@@ -132,11 +204,133 @@ class EncryptionTaskManager extends ChangeNotifier {
 
   factory EncryptionTaskManager() => _instance;
 
+  
+  int _activeWorkers = 0;
+  int _maxWorkers = 2;
+  final ReceivePort _globalReceivePort = ReceivePort();
+
   EncryptionTaskManager._internal() {
     _loadQueue();
+    _globalReceivePort.listen(_handleMessage);
+    _loadSettings();
+  }
+
+  Future<void> _loadSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    _maxWorkers = prefs.getInt('encryption_cores') ?? (Platform.numberOfProcessors ~/ 2).clamp(1, 999);
+  }
+
+  void _handleMessage(dynamic message) {
+    if (message is Map<String, dynamic>) {
+      final type = message['type'];
+      final tid = message['taskId'] as String;
+      if (type == 'progress') {
+        updateTaskProgress(tid, message['bytes'] as int);
+      } else if (type == 'done') {
+        updateTaskStatus(tid, 'completed');
+        _activeWorkers--;
+        pumpQueue();
+      } else if (type == 'error') {
+        updateTaskStatus(tid, 'failed', error: message['error'] as String?);
+        _activeWorkers--;
+        pumpQueue();
+      }
+    }
+  }
+
+  EncryptionTask? _findRootOf(String targetId) {
+    for (final task in _tasks) {
+      if (task.findById(targetId) != null) return task;
+    }
+    return null;
+  }
+
+  String? _findRemotePathOf(EncryptionTask root, String targetId) {
+    // We need to reconstruct the remote path.
+    // The tree structure matches the remote path relative to currentPath + baseName
+    if (root.taskArgs == null) return null;
+    final currentPath = root.taskArgs!['currentPath'] as String;
+    final result = root.taskArgs!['result'] as String;
+    // Actually, vault_explorer_page constructs remotePath by traversing.
+    // To simplify, we can store remotePath in taskArgs or compute it here.
+    return _computeRemotePath(root, targetId, currentPath + '/' + root.name);
+  }
+
+  String? _computeRemotePath(EncryptionTask current, String targetId, String currentRemotePath) {
+    if (current.id == targetId) return currentRemotePath;
+    for (final child in current.children) {
+      final path = currentRemotePath + '/' + child.name;
+      final found = _computeRemotePath(child, targetId, path);
+      if (found != null) return found;
+    }
+    return null;
+  }
+
+  String? _findLocalPathOf(EncryptionTask root, String targetId) {
+    if (root.id == targetId && root.taskArgs != null) return root.taskArgs!['result'] as String;
+    for (final child in root.children) {
+      final found = _findLocalPathOf(child, targetId);
+      if (found != null) return found;
+    }
+    return null;
+  }
+
+  EncryptionTask? _findNextPendingFile(List<EncryptionTask> list) {
+    for (final task in list) {
+      if (task.isDirectory) {
+        if (task.status == 'paused') continue;
+        final found = _findNextPendingFile(task.children);
+        if (found != null) return found;
+      } else {
+        if (task.status == 'pending') return task;
+      }
+    }
+    return null;
+  }
+
+  void pumpQueue() async {
+    await _loadSettings();
+    while (_activeWorkers < _maxWorkers) {
+      final task = _findNextPendingFile(_tasks);
+      if (task == null) break;
+
+      final root = _findRootOf(task.id);
+      if (root == null || root.taskArgs == null || root.taskArgs!['masterKey'] == null) {
+        task.status = 'failed';
+        task.error = 'Missing credentials or root task';
+        continue;
+      }
+
+      final localPath = task.taskArgs?['path'] as String? ?? _findLocalPathOf(root, task.id);
+      final remotePath = task.taskArgs?['remotePath'] as String? ?? _findRemotePathOf(root, task.id);
+
+      if (localPath == null || remotePath == null) {
+        task.status = 'failed';
+        task.error = 'Path not found';
+        continue;
+      }
+
+      task.status = 'encrypting';
+      _activeWorkers++;
+      notifyListeners();
+
+      final args = {
+        'sendPort': _globalReceivePort.sendPort,
+        'files': [{'localPath': localPath, 'remotePath': remotePath}],
+        'vaultDirectoryPath': root.taskArgs!['vaultDirectoryPath'],
+        'masterKey': root.taskArgs!['masterKey'],
+        'encryptFilename': root.taskArgs!['encryptFilename'],
+        'taskId': task.id,
+      };
+
+      Isolate.spawn(doImportFileIsolate, args).then((isolate) {
+        registerIsolate(task.id, isolate);
+      });
+    }
   }
 
   final List<EncryptionTask> _tasks = [];
+  final Map<String, Isolate> _isolates = {};
   bool _isSaving = false;
 
   List<EncryptionTask> get tasks => List.unmodifiable(_tasks);
@@ -150,12 +344,11 @@ class EncryptionTaskManager extends ChangeNotifier {
         if (content.isEmpty) return;
         final List<dynamic> jsonList = jsonDecode(content);
         final loadedTasks = jsonList.map((e) => EncryptionTask.fromJson(e as Map<String, dynamic>)).toList();
-        
-        // Pause all ongoing tasks, fail interrupted files
+
         for (var task in loadedTasks) {
           _pauseOrFailTaskRecursive(task);
         }
-        
+
         _tasks.addAll(loadedTasks);
         notifyListeners();
       }
@@ -166,18 +359,15 @@ class EncryptionTaskManager extends ChangeNotifier {
 
   void _pauseOrFailTaskRecursive(EncryptionTask task) {
     if (task.children.isEmpty) {
-      // If it's a file and it was encrypting or partially done
       if (task.status == 'encrypting' || (task.processedBytes > 0 && task.processedBytes < task.totalBytes)) {
         task.status = 'failed';
         task.processedBytes = 0;
         task.error = 'Encryption interrupted';
       }
     } else {
-      // It's a directory
       for (var child in task.children) {
         _pauseOrFailTaskRecursive(child);
       }
-      // If the overall task was in progress, mark it as paused so user can manually resume
       if (task.status == 'encrypting' || task.status == 'pending') {
         task.status = 'paused';
       }
@@ -188,7 +378,6 @@ class EncryptionTaskManager extends ChangeNotifier {
 
   Future<void> _saveQueue() async {
     if (_isSaving) {
-      // If currently saving, schedule another save soon
       _scheduleSave();
       return;
     }
@@ -242,6 +431,7 @@ class EncryptionTaskManager extends ChangeNotifier {
       task.children.addAll(_parseTree(treeMap['children'] as List<dynamic>));
       _saveQueue();
       notifyListeners();
+      pumpQueue();
     }
   }
 
@@ -264,7 +454,7 @@ class EncryptionTaskManager extends ChangeNotifier {
     final task = findTask(id);
     if (task != null) {
       task.processedBytes = processedBytes;
-      _saveQueue();
+      _scheduleSave();
       notifyListeners();
     }
   }
@@ -282,6 +472,11 @@ class EncryptionTaskManager extends ChangeNotifier {
   }
 
   void _updateStatusRecursive(EncryptionTask task, String status) {
+    if (task.children.isEmpty) {
+      if (task.status == 'completed') return;
+      if (status == 'paused' && task.status == 'failed') return;
+    }
+    
     task.status = status;
     for (final child in task.children) {
       _updateStatusRecursive(child, status);
@@ -289,8 +484,90 @@ class EncryptionTaskManager extends ChangeNotifier {
   }
 
   void removeTask(String id) {
-    _tasks.removeWhere((t) => t.id == id);
-    _saveQueue();
-    notifyListeners();
+    final task = findTask(id);
+    if (task != null) {
+      cancelTask(id);
+      if (_tasks.contains(task)) {
+        _tasks.remove(task);
+      } else {
+        _removeChildRecursive(_tasks, id);
+      }
+      _saveQueue();
+      notifyListeners();
+    }
+  }
+
+  bool _removeChildRecursive(List<EncryptionTask> tasks, String id) {
+    for (var i = 0; i < tasks.length; i++) {
+      if (tasks[i].id == id) {
+        tasks.removeAt(i);
+        return true;
+      }
+      if (_removeChildRecursive(tasks[i].children, id)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  void registerIsolate(String taskId, Isolate isolate) {
+    _isolates[taskId] = isolate;
+  }
+
+  void cancelTask(String taskId) {
+    final task = findTask(taskId);
+    if (task != null) {
+      _killIsolatesRecursive(task);
+      _updateStatusRecursive(task, 'failed');
+      _saveQueue();
+      notifyListeners();
+    }
+  }
+
+  void pauseTask(String taskId) {
+    final task = findTask(taskId);
+    if (task != null) {
+      _killIsolatesRecursive(task);
+      _updateStatusRecursive(task, 'paused');
+      _saveQueue();
+      notifyListeners();
+    }
+  }
+
+  void _killIsolatesRecursive(EncryptionTask task) {
+    if (_isolates.containsKey(task.id)) {
+      _isolates[task.id]?.kill(priority: Isolate.immediate);
+      _isolates.remove(task.id);
+    }
+    for (final child in task.children) {
+      _killIsolatesRecursive(child);
+    }
+  }
+
+  bool get hasActiveTasks {
+    bool hasActive = false;
+    for (final task in _tasks) {
+      if (task.status == 'encrypting' || task.status == 'pending') {
+        hasActive = true;
+        break;
+      }
+    }
+    return hasActive;
+  }
+
+  void pauseAll() {
+    for (final task in _tasks) {
+      if (task.status == 'encrypting' || task.status == 'pending') {
+        pauseTask(task.id);
+      }
+    }
+  }
+
+  void resumeAll() {
+    for (final task in _tasks) {
+      if (task.status == 'paused') {
+        updateTaskStatus(task.id, 'pending');
+      }
+    }
   }
 }
