@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:webdav_client/webdav_client.dart' as webdav;
 import 'package:intl/intl.dart';
 import 'webdav_config.dart';

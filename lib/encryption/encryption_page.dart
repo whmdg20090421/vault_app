@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../main.dart';
 
 import 'models/vault_config.dart';
+import '../utils/crypto_utils.dart';
 import '../utils/format_utils.dart';
 import 'vault_config_page.dart';
 import 'vault_explorer_page.dart';
