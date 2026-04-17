@@ -1,7 +1,10 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 
 import 'webdav_config.dart';
 import 'webdav_storage.dart';
+import 'webdav_new/webdav_client.dart';
+import 'webdav_new/webdav_service.dart';
 
 class WebDavEditResult {
   const WebDavEditResult({
@@ -131,12 +134,24 @@ class _WebDavEditPageState extends State<WebDavEditPage> {
     });
 
     try {
-      // 网络连接逻辑已被移除，待重构
-      // 这里模拟直接提交
-      await Future.delayed(const Duration(milliseconds: 500));
+      String passwordToUse = _passwordController.text;
+      if (_isEdit && passwordToUse.isEmpty) {
+        final repository = WebDavConfigRepository();
+        passwordToUse = await repository.readPassword(widget.initial!.id) ?? '';
+      }
+
+      final client = WebDavClient(
+        baseUrl: _urlController.text.trim(),
+        username: _usernameController.text.trim(),
+        password: passwordToUse,
+      );
+      final service = WebDavService(client);
+      
+      await service.readDir('/');
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('测试跳过：网络底层重构中，直接保存')),
+          const SnackBar(content: Text('连接成功')),
         );
         _submit();
       }
@@ -173,12 +188,13 @@ class _WebDavEditPageState extends State<WebDavEditPage> {
     });
 
     try {
-      // 网络连接逻辑已被移除，待重构
-      await Future.delayed(const Duration(milliseconds: 500));
+      final dio = Dio();
+      await dio.get('https://www.baidu.com');
+      
       if (mounted) {
         setState(() {
-          _networkTestResult = '模拟网络连接已被移除（待重构）';
-          _networkTestColor = Colors.orange;
+          _networkTestResult = '网络连接正常';
+          _networkTestColor = Colors.green;
         });
       }
     } catch (e) {

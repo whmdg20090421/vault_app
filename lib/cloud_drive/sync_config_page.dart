@@ -15,6 +15,8 @@ import '../vfs/encrypted_vfs.dart';
 import '../vfs/standard_vfs.dart';
 import 'webdav_config.dart';
 import 'webdav_storage.dart';
+import 'webdav_new/webdav_client.dart';
+import 'webdav_new/webdav_service.dart';
 
 class SyncConfigPage extends StatefulWidget {
   const SyncConfigPage({super.key});
@@ -249,7 +251,17 @@ class _SyncConfigPageState extends State<SyncConfigPage> {
       _loadingCloudDirs = true;
     });
     try {
-      _cloudVfs = StandardVfs();
+      final repo = WebDavConfigRepository();
+      final password = await repo.readPassword(config.id) ?? '';
+
+      final client = WebDavClient(
+        baseUrl: config.url,
+        username: config.username,
+        password: password,
+      );
+      final service = WebDavService(client);
+      _cloudVfs = StandardVfs(service);
+
       _cloudPath = '/';
       _selectedCloudFolder = '/';
       await _loadCloudDirs();
