@@ -1,10 +1,9 @@
 # 版本 1.3.1 (2026-04-17)
 
 ### 🐛 Bug Fixes & Network
-- 修复 Android 14/15 环境下即使配置了 `INTERNET` 权限仍可能导致的全局 DNS 解析和 `Failed host lookup` 失败问题。
-- 新增 `network_security_config.xml` 配置信任系统/用户证书，并放开明文流量拦截。
-- 在 Android 构建配置中将编译目标与 SDK 版本对齐到 34 (Android 14+)。
-- 提供基于 `dart:io` 原生 Socket 与 NetworkInterface 的终极网络诊断脚本，以记录和排查复杂的 VPN 或 WIFI/蜂窝网络通道异常。
+- 恢复 Android 默认 `flutter.compileSdkVersion` 配置，修复因强制指定 SDK 版本 34 导致的构建冲突。
+- 提供基于 `dart:io` 原生 Socket 与 NetworkInterface 的终极网络诊断脚本。
+- 新增 `network_security_config.xml` 配置信任系统/用户证书。
 
 # 版本 1.3.0 (2026-04-17)
 
