@@ -21,14 +21,42 @@ class WebDavErrorLoggerInterceptor extends Interceptor {
   @override
   void onError(DioException err, ErrorInterceptorHandler handler) {
     final buffer = StringBuffer();
+    buffer.writeln('=== [WebDAV Error] ===');
     buffer.writeln('DioException: [${err.type}] ${err.message}');
-    buffer.writeln('URL: ${err.requestOptions.uri}');
     
-    if (err.response != null) {
-      buffer.writeln('Status Code: ${err.response?.statusCode}');
-      buffer.writeln('Response Data: ${err.response?.data}');
+    // Request Details
+    buffer.writeln('\n--- Request Details ---');
+    buffer.writeln('Method: ${err.requestOptions.method}');
+    buffer.writeln('URL: ${err.requestOptions.uri}');
+    buffer.writeln('Headers:');
+    err.requestOptions.headers.forEach((key, value) {
+      // 遮离敏感信息如 Authorization
+      if (key.toLowerCase() == 'authorization') {
+        buffer.writeln('  $key: [HIDDEN]');
+      } else {
+        buffer.writeln('  $key: $value');
+      }
+    });
+    if (err.requestOptions.data != null) {
+      buffer.writeln('Request Data: ${err.requestOptions.data}');
     }
 
+    // Response Details
+    buffer.writeln('\n--- Response Details ---');
+    if (err.response != null) {
+      buffer.writeln('Status Code: ${err.response?.statusCode}');
+      buffer.writeln('Status Message: ${err.response?.statusMessage}');
+      buffer.writeln('Response Headers:');
+      err.response?.headers.forEach((key, values) {
+        buffer.writeln('  $key: ${values.join(', ')}');
+      });
+      buffer.writeln('Response Data: ${err.response?.data}');
+    } else {
+      buffer.writeln('No Response Received.');
+    }
+
+    // Underlying Error Details
+    buffer.writeln('\n--- Underlying Error ---');
     if (err.error != null) {
       buffer.writeln('Error Details: ${err.error}');
       if (err.error is SocketException) {
@@ -41,9 +69,11 @@ class WebDavErrorLoggerInterceptor extends Interceptor {
         final he = err.error as HttpException;
         buffer.writeln('HttpException: ${he.message}, uri: ${he.uri}');
       }
+    } else {
+      buffer.writeln('None.');
     }
     
-    buffer.writeln('--------------------------------------------------');
+    buffer.writeln('==================================================');
     _writeLog(buffer.toString());
     
     super.onError(err, handler);
