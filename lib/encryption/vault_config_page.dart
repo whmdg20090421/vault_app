@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import '../main.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:pointycastle/export.dart' as pc;
+import '../theme/app_theme.dart';
 
 import 'models/vault_config.dart';
 import 'performance_settings_page.dart';

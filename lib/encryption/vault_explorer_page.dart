@@ -16,6 +16,7 @@ import '../vfs/local_vfs.dart';
 import '../vfs/encrypted_vfs.dart';
 import 'services/encryption_task_manager.dart';
 import 'dart:isolate';
+import '../theme/app_theme.dart';
 
 Future<void> _doImportFileIsolate(Map<String, dynamic> args) async {
   final sendPort = args['sendPort'] as SendPort;

@@ -8,6 +8,7 @@ import 'package:path/path.dart' as p;
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../main.dart';
+import '../theme/app_theme.dart';
 
 import 'models/vault_config.dart';
 import 'utils/crypto_utils.dart';
