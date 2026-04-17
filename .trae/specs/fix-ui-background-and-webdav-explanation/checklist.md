@@ -1,0 +1,2 @@
+- [ ] `_BackgroundShell` is used inside `MaterialApp.builder` and removed from wrapping `MaterialApp`.
+- [ ] `scaffoldBackgroundColor` in `buildTheme` is conditionally transparent based on `bgEnabled`.
