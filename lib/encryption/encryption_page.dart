@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
+import 'dart:isolate';
 
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
@@ -497,6 +498,163 @@ class _TaskCard extends StatefulWidget {
 class _TaskCardState extends State<_TaskCard> {
   bool _isExpanded = false;
 
+  void _resumeTask(BuildContext context) async {
+    final args = widget.task.taskArgs!;
+    final vaultDir = args['vaultDirectoryPath'] as String;
+    final configFile = File('$vaultDir/vault_config.json');
+    if (!await configFile.exists()) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Vault config not found!')));
+      return;
+    }
+    final configStr = await configFile.readAsString();
+    final config = VaultConfig.fromJson(jsonDecode(configStr));
+
+    String? password;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        final pwdController = TextEditingController();
+        bool isUnlocking = false;
+        return StatefulBuilder(
+          builder: (context, setStateDialog) => AlertDialog(
+            title: const Text('解锁保险箱 (Unlock)'),
+            content: TextField(
+              controller: pwdController,
+              decoration: const InputDecoration(labelText: '密码 (Password)'),
+              obscureText: true,
+              enabled: !isUnlocking,
+            ),
+            actions: [
+              TextButton(
+                onPressed: isUnlocking ? null : () => Navigator.pop(context),
+                child: const Text('取消 (Cancel)'),
+              ),
+              ElevatedButton(
+                onPressed: isUnlocking
+                    ? null
+                    : () async {
+                        setStateDialog(() => isUnlocking = true);
+                        try {
+                            final derivedKey = await CryptoUtils.deriveKeyAsync(
+                              password: pwdController.text,
+                              saltBase64: config.salt,
+                              kdfType: config.kdf,
+                              kdfParams: config.kdfParams,
+                            );
+                            
+                            final ciphertextBytes = base64Decode(config.validationCiphertext);
+                            final nonceBytes = base64Url.decode(config.nonce);
+                            
+                            final decryptedBytes = CryptoUtils.decrypt(
+                              key: derivedKey,
+                              nonce: nonceBytes,
+                              ciphertext: ciphertextBytes,
+                              algorithm: config.algorithm,
+                            );
+
+                            final decryptedString = utf8.decode(decryptedBytes);
+                            if (decryptedString != 'vault_magic_encrypted') {
+                              throw Exception('Wrong password');
+                            }
+                            password = pwdController.text;
+                            Navigator.pop(context);
+                          } catch (e) {
+                            setStateDialog(() => isUnlocking = false);
+                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('错误 (Error): 密码错误或解密失败')));
+                          }
+                      },
+                child: isUnlocking ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('确定 (OK)'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (password == null) return;
+
+    final masterKey = await CryptoUtils.deriveKeyAsync(
+      password: password!,
+      saltBase64: config.salt,
+      kdfType: config.kdf,
+      kdfParams: config.kdfParams,
+    );
+
+    EncryptionTaskManager().updateTaskStatus(widget.task.id, 'encrypting', error: null);
+
+    final receivePort = ReceivePort();
+    receivePort.listen((message) {
+      if (message is Map<String, dynamic>) {
+        final type = message['type'];
+        final tid = message['taskId'] as String;
+        if (type == 'progress') {
+          final bytes = message['bytes'] as int;
+          EncryptionTaskManager().updateTaskProgress(tid, bytes);
+        } else if (type == 'add_child') {
+          final childMap = message['child'] as Map<String, dynamic>;
+          final child = EncryptionTask(
+            id: childMap['id'] as String,
+            name: childMap['name'] as String,
+            isDirectory: childMap['isDirectory'] as bool? ?? false,
+            totalBytes: childMap['totalBytes'] as int,
+          );
+          EncryptionTaskManager().addChild(tid, child);
+        } else if (type == 'tree') {
+          final treeMap = message['tree'] as Map<String, dynamic>;
+          EncryptionTaskManager().updateTaskTree(tid, treeMap);
+        } else if (type == 'done') {
+          EncryptionTaskManager().updateTaskStatus(tid, 'completed');
+          receivePort.close();
+        } else if (type == 'error') {
+          final error = message['error'] as String;
+          EncryptionTaskManager().updateTaskStatus(tid, 'failed', error: error);
+          receivePort.close();
+        }
+      }
+    });
+
+    final isolateArgs = Map<String, dynamic>.from(args);
+    isolateArgs['sendPort'] = receivePort.sendPort;
+    isolateArgs['masterKey'] = masterKey;
+    isolateArgs['encryptFilename'] = config.encryptFilename;
+
+    if (args['type'] == 'import_files') {
+      final allFiles = (args['files'] as List<dynamic>).map((e) => Map<String, String>.from(e as Map)).toList();
+      final List<Map<String, String>> remainingFiles = [];
+      
+      for (final f in allFiles) {
+        final childId = '${widget.task.id}/${p.basename(f['localPath']!)}';
+        final childTask = widget.task.children.where((c) => c.id == childId).firstOrNull;
+        if (childTask == null || childTask.status != 'completed') {
+          remainingFiles.add(f);
+        }
+      }
+      
+      if (remainingFiles.isEmpty) {
+        EncryptionTaskManager().updateTaskStatus(widget.task.id, 'completed');
+        return;
+      }
+      isolateArgs['files'] = remainingFiles;
+      Isolate.run(() => doImportFileIsolate(isolateArgs));
+    } else if (args['type'] == 'import_folder') {
+      final List<String> skipFileIds = [];
+      
+      void findCompletedFiles(EncryptionTask t) {
+        if (!t.isDirectory && t.status == 'completed') {
+          skipFileIds.add(t.id);
+        }
+        for (final c in t.children) {
+          findCompletedFiles(c);
+        }
+      }
+      findCompletedFiles(widget.task);
+      
+      isolateArgs['skipFileIds'] = skipFileIds;
+      Isolate.run(() => doImportFolderIsolate(isolateArgs));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final hasChildren = widget.task.children.isNotEmpty;
@@ -567,6 +725,20 @@ class _TaskCardState extends State<_TaskCard> {
                     style: widget.theme.textTheme.bodySmall?.copyWith(color: widget.theme.colorScheme.error),
                   ),
                 ],
+                if (widget.depth == 0 && widget.task.status == 'paused' && widget.task.taskArgs != null) ...[
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: ElevatedButton.icon(
+                      onPressed: () => _resumeTask(context),
+                      icon: const Icon(Icons.play_arrow, size: 16),
+                      label: const Text('继续加密 (Resume)'),
+                      style: ElevatedButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -611,35 +783,59 @@ class _TaskCardState extends State<_TaskCard> {
   }
 
   Widget _buildStatusBadge(ThemeData theme, String status) {
-    Color color = _getStatusColor(theme, status);
-    String label = '';
+    Color color;
+    String text;
     switch (status) {
-      case 'pending': label = '等待中'; break;
-      case 'encrypting': label = '加密中'; break;
-      case 'completed': label = '已完成'; break;
-      case 'failed': label = '失败'; break;
-      default: label = status;
+      case 'completed':
+        color = theme.colorScheme.primary;
+        text = '完成';
+        break;
+      case 'encrypting':
+        color = theme.colorScheme.secondary;
+        text = '加密中';
+        break;
+      case 'paused':
+        color = theme.colorScheme.tertiary;
+        text = '已暂停';
+        break;
+      case 'failed':
+        color = theme.colorScheme.error;
+        text = '失败';
+        break;
+      default:
+        color = theme.colorScheme.outline;
+        text = '等待中';
     }
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: color.withOpacity(0.5)),
       ),
       child: Text(
-        label,
-        style: theme.textTheme.labelSmall?.copyWith(color: color, fontWeight: FontWeight.bold),
+        text,
+        style: theme.textTheme.labelSmall?.copyWith(
+          color: color,
+          fontWeight: FontWeight.bold,
+        ),
       ),
     );
   }
 
   Color _getStatusColor(ThemeData theme, String status) {
     switch (status) {
-      case 'completed': return Colors.green;
-      case 'failed': return theme.colorScheme.error;
-      case 'encrypting': return theme.colorScheme.primary;
-      default: return Colors.grey;
+      case 'completed':
+        return theme.colorScheme.primary;
+      case 'encrypting':
+        return theme.colorScheme.secondary;
+      case 'paused':
+        return theme.colorScheme.tertiary;
+      case 'failed':
+        return theme.colorScheme.error;
+      default:
+        return theme.colorScheme.outline;
     }
   }
 

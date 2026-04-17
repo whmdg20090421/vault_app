@@ -19,7 +19,6 @@ import 'dart:isolate';
 import '../theme/app_theme.dart';
 import 'encryption_page.dart';
 
-@visibleForTesting
 Future<void> doImportFileIsolate(Map<String, dynamic> args) async {
   final sendPort = args['sendPort'] as SendPort;
   final files = args['files'] as List<Map<String, String>>;
@@ -79,7 +78,6 @@ Future<void> doImportFileIsolate(Map<String, dynamic> args) async {
   }
 }
 
-@visibleForTesting
 Future<void> doImportFolderIsolate(Map<String, dynamic> args) async {
   final sendPort = args['sendPort'] as SendPort;
   final result = args['result'] as String;
@@ -88,6 +86,7 @@ Future<void> doImportFolderIsolate(Map<String, dynamic> args) async {
   final masterKey = args['masterKey'] as Uint8List;
   final encryptFilename = args['encryptFilename'] as bool;
   final taskId = args['taskId'] as String;
+  final skipFileIds = args['skipFileIds'] as List<String>? ?? [];
 
   final localVfs = LocalVfs(rootPath: vaultDirectoryPath);
   final encryptedVfs = EncryptedVfs(baseVfs: localVfs, masterKey: masterKey, encryptFilename: encryptFilename);
@@ -145,8 +144,12 @@ Future<void> doImportFolderIsolate(Map<String, dynamic> args) async {
               await vfs.mkdir(remotePath);
               await processTree(child, remotePath);
             } else {
-              final localPath = child['path'] as String;
               final childId = child['id'] as String;
+              if (skipFileIds.contains(childId)) {
+                continue;
+              }
+
+              final localPath = child['path'] as String;
               final size = child['totalBytes'] as int;
               
               final file = File(localPath);
@@ -351,11 +354,20 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
             ? p.basename(filesToProcess.first['localPath']!)
             : '批量导入 ${filesToProcess.length} 个文件';
 
+        final taskArgs = {
+          'type': 'import_files',
+          'files': filesToProcess,
+          'vaultDirectoryPath': widget.vaultDirectoryPath,
+          'encryptFilename': widget.vaultConfig.encryptFilename,
+          'taskId': taskId,
+        };
+
         final task = EncryptionTask(
           id: taskId,
           name: taskName,
           totalBytes: totalSize,
           status: 'encrypting',
+          taskArgs: taskArgs,
         );
 
         EncryptionTaskManager().addTask(task);
@@ -447,11 +459,21 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
           final baseName = p.basename(result);
           final taskId = DateTime.now().millisecondsSinceEpoch.toString();
           
+          final taskArgs = {
+            'type': 'import_folder',
+            'result': result,
+            'currentPath': _currentPath,
+            'vaultDirectoryPath': widget.vaultDirectoryPath,
+            'encryptFilename': widget.vaultConfig.encryptFilename,
+            'taskId': taskId,
+          };
+
           final task = EncryptionTask(
             id: taskId,
             name: baseName,
             totalBytes: totalSize,
             status: 'encrypting',
+            taskArgs: taskArgs,
           );
 
           EncryptionTaskManager().addTask(task);

@@ -1,4 +1,8 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:path_provider/path_provider.dart';
 
 class EncryptionTask {
   final String id;
@@ -6,9 +10,10 @@ class EncryptionTask {
   final bool isDirectory;
   int _totalBytes;
   int _processedBytes;
-  String _status; // 'pending', 'encrypting', 'completed', 'failed'
+  String _status; // 'pending', 'encrypting', 'completed', 'failed', 'paused'
   String? error;
   final List<EncryptionTask> children;
+  final Map<String, dynamic>? taskArgs;
 
   EncryptionTask({
     required this.id,
@@ -19,10 +24,39 @@ class EncryptionTask {
     String status = 'pending',
     this.error,
     List<EncryptionTask>? children,
+    this.taskArgs,
   })  : _totalBytes = totalBytes,
         _processedBytes = processedBytes,
         _status = status,
         children = children ?? [];
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'isDirectory': isDirectory,
+        'totalBytes': _totalBytes,
+        'processedBytes': _processedBytes,
+        'status': _status,
+        'error': error,
+        'children': children.map((c) => c.toJson()).toList(),
+        'taskArgs': taskArgs,
+      };
+
+  factory EncryptionTask.fromJson(Map<String, dynamic> json) {
+    return EncryptionTask(
+      id: json['id'] as String,
+      name: json['name'] as String,
+      isDirectory: json['isDirectory'] as bool? ?? false,
+      totalBytes: json['totalBytes'] as int? ?? 0,
+      processedBytes: json['processedBytes'] as int? ?? 0,
+      status: json['status'] as String? ?? 'pending',
+      error: json['error'] as String?,
+      children: (json['children'] as List<dynamic>?)
+          ?.map((c) => EncryptionTask.fromJson(c as Map<String, dynamic>))
+          .toList(),
+      taskArgs: json['taskArgs'] as Map<String, dynamic>?,
+    );
+  }
 
   int get totalBytes {
     if (children.isEmpty) return _totalBytes;
@@ -50,6 +84,7 @@ class EncryptionTask {
     bool hasFailed = false;
     bool hasEncrypting = false;
     bool hasPending = false;
+    bool hasPaused = false;
     bool allCompleted = true;
     for (var child in children) {
       final s = child.status;
@@ -65,9 +100,14 @@ class EncryptionTask {
         hasPending = true;
         allCompleted = false;
       }
+      if (s == 'paused') {
+        hasPaused = true;
+        allCompleted = false;
+      }
     }
     if (hasFailed) return 'failed';
     if (hasEncrypting) return 'encrypting';
+    if (hasPaused) return 'paused';
     if (allCompleted && children.isNotEmpty) return 'completed';
     if (hasPending) return 'pending';
     return _status;
@@ -92,14 +132,89 @@ class EncryptionTaskManager extends ChangeNotifier {
 
   factory EncryptionTaskManager() => _instance;
 
-  EncryptionTaskManager._internal();
+  EncryptionTaskManager._internal() {
+    _loadQueue();
+  }
 
   final List<EncryptionTask> _tasks = [];
+  bool _isSaving = false;
 
   List<EncryptionTask> get tasks => List.unmodifiable(_tasks);
 
+  Future<void> _loadQueue() async {
+    try {
+      final directory = await getApplicationDocumentsDirectory();
+      final file = File('${directory.path}/encryption_queue.json');
+      if (await file.exists()) {
+        final content = await file.readAsString();
+        if (content.isEmpty) return;
+        final List<dynamic> jsonList = jsonDecode(content);
+        final loadedTasks = jsonList.map((e) => EncryptionTask.fromJson(e as Map<String, dynamic>)).toList();
+        
+        // Pause all ongoing tasks, fail interrupted files
+        for (var task in loadedTasks) {
+          _pauseOrFailTaskRecursive(task);
+        }
+        
+        _tasks.addAll(loadedTasks);
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint('Failed to load encryption queue: $e');
+    }
+  }
+
+  void _pauseOrFailTaskRecursive(EncryptionTask task) {
+    if (task.children.isEmpty) {
+      // If it's a file and it was encrypting or partially done
+      if (task.status == 'encrypting' || (task.processedBytes > 0 && task.processedBytes < task.totalBytes)) {
+        task.status = 'failed';
+        task.processedBytes = 0;
+        task.error = 'Encryption interrupted';
+      }
+    } else {
+      // It's a directory
+      for (var child in task.children) {
+        _pauseOrFailTaskRecursive(child);
+      }
+      // If the overall task was in progress, mark it as paused so user can manually resume
+      if (task.status == 'encrypting' || task.status == 'pending') {
+        task.status = 'paused';
+      }
+    }
+  }
+
+  Timer? _saveTimer;
+
+  Future<void> _saveQueue() async {
+    if (_isSaving) {
+      // If currently saving, schedule another save soon
+      _scheduleSave();
+      return;
+    }
+    _isSaving = true;
+    try {
+      final directory = await getApplicationDocumentsDirectory();
+      final file = File('${directory.path}/encryption_queue.json');
+      final jsonString = jsonEncode(_tasks.map((t) => t.toJson()).toList());
+      await file.writeAsString(jsonString);
+    } catch (e) {
+      debugPrint('Failed to save encryption queue: $e');
+    } finally {
+      _isSaving = false;
+    }
+  }
+
+  void _scheduleSave() {
+    if (_saveTimer?.isActive ?? false) return;
+    _saveTimer = Timer(const Duration(milliseconds: 500), () {
+      _saveQueue();
+    });
+  }
+
   void addTask(EncryptionTask task) {
     _tasks.add(task);
+    _saveQueue();
     notifyListeners();
   }
 
@@ -115,6 +230,7 @@ class EncryptionTaskManager extends ChangeNotifier {
     final parent = findTask(parentId);
     if (parent != null) {
       parent.children.add(child);
+      _saveQueue();
       notifyListeners();
     }
   }
@@ -124,6 +240,7 @@ class EncryptionTaskManager extends ChangeNotifier {
     if (task != null) {
       task.children.clear();
       task.children.addAll(_parseTree(treeMap['children'] as List<dynamic>));
+      _saveQueue();
       notifyListeners();
     }
   }
@@ -147,6 +264,7 @@ class EncryptionTaskManager extends ChangeNotifier {
     final task = findTask(id);
     if (task != null) {
       task.processedBytes = processedBytes;
+      _saveQueue();
       notifyListeners();
     }
   }
@@ -158,6 +276,7 @@ class EncryptionTaskManager extends ChangeNotifier {
       if (error != null) {
         task.error = error;
       }
+      _saveQueue();
       notifyListeners();
     }
   }
@@ -171,6 +290,7 @@ class EncryptionTaskManager extends ChangeNotifier {
 
   void removeTask(String id) {
     _tasks.removeWhere((t) => t.id == id);
+    _saveQueue();
     notifyListeners();
   }
 }
