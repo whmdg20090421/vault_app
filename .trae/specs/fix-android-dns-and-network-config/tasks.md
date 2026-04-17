@@ -8,5 +8,6 @@
   - 说明：在 `<application>` 标签中添加 `android:networkSecurityConfig="@xml/network_security_config"`。
 - [ ] Task 4: 编写 Dart 终极诊断脚本
   - 说明：仅使用原生 `dart:io` 的 `Socket.connect` 和 `InternetAddress.lookup` 编写诊断函数，并返回相关日志。
+  - 增强：使用 `NetworkInterface.list()` 打印所有活跃的网卡接口（如 wlan0, tun0, rmnet0），以排查 WIFI、VPN 与蜂窝数据网络的流量走向通道。
 - [ ] Task 5: 总结与原因分析
   - 说明：输出修复方案并解释为什么在 Android 14/15 上即使配置了 `INTERNET` 权限仍会出现 DNS 拦截（证书不受信、targetSdk>33 引入的更严格的 cleartext 和网络访问限制等）。

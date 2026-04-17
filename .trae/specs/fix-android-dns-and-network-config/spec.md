@@ -7,7 +7,7 @@
 - **Gradle SDK 配置**：推荐并调整 `android/app/build.gradle.kts`（或通过 Flutter 默认变量说明），确保 `compileSdk`、`targetSdk` 及 `minSdk` 符合 Android 14/15 (API 34/35) 的现代网络安全标准。
 - **网络安全配置文件**：新增 `network_security_config.xml`，配置信任系统与用户证书，并合理放开明文流量（`cleartextTrafficPermitted="true"`），解决证书或域名被系统底层拦截的问题。
 - **Manifest 挂载配置**：在 `AndroidManifest.xml` 的 `<application>` 标签中，追加挂载 `android:networkSecurityConfig="@xml/network_security_config"`。
-- **Dart 终极诊断脚本**：提供一个仅依赖 `dart:io` 的网络与 DNS 诊断函数，用于在应用启动时快速区分是系统 DNS 瘫痪还是 App 缺乏底层网络权限。
+- **Dart 终极诊断脚本**：提供一个仅依赖 `dart:io` 的网络与 DNS 诊断函数，用于在应用启动时快速区分是系统 DNS 瘫痪还是 App 缺乏底层网络权限，同时通过 `NetworkInterface.list()` 输出当前活跃的网络通道（如 WIFI、VPN、蜂窝数据），排查流量走向和网卡绑定问题。
 
 ## Impact
 - Affected specs: 无

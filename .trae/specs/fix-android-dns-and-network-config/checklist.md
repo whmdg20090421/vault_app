@@ -1,5 +1,5 @@
 - [ ] `android/app/build.gradle.kts` SDK 兼容性审查完成，已提供推荐配置和修复代码。
 - [ ] `network_security_config.xml` 文件内容已生成，路径正确指定。
 - [ ] `AndroidManifest.xml` 中已正确添加了 `android:networkSecurityConfig="@xml/network_security_config"` 的挂载代码片段。
-- [ ] Dart 终极诊断脚本编写完成，能区分直连公网 IP 与域名解析。
+- [ ] Dart 终极诊断脚本编写完成，能区分直连公网 IP 与域名解析，并输出 WIFI、VPN、蜂窝网络等底层网络通道信息。
 - [ ] 详细的原因分析已在最终回复中提供。
