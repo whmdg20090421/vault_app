@@ -62,35 +62,77 @@ class _HomePageState extends State<HomePage> {
                     )
                   else
                     Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: LinearProgressIndicator(
-                            value: encryptedPercentage,
-                            minHeight: 24,
-                            backgroundColor: Colors.red,
-                            color: Colors.green,
-                          ),
+                        TweenAnimationBuilder<double>(
+                          tween: Tween<double>(begin: 0, end: encryptedPercentage),
+                          duration: const Duration(milliseconds: 1200),
+                          curve: Curves.easeOutCubic,
+                          builder: (context, value, child) {
+                            return Container(
+                              height: 24,
+                              width: double.infinity,
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(12),
+                                // 未加密部分背景
+                                gradient: LinearGradient(
+                                  colors: [Colors.red.shade400, Colors.red.shade700],
+                                  begin: Alignment.centerLeft,
+                                  end: Alignment.centerRight,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.red.withOpacity(0.3),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: Stack(
+                                children: [
+                                  // 已加密部分前景（带发光效果）
+                                  FractionallySizedBox(
+                                    widthFactor: value,
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(12),
+                                        gradient: const LinearGradient(
+                                          colors: [Colors.greenAccent, Colors.green],
+                                          begin: Alignment.centerLeft,
+                                          end: Alignment.centerRight,
+                                        ),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.greenAccent.withOpacity(0.6),
+                                            blurRadius: 10,
+                                            spreadRadius: 1,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
                         ),
                         const SizedBox(height: 24),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceAround,
-                          children: [
-                            Expanded(
-                              child: _Indicator(
-                                color: Colors.green,
-                                text: '已加密',
-                                subtext: FormatUtils.formatBytes(encryptedBytes),
-                              ),
-                            ),
-                            Expanded(
-                              child: _Indicator(
-                                color: Colors.red,
-                                text: '未加密',
-                                subtext: FormatUtils.formatBytes(unencryptedBytes),
-                              ),
-                            ),
-                          ],
+                        Text(
+                          '🟩 已加密: ${FormatUtils.formatBytes(encryptedBytes)} (${(encryptedPercentage * 100).toStringAsFixed(0)}%)',
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                            fontFamily: 'monospace',
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          '🟥 未加密: ${FormatUtils.formatBytes(unencryptedBytes)} (${((1 - encryptedPercentage) * 100).toStringAsFixed(0)}%)',
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                            fontFamily: 'monospace',
+                          ),
                         ),
                       ],
                     ),
@@ -102,57 +144,6 @@ class _HomePageState extends State<HomePage> {
       ),
     );
       },
-    );
-  }
-}
-
-class _Indicator extends StatelessWidget {
-  final Color color;
-  final String text;
-  final String subtext;
-
-  const _Indicator({
-    required this.color,
-    required this.text,
-    required this.subtext,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: <Widget>[
-        Container(
-          width: 16,
-          height: 16,
-          decoration: BoxDecoration(
-            shape: BoxShape.rectangle,
-            color: color,
-            borderRadius: BorderRadius.circular(4),
-          ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                text,
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 4),
-              Text(
-                subtext,
-                style: const TextStyle(fontSize: 12, color: Colors.grey, fontFamily: 'monospace'),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
-          ),
-        )
-      ],
     );
   }
 }

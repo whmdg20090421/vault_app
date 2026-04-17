@@ -27,6 +27,42 @@ class ChangelogPage extends StatelessWidget {
             ],
           ),
           ExpansionTile(
+            title: Text('版本 1.2.2 (2026-04-16)'),
+            children: [
+              ListTile(
+                title: Text(
+                    '🐛 Bug Fixes & Stability\n'
+                    '• 修复部分设备上切换主题时的闪退问题。\n'
+                    '• 优化了后台任务的内存占用，提升应用整体稳定性。'
+                ),
+              ),
+            ],
+          ),
+          ExpansionTile(
+            title: Text('版本 1.2.1 (2026-04-16)'),
+            children: [
+              ListTile(
+                title: Text(
+                    '✨ UI Enhancements\n'
+                    '• 优化了设置页面的排版与图标对齐。\n'
+                    '• 增加了动画过渡效果，使交互更加流畅。'
+                ),
+              ),
+            ],
+          ),
+          ExpansionTile(
+            title: Text('版本 1.2.0 (2026-04-16)'),
+            children: [
+              ListTile(
+                title: Text(
+                    '✨ Architecture Updates\n'
+                    '• 重构了状态管理模块，为后续新功能打下基础。\n'
+                    '• 更新了核心依赖库，提升应用启动速度。'
+                ),
+              ),
+            ],
+          ),
+          ExpansionTile(
             title: Text('版本 1.1.4 (2026-04-16)'),
             children: [
               ListTile(

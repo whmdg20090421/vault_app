@@ -35,16 +35,32 @@ Future<void> _doImportFileIsolate(Map<String, dynamic> args) async {
   }
 
   try {
-    int processedBytes = 0;
     for (final fileInfo in files) {
       final localPath = fileInfo['localPath']!;
       final remotePath = fileInfo['remotePath']!;
       final file = File(localPath);
       if (await file.exists()) {
         final size = await file.length();
-        await vfs.upload(localPath, remotePath);
-        processedBytes += size;
-        sendPort.send({'type': 'progress', 'taskId': taskId, 'bytes': processedBytes});
+        final childId = '$taskId/${p.basename(localPath)}';
+        
+        sendPort.send({
+          'type': 'add_child',
+          'taskId': taskId,
+          'child': {
+            'id': childId,
+            'name': p.basename(localPath),
+            'isDirectory': false,
+            'totalBytes': size,
+          }
+        });
+
+        int bytesProcessed = 0;
+        final stream = file.openRead().map((chunk) {
+          bytesProcessed += chunk.length;
+          sendPort.send({'type': 'progress', 'taskId': childId, 'bytes': bytesProcessed});
+          return chunk;
+        });
+        await vfs.uploadStream(stream, size, remotePath);
       }
     }
     sendPort.send({'type': 'done', 'taskId': taskId});
@@ -79,24 +95,122 @@ Future<void> _doImportFolderIsolate(Map<String, dynamic> args) async {
       final remoteDirPath = p.join(currentPath, baseName).replaceAll(r'\', '/');
       await vfs.mkdir(remoteDirPath);
 
-      int processedBytes = 0;
+      // Build task tree recursively
+      Map<String, dynamic> buildTree(Directory d, String parentId) {
+        int totalSize = 0;
+        List<Map<String, dynamic>> children = [];
+        for (final entity in d.listSync()) {
+          final id = '$parentId/${p.basename(entity.path)}';
+          if (entity is File) {
+            final size = entity.lengthSync();
+            totalSize += size;
+            children.add({
+              'id': id,
+              'name': p.basename(entity.path),
+              'isDirectory': false,
+              'totalBytes': size,
+              'path': entity.path,
+            });
+          } else if (entity is Directory) {
+            final childMap = buildTree(entity, id);
+            totalSize += childMap['totalBytes'] as int;
+            children.add(childMap);
+          }
+        }
+        return {
+          'id': parentId,
+          'name': p.basename(d.path),
+          'isDirectory': true,
+          'totalBytes': totalSize,
+          'children': children,
+        };
+      }
 
-      await for (final entity in dir.list(recursive: true)) {
-        final relativePath = p.relative(entity.path, from: result);
-        final remotePath = p.join(remoteDirPath, relativePath).replaceAll(r'\', '/');
-        if (entity is File) {
-          final size = await entity.length();
-          await vfs.upload(entity.path, remotePath);
-          processedBytes += size;
-          sendPort.send({'type': 'progress', 'taskId': taskId, 'bytes': processedBytes});
-        } else if (entity is Directory) {
-          await vfs.mkdir(remotePath);
+      final treeMap = buildTree(dir, taskId);
+      sendPort.send({'type': 'tree', 'tree': treeMap});
+
+      // Now traverse the tree and process files
+      Future<void> processTree(Map<String, dynamic> node, String currentRemotePath) async {
+        if (node['isDirectory'] == true) {
+          final children = node['children'] as List<Map<String, dynamic>>;
+          for (final child in children) {
+            final remotePath = p.join(currentRemotePath, child['name'] as String).replaceAll(r'\', '/');
+            if (child['isDirectory'] == true) {
+              await vfs.mkdir(remotePath);
+              await processTree(child, remotePath);
+            } else {
+              final localPath = child['path'] as String;
+              final childId = child['id'] as String;
+              final size = child['totalBytes'] as int;
+              
+              final file = File(localPath);
+              int bytesProcessed = 0;
+              final stream = file.openRead().map((chunk) {
+                bytesProcessed += chunk.length;
+                sendPort.send({'type': 'progress', 'taskId': childId, 'bytes': bytesProcessed});
+                return chunk;
+              });
+              await vfs.uploadStream(stream, size, remotePath);
+            }
+          }
         }
       }
+
+      await processTree(treeMap, remoteDirPath);
+      sendPort.send({'type': 'done', 'taskId': taskId});
     }
-    sendPort.send({'type': 'done', 'taskId': taskId});
   } catch (e) {
     sendPort.send({'type': 'error', 'taskId': taskId, 'error': e.toString()});
+  }
+}
+
+Future<void> _doExportFileIsolate(Map<String, dynamic> args) async {
+  final nodePath = args['nodePath'] as String;
+  final outFilePath = args['outFilePath'] as String;
+  final vaultDirectoryPath = args['vaultDirectoryPath'] as String;
+  final masterKey = args['masterKey'] as Uint8List;
+  final encryptFilename = args['encryptFilename'] as bool;
+
+  final localVfs = LocalVfs(rootPath: vaultDirectoryPath);
+  VirtualFileSystem vfs;
+  if (encryptFilename) {
+    final encryptedVfs = EncryptedVfs(baseVfs: localVfs, masterKey: masterKey);
+    await encryptedVfs.initEncryptedDomain('/');
+    vfs = encryptedVfs;
+  } else {
+    vfs = localVfs;
+  }
+
+  final stream = await vfs.open(nodePath);
+  final outFile = File(outFilePath);
+  final sink = outFile.openWrite();
+  await stream.pipe(sink);
+}
+
+Future<void> _doShareFilesIsolate(Map<String, dynamic> args) async {
+  final nodes = args['nodes'] as List<Map<String, String>>;
+  final shareDirPath = args['shareDirPath'] as String;
+  final vaultDirectoryPath = args['vaultDirectoryPath'] as String;
+  final masterKey = args['masterKey'] as Uint8List;
+  final encryptFilename = args['encryptFilename'] as bool;
+
+  final localVfs = LocalVfs(rootPath: vaultDirectoryPath);
+  VirtualFileSystem vfs;
+  if (encryptFilename) {
+    final encryptedVfs = EncryptedVfs(baseVfs: localVfs, masterKey: masterKey);
+    await encryptedVfs.initEncryptedDomain('/');
+    vfs = encryptedVfs;
+  } else {
+    vfs = localVfs;
+  }
+
+  for (final node in nodes) {
+    final nodePath = node['path']!;
+    final nodeName = node['name']!;
+    final stream = await vfs.open(nodePath);
+    final tempFile = File(p.join(shareDirPath, nodeName));
+    final sink = tempFile.openWrite();
+    await stream.pipe(sink);
   }
 }
 
@@ -219,6 +333,15 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
             if (type == 'progress') {
               final bytes = message['bytes'] as int;
               EncryptionTaskManager().updateTaskProgress(tid, bytes);
+            } else if (type == 'add_child') {
+              final childMap = message['child'] as Map<String, dynamic>;
+              final child = EncryptionTask(
+                id: childMap['id'] as String,
+                name: childMap['name'] as String,
+                isDirectory: childMap['isDirectory'] as bool,
+                totalBytes: childMap['totalBytes'] as int,
+              );
+              EncryptionTaskManager().addChild(tid, child);
             } else if (type == 'done') {
               EncryptionTaskManager().updateTaskStatus(tid, 'completed');
               StatsService().recalculate();
@@ -303,6 +426,9 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
               if (type == 'progress') {
                 final bytes = message['bytes'] as int;
                 EncryptionTaskManager().updateTaskProgress(tid, bytes);
+              } else if (type == 'tree') {
+                final treeMap = message['tree'] as Map<String, dynamic>;
+                EncryptionTaskManager().updateTaskTree(tid, treeMap);
               } else if (type == 'done') {
                 EncryptionTaskManager().updateTaskStatus(tid, 'completed');
                 StatsService().recalculate();
@@ -362,10 +488,14 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
         );
       }
 
-      final stream = await _vfs.open(node.path);
       final outFile = File(p.join(selectedDir, node.name));
-      final sink = outFile.openWrite();
-      await stream.pipe(sink);
+      await Isolate.run(() => _doExportFileIsolate({
+        'nodePath': node.path,
+        'outFilePath': outFile.path,
+        'vaultDirectoryPath': widget.vaultDirectoryPath,
+        'masterKey': widget.masterKey,
+        'encryptFilename': widget.vaultConfig.encryptFilename,
+      }));
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -498,13 +628,22 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
       await shareDir.create(recursive: true);
 
       final xFiles = <XFile>[];
+      final nodesToShare = <Map<String, String>>[];
       for (final node in _selectedNodes) {
-        if (node.isDirectory) continue; // 仅支持分享文件
-        final stream = await _vfs.open(node.path);
-        final tempFile = File(p.join(shareDir.path, node.name));
-        final sink = tempFile.openWrite();
-        await stream.pipe(sink);
-        xFiles.add(XFile(tempFile.path));
+        if (node.isDirectory) continue;
+        nodesToShare.add({'path': node.path, 'name': node.name});
+        xFiles.add(XFile(p.join(shareDir.path, node.name)));
+      }
+
+      if (nodesToShare.isNotEmpty) {
+        final args = {
+          'nodes': nodesToShare,
+          'shareDirPath': shareDir.path,
+          'vaultDirectoryPath': widget.vaultDirectoryPath,
+          'masterKey': widget.masterKey,
+          'encryptFilename': widget.vaultConfig.encryptFilename,
+        };
+        await Isolate.run(() => _doShareFilesIsolate(args));
       }
 
       if (mounted) {
@@ -545,10 +684,14 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
       final previewDir = Directory(p.join(tempDir.path, 'vault_preview_${DateTime.now().millisecondsSinceEpoch}'));
       await previewDir.create(recursive: true);
 
-      final stream = await _vfs.open(file.path);
       final tempFile = File(p.join(previewDir.path, file.name));
-      final sink = tempFile.openWrite();
-      await stream.pipe(sink);
+      await Isolate.run(() => _doExportFileIsolate({
+        'nodePath': file.path,
+        'outFilePath': tempFile.path,
+        'vaultDirectoryPath': widget.vaultDirectoryPath,
+        'masterKey': widget.masterKey,
+        'encryptFilename': widget.vaultConfig.encryptFilename,
+      }));
 
       if (mounted) {
         Navigator.of(context).pop(); // Close loading

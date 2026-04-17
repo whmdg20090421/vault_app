@@ -8,8 +8,6 @@ import 'webdav_dashboard_page.dart';
 import 'webdav_edit_page.dart';
 import 'webdav_storage.dart';
 
-import 'sync_config_page.dart';
-
 class CloudDrivePage extends StatefulWidget {
   const CloudDrivePage({
     super.key,
@@ -275,19 +273,6 @@ class _CloudDrivePageState extends State<CloudDrivePage> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                FloatingActionButton.extended(
-                  heroTag: 'sync_task_btn',
-                  onPressed: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const SyncConfigPage(),
-                      ),
-                    );
-                  },
-                  icon: const Icon(Icons.sync),
-                  label: const Text('新建同步任务'),
-                ),
-                const SizedBox(height: 16),
                 FloatingActionButton.extended(
                   heroTag: 'add_webdav_btn',
                   onPressed: _create,

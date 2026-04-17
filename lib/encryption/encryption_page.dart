@@ -458,67 +458,7 @@ class EncryptionProgressPanel extends StatelessWidget {
                   itemCount: tasks.length,
                   itemBuilder: (context, index) {
                     final task = tasks[index];
-                    return Card(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      elevation: isCyberpunk ? 0 : 1,
-                      shape: isCyberpunk
-                          ? const RoundedRectangleBorder(
-                              borderRadius: BorderRadius.zero,
-                              side: BorderSide(color: Color(0xFF00E5FF), width: 1.0),
-                            )
-                          : RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                      color: isCyberpunk ? theme.colorScheme.surfaceContainer : theme.colorScheme.surface,
-                      child: Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    task.name,
-                                    style: const TextStyle(fontWeight: FontWeight.bold),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                _buildStatusBadge(theme, task.status),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-                            LinearProgressIndicator(
-                              value: task.progress,
-                              backgroundColor: theme.colorScheme.surfaceContainerHighest,
-                              color: _getStatusColor(theme, task.status),
-                            ),
-                            const SizedBox(height: 8),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(
-                                  '${(task.progress * 100).toStringAsFixed(1)}%',
-                                  style: theme.textTheme.bodySmall,
-                                ),
-                                Text(
-                                  '${FormatUtils.formatBytes(task.processedBytes)} / ${FormatUtils.formatBytes(task.totalBytes)}',
-                                  style: theme.textTheme.bodySmall?.copyWith(fontFamily: 'monospace'),
-                                ),
-                              ],
-                            ),
-                            if (task.error != null) ...[
-                              const SizedBox(height: 8),
-                              Text(
-                                task.error!,
-                                style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.error),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                    );
+                    return _TaskCard(task: task, isCyberpunk: isCyberpunk, theme: theme);
                   },
                 );
               },
@@ -527,6 +467,140 @@ class EncryptionProgressPanel extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+class _TaskCard extends StatefulWidget {
+  final EncryptionTask task;
+  final bool isCyberpunk;
+  final ThemeData theme;
+  final int depth;
+
+  const _TaskCard({
+    required this.task,
+    required this.isCyberpunk,
+    required this.theme,
+    this.depth = 0,
+  });
+
+  @override
+  State<_TaskCard> createState() => _TaskCardState();
+}
+
+class _TaskCardState extends State<_TaskCard> {
+  bool _isExpanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasChildren = widget.task.children.isNotEmpty;
+    final padding = EdgeInsets.only(
+      left: widget.depth == 0 ? 0 : 16.0,
+      bottom: widget.depth == 0 ? 12.0 : 0.0,
+    );
+
+    final content = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        InkWell(
+          onTap: hasChildren ? () => setState(() => _isExpanded = !_isExpanded) : null,
+          child: Padding(
+            padding: EdgeInsets.all(widget.depth == 0 ? 16.0 : 8.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    if (hasChildren)
+                      Icon(
+                        _isExpanded ? Icons.folder_open : Icons.folder,
+                        size: 20,
+                        color: widget.theme.colorScheme.primary,
+                      )
+                    else if (widget.depth > 0)
+                      Icon(Icons.insert_drive_file, size: 16, color: widget.theme.colorScheme.secondary),
+                    if (hasChildren || widget.depth > 0) const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        widget.task.name,
+                        style: TextStyle(
+                          fontWeight: widget.depth == 0 ? FontWeight.bold : FontWeight.normal,
+                          fontSize: widget.depth == 0 ? 16 : 14,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    _buildStatusBadge(widget.theme, widget.task.status),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                LinearProgressIndicator(
+                  value: widget.task.progress,
+                  backgroundColor: widget.theme.colorScheme.surfaceContainerHighest,
+                  color: _getStatusColor(widget.theme, widget.task.status),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      '${(widget.task.progress * 100).toStringAsFixed(1)}%',
+                      style: widget.theme.textTheme.bodySmall,
+                    ),
+                    Text(
+                      '${FormatUtils.formatBytes(widget.task.processedBytes)} / ${FormatUtils.formatBytes(widget.task.totalBytes)}',
+                      style: widget.theme.textTheme.bodySmall?.copyWith(fontFamily: 'monospace'),
+                    ),
+                  ],
+                ),
+                if (widget.task.error != null) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    widget.task.error!,
+                    style: widget.theme.textTheme.bodySmall?.copyWith(color: widget.theme.colorScheme.error),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+        if (hasChildren && _isExpanded)
+          Column(
+            children: widget.task.children.map((child) {
+              return _TaskCard(
+                task: child,
+                isCyberpunk: widget.isCyberpunk,
+                theme: widget.theme,
+                depth: widget.depth + 1,
+              );
+            }).toList(),
+          ),
+      ],
+    );
+
+    if (widget.depth == 0) {
+      return Padding(
+        padding: padding,
+        child: Card(
+          elevation: widget.isCyberpunk ? 0 : 1,
+          shape: widget.isCyberpunk
+              ? const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.zero,
+                  side: BorderSide(color: Color(0xFF00E5FF), width: 1.0),
+                )
+              : RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+          color: widget.isCyberpunk ? widget.theme.colorScheme.surfaceContainer : widget.theme.colorScheme.surface,
+          child: content,
+        ),
+      );
+    } else {
+      return Padding(
+        padding: padding,
+        child: content,
+      );
+    }
   }
 
   Widget _buildStatusBadge(ThemeData theme, String status) {
