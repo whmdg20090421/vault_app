@@ -43,7 +43,7 @@ class TianyanApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: Listenable.merge([appTheme, BackgroundSettings.instance, WebDAVStateManager.instance]),
+      listenable: Listenable.merge([appTheme, BackgroundSettings.instance]),
       builder: (context, _) {
         final theme = appTheme.value;
         final bg = BackgroundSettings.instance;

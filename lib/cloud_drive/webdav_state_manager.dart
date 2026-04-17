@@ -29,6 +29,9 @@ class WebDAVStateManager extends ChangeNotifier {
 
   void addLog(String message, {bool isError = false}) {
     _syncLogs.add(SyncLog(time: DateTime.now(), message: message, isError: isError));
+    if (_syncLogs.length > 500) {
+      _syncLogs.removeRange(0, _syncLogs.length - 500);
+    }
     notifyListeners();
   }
 

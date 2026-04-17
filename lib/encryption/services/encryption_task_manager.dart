@@ -134,6 +134,8 @@ class EncryptionTaskManager extends ChangeNotifier {
       );
     }).toList();
   }
+
+  void updateTaskProgress(String id, int processedBytes) {
     final task = findTask(id);
     if (task != null) {
       task.processedBytes = processedBytes;

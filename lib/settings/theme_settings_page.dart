@@ -13,10 +13,23 @@ class ThemeSettingsPage extends StatelessWidget {
     final pickedFile = await picker.pickImage(source: ImageSource.gallery);
     if (pickedFile != null) {
       final appDir = await getApplicationDocumentsDirectory();
-      final fileName = pickedFile.name;
-      final savedImage = File('${appDir.path}/$fileName');
+      final bgDir = Directory('${appDir.path}/backgrounds');
+      await bgDir.create(recursive: true);
+
+      final previousPath = BackgroundSettings.instance.imagePath;
+      if (previousPath != null) {
+        try {
+          final previous = File(previousPath);
+          if (previous.path.startsWith(bgDir.path) && await previous.exists()) {
+            await previous.delete();
+          }
+        } catch (_) {}
+      }
+
+      final ext = pickedFile.name.contains('.') ? '.${pickedFile.name.split('.').last}' : '';
+      final savedImage = File('${bgDir.path}/bg_${DateTime.now().millisecondsSinceEpoch}$ext');
       await File(pickedFile.path).copy(savedImage.path);
-      await BackgroundSettings.instance.setImagePath(savedImage.path);
+      BackgroundSettings.instance.setImagePath(savedImage.path);
     }
   }
 

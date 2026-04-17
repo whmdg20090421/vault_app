@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
@@ -184,7 +185,11 @@ Future<void> _doExportFileIsolate(Map<String, dynamic> args) async {
   final stream = await vfs.open(nodePath);
   final outFile = File(outFilePath);
   final sink = outFile.openWrite();
-  await stream.pipe(sink);
+  try {
+    await stream.pipe(sink);
+  } finally {
+    await sink.close();
+  }
 }
 
 Future<void> _doShareFilesIsolate(Map<String, dynamic> args) async {
@@ -210,7 +215,11 @@ Future<void> _doShareFilesIsolate(Map<String, dynamic> args) async {
     final stream = await vfs.open(nodePath);
     final tempFile = File(p.join(shareDirPath, nodeName));
     final sink = tempFile.openWrite();
-    await stream.pipe(sink);
+    try {
+      await stream.pipe(sink);
+    } finally {
+      await sink.close();
+    }
   }
 }
 
@@ -238,6 +247,30 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
   bool _isLoading = true;
   bool _isMultiSelectMode = false;
   final Set<VfsNode> _selectedNodes = {};
+  final List<ReceivePort> _receivePorts = [];
+  final List<Directory> _tempDirs = [];
+
+  @override
+  void dispose() {
+    for (final port in _receivePorts) {
+      try {
+        port.close();
+      } catch (_) {}
+    }
+    _receivePorts.clear();
+
+    for (final dir in _tempDirs) {
+      Future<void>(() async {
+        try {
+          if (await dir.exists()) {
+            await dir.delete(recursive: true);
+          }
+        } catch (_) {}
+      });
+    }
+    _tempDirs.clear();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -326,6 +359,7 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
         EncryptionTaskManager().addTask(task);
 
         final receivePort = ReceivePort();
+        _receivePorts.add(receivePort);
         receivePort.listen((message) {
           if (message is Map<String, dynamic>) {
             final type = message['type'];
@@ -349,6 +383,7 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
                 _loadCurrentDirectory();
               }
               receivePort.close();
+              _receivePorts.remove(receivePort);
             } else if (type == 'error') {
               final error = message['error'] as String;
               EncryptionTaskManager().updateTaskStatus(tid, 'failed', error: error);
@@ -358,6 +393,7 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
                 );
               }
               receivePort.close();
+              _receivePorts.remove(receivePort);
             }
           }
         });
@@ -419,6 +455,7 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
           EncryptionTaskManager().addTask(task);
 
           final receivePort = ReceivePort();
+          _receivePorts.add(receivePort);
           receivePort.listen((message) {
             if (message is Map<String, dynamic>) {
               final type = message['type'];
@@ -436,6 +473,7 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
                   _loadCurrentDirectory();
                 }
                 receivePort.close();
+                _receivePorts.remove(receivePort);
               } else if (type == 'error') {
                 final error = message['error'] as String;
                 EncryptionTaskManager().updateTaskStatus(tid, 'failed', error: error);
@@ -445,6 +483,7 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
                   );
                 }
                 receivePort.close();
+                _receivePorts.remove(receivePort);
               }
             }
           });
@@ -626,6 +665,7 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
       final tempDir = await getTemporaryDirectory();
       final shareDir = Directory(p.join(tempDir.path, 'vault_share_${DateTime.now().millisecondsSinceEpoch}'));
       await shareDir.create(recursive: true);
+      _tempDirs.add(shareDir);
 
       final xFiles = <XFile>[];
       final nodesToShare = <Map<String, String>>[];
@@ -654,10 +694,15 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
           );
           return;
         }
-        await Share.shareXFiles(xFiles, text: '来自加密保险箱的分享');
-        // 分享完成后清理临时文件
-        if (await shareDir.exists()) {
-          await shareDir.delete(recursive: true);
+        try {
+          await Share.shareXFiles(xFiles, text: '来自加密保险箱的分享');
+        } finally {
+          try {
+            if (await shareDir.exists()) {
+              await shareDir.delete(recursive: true);
+            }
+          } catch (_) {}
+          _tempDirs.remove(shareDir);
         }
       }
     } catch (e) {
@@ -683,6 +728,7 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
       final tempDir = await getTemporaryDirectory();
       final previewDir = Directory(p.join(tempDir.path, 'vault_preview_${DateTime.now().millisecondsSinceEpoch}'));
       await previewDir.create(recursive: true);
+      _tempDirs.add(previewDir);
 
       final tempFile = File(p.join(previewDir.path, file.name));
       await Isolate.run(() => _doExportFileIsolate({
@@ -701,8 +747,14 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
             SnackBar(content: Text('打开文件失败: ${result.message}')),
           );
         }
-        // 由于预览可能是异步外部进程，我们不能立即删除文件，可以依赖系统的临时目录清理，
-        // 或者保留一段时间。这里为简便，依赖系统自动清理临时目录。
+        Timer(const Duration(minutes: 10), () async {
+          try {
+            if (await previewDir.exists()) {
+              await previewDir.delete(recursive: true);
+            }
+          } catch (_) {}
+          _tempDirs.remove(previewDir);
+        });
       }
     } catch (e) {
       if (mounted) {

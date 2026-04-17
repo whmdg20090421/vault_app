@@ -4,6 +4,12 @@ import 'package:dio/dio.dart';
 import 'package:xml/xml.dart';
 import 'package:path_provider/path_provider.dart';
 
+String _redactSensitive(String input) {
+  return input
+      .replaceAll(RegExp(r'Authorization:\s*Basic\s+[A-Za-z0-9+/=]+', caseSensitive: false), 'Authorization: Basic <redacted>')
+      .replaceAll(RegExp(r'Basic\s+[A-Za-z0-9+/=]+', caseSensitive: false), 'Basic <redacted>');
+}
+
 class WebDavFile {
   final String name;
   final String path;
@@ -21,7 +27,7 @@ class WebDavFile {
 }
 
 String translateWebDavError(Object error) {
-  final errStr = error.toString();
+  final errStr = _redactSensitive(error.toString());
   if (error is SocketException) {
     return '网络连接失败：请检查网络设置或服务器地址是否正确 (${error.message})';
   }
@@ -55,13 +61,13 @@ String translateWebDavError(Object error) {
   if (errStr.contains('Failed host lookup')) return 'DNS解析失败：无法找到服务器地址';
   if (errStr.contains('Connection refused')) return '连接被拒绝：可能端口错误或服务未启动';
   if (errStr.contains('Failed to upload file') || errStr.contains('Failed to upload data')) {
-    return '上传失败：请检查服务器空间是否已满或权限设置 (原错误：$errStr)';
+    return '上传失败：请检查服务器空间是否已满或权限设置';
   }
   if (errStr.contains('Failed to download') || errStr.contains('Failed to read data')) {
-    return '下载失败：资源可能不存在或无法访问 (原错误：$errStr)';
+    return '下载失败：资源可能不存在或无法访问';
   }
   if (errStr.contains('Failed to move')) {
-    return '移动/重命名失败：可能是目标路径已存在或没有权限 (原错误：$errStr)';
+    return '移动/重命名失败：可能是目标路径已存在或没有权限';
   }
   if (errStr.contains('File not found')) {
     return '文件不存在或已被删除';
@@ -76,12 +82,13 @@ class WebDavClientService {
     required this.username,
     required this.password,
   }) {
+    final authHeader = 'Basic ${base64Encode(utf8.encode('$username:$password'))}';
     _dio = Dio(BaseOptions(
       baseUrl: url,
       connectTimeout: const Duration(seconds: 30),
       receiveTimeout: const Duration(seconds: 30),
       headers: {
-        'Authorization': 'Basic ${base64Encode(utf8.encode('$username:$password'))}',
+        'Authorization': authHeader,
       },
     ));
     _dio.interceptors.add(InterceptorsWrapper(
@@ -94,8 +101,13 @@ class WebDavClientService {
 
   final String url;
   final String username;
-  final String password;
   late final Dio _dio;
+
+  static String _redact(String input) {
+    return input
+        .replaceAll(RegExp(r'Authorization:\s*Basic\s+[A-Za-z0-9+/=]+', caseSensitive: false), 'Authorization: Basic <redacted>')
+        .replaceAll(RegExp(r'Basic\s+[A-Za-z0-9+/=]+', caseSensitive: false), 'Basic <redacted>');
+  }
 
   Future<void> _logError(DioException e) async {
     try {
@@ -108,7 +120,15 @@ class WebDavClientService {
       if (dir != null) {
         final logFile = File('${dir.path}/webdav_error_log.txt');
         final time = DateTime.now().toIso8601String();
-        await logFile.writeAsString('[$time] ${e.type}: ${e.message}\n${e.stackTrace}\n\n', mode: FileMode.append);
+        final uri = e.requestOptions.uri.toString();
+        final method = e.requestOptions.method;
+        final status = e.response?.statusCode;
+        final safeMessage = _redact(e.message ?? '');
+        await logFile.writeAsString(
+          '[$time] $method $uri status=$status type=${e.type} message=$safeMessage\n${e.stackTrace}\n\n',
+          mode: FileMode.append,
+          flush: true,
+        );
       }
     } catch (_) {}
   }
