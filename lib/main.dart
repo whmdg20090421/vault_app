@@ -47,18 +47,20 @@ class TianyanApp extends StatelessWidget {
       builder: (context, _) {
         final theme = appTheme.value;
         final bg = BackgroundSettings.instance;
-        return _BackgroundShell(
-          theme: theme,
-          enabled: bg.enabled,
-          imagePath: bg.imagePath,
-          imageOpacity: bg.imageOpacity,
-          child: MaterialApp(
-            debugShowCheckedModeBanner: false,
-            title: '天眼·艨艟战舰',
-            theme: buildTheme(theme, bg.enabled, bg.uiOpacity),
-            builder: (context, child) => child ?? const SizedBox.shrink(),
-            home: const MainShell(),
-          ),
+        return MaterialApp(
+          debugShowCheckedModeBanner: false,
+          title: '天眼·艨艟战舰',
+          theme: buildTheme(theme, bg.enabled, bg.uiOpacity),
+          builder: (context, child) {
+            return _BackgroundShell(
+              theme: theme,
+              enabled: bg.enabled,
+              imagePath: bg.imagePath,
+              imageOpacity: bg.imageOpacity,
+              child: child ?? const SizedBox.shrink(),
+            );
+          },
+          home: const MainShell(),
         );
       },
     );
