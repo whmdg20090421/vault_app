@@ -307,7 +307,7 @@ class EncryptedVfs implements VirtualFileSystem {
         final cipherChunk = Uint8List.fromList(buffer.sublist(0, _chunkCipherSize));
         buffer.removeRange(0, _chunkCipherSize);
 
-        final plainChunk = await _chunkCrypto.decryptChunk(
+        final plainChunk = _chunkCrypto.decryptChunkSync(
           chunkData: cipherChunk,
           fileId: fileId,
           chunkIndex: currentChunkIndex,
@@ -324,7 +324,7 @@ class EncryptedVfs implements VirtualFileSystem {
     }
 
     if (buffer.isNotEmpty) {
-      final plainChunk = await _chunkCrypto.decryptChunk(
+      final plainChunk = _chunkCrypto.decryptChunkSync(
         chunkData: Uint8List.fromList(buffer),
         fileId: fileId,
         chunkIndex: currentChunkIndex,
@@ -436,7 +436,7 @@ class EncryptedVfs implements VirtualFileSystem {
       while (buffer.length >= _chunkSize) {
         final plainChunk = Uint8List.fromList(buffer.sublist(0, _chunkSize));
         buffer.removeRange(0, _chunkSize);
-        yield await _chunkCrypto.encryptChunk(
+        yield _chunkCrypto.encryptChunkSync(
           chunkData: plainChunk,
           fileId: fileId,
           chunkIndex: currentChunkIndex,
@@ -446,7 +446,7 @@ class EncryptedVfs implements VirtualFileSystem {
     }
 
     if (buffer.isNotEmpty) {
-      yield await _chunkCrypto.encryptChunk(
+      yield _chunkCrypto.encryptChunkSync(
         chunkData: Uint8List.fromList(buffer),
         fileId: fileId,
         chunkIndex: currentChunkIndex,

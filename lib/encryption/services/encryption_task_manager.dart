@@ -38,7 +38,15 @@ class EncryptionTask {
   set processedBytes(int value) => _processedBytes = value;
 
   String get status {
-    if (children.isEmpty) return _status;
+    if (children.isEmpty) {
+      if (_status == 'pending' && _processedBytes > 0 && _processedBytes < _totalBytes) {
+        return 'encrypting';
+      }
+      if (_status == 'pending' && _processedBytes == _totalBytes && _totalBytes > 0) {
+        return 'completed';
+      }
+      return _status;
+    }
     bool hasFailed = false;
     bool hasEncrypting = false;
     bool hasPending = false;
@@ -146,11 +154,18 @@ class EncryptionTaskManager extends ChangeNotifier {
   void updateTaskStatus(String id, String status, {String? error}) {
     final task = findTask(id);
     if (task != null) {
-      task.status = status;
+      _updateStatusRecursive(task, status);
       if (error != null) {
         task.error = error;
       }
       notifyListeners();
+    }
+  }
+
+  void _updateStatusRecursive(EncryptionTask task, String status) {
+    task.status = status;
+    for (final child in task.children) {
+      _updateStatusRecursive(child, status);
     }
   }
 

@@ -58,12 +58,23 @@ Future<void> doImportFileIsolate(Map<String, dynamic> args) async {
         });
 
         int bytesProcessed = 0;
+        int lastReportedBytes = 0;
+        int lastReportTime = DateTime.now().millisecondsSinceEpoch;
+        
         final stream = file.openRead().map((chunk) {
           bytesProcessed += chunk.length;
-          sendPort.send({'type': 'progress', 'taskId': childId, 'bytes': bytesProcessed});
+          final now = DateTime.now().millisecondsSinceEpoch;
+          // Throttle progress updates to every 500ms or 1MB
+          if (bytesProcessed - lastReportedBytes >= 1024 * 1024 || now - lastReportTime >= 500) {
+            sendPort.send({'type': 'progress', 'taskId': childId, 'bytes': bytesProcessed});
+            lastReportedBytes = bytesProcessed;
+            lastReportTime = now;
+          }
           return chunk;
         });
         await vfs.uploadStream(stream, size, remotePath);
+        // Ensure final progress is reported
+        sendPort.send({'type': 'progress', 'taskId': childId, 'bytes': bytesProcessed});
       }
     }
     sendPort.send({'type': 'done', 'taskId': taskId});
@@ -149,12 +160,22 @@ Future<void> doImportFolderIsolate(Map<String, dynamic> args) async {
               
               final file = File(localPath);
               int bytesProcessed = 0;
+              int lastReportedBytes = 0;
+              int lastReportTime = DateTime.now().millisecondsSinceEpoch;
+
               final stream = file.openRead().map((chunk) {
                 bytesProcessed += chunk.length;
-                sendPort.send({'type': 'progress', 'taskId': childId, 'bytes': bytesProcessed});
+                final now = DateTime.now().millisecondsSinceEpoch;
+                if (bytesProcessed - lastReportedBytes >= 1024 * 1024 || now - lastReportTime >= 500) {
+                  sendPort.send({'type': 'progress', 'taskId': childId, 'bytes': bytesProcessed});
+                  lastReportedBytes = bytesProcessed;
+                  lastReportTime = now;
+                }
                 return chunk;
               });
               await vfs.uploadStream(stream, size, remotePath);
+              // Ensure final progress is reported
+              sendPort.send({'type': 'progress', 'taskId': childId, 'bytes': bytesProcessed});
             }
           }
         }

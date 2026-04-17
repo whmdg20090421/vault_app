@@ -1,8 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:dio/dio.dart';
-import 'package:xml/xml.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:webdav_client/webdav_client.dart' as webdav;
 
 String _redactSensitive(String input) {
   return input
@@ -82,26 +83,29 @@ class WebDavClientService {
     required this.username,
     required String password,
   }) {
-    final authHeader = 'Basic ${base64Encode(utf8.encode('$username:$password'))}';
-    _dio = Dio(BaseOptions(
-      baseUrl: url,
-      connectTimeout: const Duration(seconds: 30),
-      receiveTimeout: const Duration(seconds: 30),
-      headers: {
-        'Authorization': authHeader,
-      },
-    ));
-    _dio.interceptors.add(InterceptorsWrapper(
+    _client = webdav.newClient(
+      url,
+      user: username,
+      password: password,
+      debug: false,
+    );
+    _client.setConnectTimeout(30000);
+    _client.setSendTimeout(30000);
+    _client.setReceiveTimeout(30000);
+
+    _client.c.interceptors.add(InterceptorsWrapper(
       onError: (DioException e, handler) async {
         await _logError(e);
         handler.next(e);
       },
     ));
+    _authHeader = 'Basic ${base64Encode(utf8.encode('$username:$password'))}';
   }
 
   final String url;
   final String username;
-  late final Dio _dio;
+  late final webdav.Client _client;
+  late final String _authHeader;
 
   static String _redact(String input) {
     return input
@@ -145,210 +149,83 @@ class WebDavClientService {
     return fullUrl + segments;
   }
 
+  WebDavFile _mapFile(webdav.File f) {
+    return WebDavFile(
+      name: f.name ?? f.path?.split('/').lastWhere((e) => e.isNotEmpty, orElse: () => 'unknown') ?? 'unknown',
+      path: f.path ?? '',
+      isDirectory: f.isDir ?? false,
+      size: f.size ?? 0,
+      lastModified: f.mTime,
+    );
+  }
+
   /// PROPFIND: Get list of files in a directory
   Future<List<WebDavFile>> readDir(String path) async {
-    final uri = Uri.parse(url);
-    final host = uri.host;
-    final port = uri.hasPort ? ':${uri.port}' : '';
-    final hostHeader = '$host$port';
-
-    final response = await _dio.request(
-      _buildUrl(path),
-      options: Options(
-        method: 'PROPFIND',
-        headers: {
-          'Depth': '1',
-          'Host': hostHeader,
-        },
-        responseType: ResponseType.plain,
-      ),
-    );
-
-    if (response.statusCode != null && response.statusCode! >= 400) {
-      throw Exception('Failed to read directory: ${response.statusCode}');
-    }
-
-    final body = response.data.toString();
-    final document = XmlDocument.parse(body);
-    final responses = document.findAllElements('d:response').toList();
-    if (responses.isEmpty) {
-      responses.addAll(document.findAllElements('response'));
-    }
-
-    List<WebDavFile> files = [];
-    for (var r in responses) {
-      var href = r.findElements('d:href').firstOrNull?.innerText ?? r.findElements('href').firstOrNull?.innerText ?? '';
-      href = Uri.decodeComponent(href);
-
-      final propstat = r.findElements('d:propstat').firstOrNull ?? r.findElements('propstat').firstOrNull;
-      final prop = propstat?.findElements('d:prop').firstOrNull ?? propstat?.findElements('prop').firstOrNull;
-
-      if (prop != null) {
-        final resourcetype = prop.findElements('d:resourcetype').firstOrNull ?? prop.findElements('resourcetype').firstOrNull;
-        final isCollection = (resourcetype?.findElements('d:collection').isNotEmpty ?? false) || (resourcetype?.findElements('collection').isNotEmpty ?? false);
-
-        final getcontentlength = prop.findElements('d:getcontentlength').firstOrNull?.innerText ?? prop.findElements('getcontentlength').firstOrNull?.innerText ?? '0';
-        final size = int.tryParse(getcontentlength) ?? 0;
-
-        final getlastmodified = prop.findElements('d:getlastmodified').firstOrNull?.innerText ?? prop.findElements('getlastmodified').firstOrNull?.innerText;
-        DateTime? lastModified;
-        if (getlastmodified != null) {
-          try {
-            lastModified = HttpDate.parse(getlastmodified);
-          } catch (e) {
-            // Ignore parse error
-          }
-        }
-
-        String name = href;
-        if (name.endsWith('/')) {
-          name = name.substring(0, name.length - 1);
-        }
-        name = name.split('/').last;
-
-        files.add(WebDavFile(
-          name: name,
-          path: href,
-          isDirectory: isCollection,
-          size: size,
-          lastModified: lastModified,
-        ));
-      }
-    }
-    return files;
+    final list = await _client.readDir(path);
+    // Remove the directory itself if returned
+    return list
+        .where((f) => f.path != path && f.path != '$path/')
+        .map(_mapFile)
+        .toList();
   }
 
   /// MKCOL: Create a new directory
   Future<void> mkdir(String path) async {
-    final uri = Uri.parse(url);
-    final hostHeader = '${uri.host}${uri.hasPort ? ':${uri.port}' : ''}';
-    
-    try {
-      await _dio.request(
-        _buildUrl(path),
-        options: Options(
-          method: 'MKCOL',
-          headers: {'Host': hostHeader},
-        ),
-      );
-    } on DioException catch (e) {
-      if (e.response?.statusCode != 405) {
-        throw Exception('Failed to create directory: ${e.response?.statusCode ?? e.message}');
-      }
-    }
+    await _client.mkdir(path);
   }
 
   /// DELETE: Remove a file or directory
   Future<void> remove(String path) async {
-    final uri = Uri.parse(url);
-    final hostHeader = '${uri.host}${uri.hasPort ? ':${uri.port}' : ''}';
-
-    await _dio.request(
-      _buildUrl(path),
-      options: Options(
-        method: 'DELETE',
-        headers: {'Host': hostHeader},
-      ),
-    );
+    await _client.removeAll(path);
   }
 
   /// PUT: Upload a file
   Future<void> upload(String localFilePath, String remotePath) async {
-    final file = File(localFilePath);
-    final uri = Uri.parse(url);
-    final hostHeader = '${uri.host}${uri.hasPort ? ':${uri.port}' : ''}';
-
-    await _dio.put(
-      _buildUrl(remotePath),
-      data: file.openRead(),
-      options: Options(
-        headers: {
-          HttpHeaders.contentLengthHeader: await file.length(),
-          'Host': hostHeader,
-        },
-      ),
-    );
+    await _client.writeFromFile(localFilePath, remotePath);
   }
 
   /// PUT: Upload raw bytes
   Future<void> uploadData(List<int> data, String remotePath) async {
-    final uri = Uri.parse(url);
-    final hostHeader = '${uri.host}${uri.hasPort ? ':${uri.port}' : ''}';
-
-    await _dio.put(
-      _buildUrl(remotePath),
-      data: Stream.fromIterable([data]),
-      options: Options(
-        headers: {
-          HttpHeaders.contentLengthHeader: data.length,
-          'Host': hostHeader,
-        },
-      ),
-    );
+    await _client.write(remotePath, Uint8List.fromList(data));
   }
 
   /// PUT: Upload stream with known length
   Future<void> uploadStream(Stream<List<int>> stream, int length, String remotePath) async {
-    final uri = Uri.parse(url);
-    final hostHeader = '${uri.host}${uri.hasPort ? ':${uri.port}' : ''}';
-
-    await _dio.put(
-      _buildUrl(remotePath),
-      data: stream,
-      options: Options(
-        headers: {
-          HttpHeaders.contentLengthHeader: length,
-          'Host': hostHeader,
-        },
-      ),
+    await _client.c.wdWriteWithStream(
+      _client,
+      remotePath,
+      stream,
+      length,
     );
   }
 
   /// GET: Download a file to local path
   Future<void> download(String remotePath, String localFilePath) async {
-    final uri = Uri.parse(url);
-    final hostHeader = '${uri.host}${uri.hasPort ? ':${uri.port}' : ''}';
-
-    await _dio.download(
-      _buildUrl(remotePath),
-      localFilePath,
-      options: Options(
-        headers: {'Host': hostHeader},
-      ),
-    );
+    await _client.read2File(remotePath, localFilePath);
   }
 
   /// GET: Read raw bytes
   Future<List<int>> readData(String remotePath) async {
-    final uri = Uri.parse(url);
-    final hostHeader = '${uri.host}${uri.hasPort ? ':${uri.port}' : ''}';
-
-    final response = await _dio.get<List<int>>(
-      _buildUrl(remotePath),
-      options: Options(
-        responseType: ResponseType.bytes,
-        headers: {'Host': hostHeader},
-      ),
-    );
-    return response.data ?? [];
+    return await _client.read(remotePath);
   }
 
   Future<List<int>> readDataWithRange(String remotePath, {int? start, int? end}) async {
-    final uri = Uri.parse(url);
-    final hostHeader = '${uri.host}${uri.hasPort ? ':${uri.port}' : ''}';
-
     String rangeHeader = 'bytes=';
     if (start != null) rangeHeader += '$start';
     rangeHeader += '-';
     if (end != null) rangeHeader += '$end';
 
-    final response = await _dio.get<List<int>>(
+    final uri = Uri.parse(url);
+    final hostHeader = '${uri.host}${uri.hasPort ? ':${uri.port}' : ''}';
+
+    final response = await _client.c.get<List<int>>(
       _buildUrl(remotePath),
       options: Options(
         responseType: ResponseType.bytes,
         headers: {
           'Host': hostHeader,
           'Range': rangeHeader,
+          'Authorization': _authHeader,
         },
       ),
     );
@@ -357,92 +234,12 @@ class WebDavClientService {
 
   /// MOVE: Rename or move a file/directory
   Future<void> rename(String oldPath, String newPath) async {
-    final destination = _buildUrl(newPath);
-    final uri = Uri.parse(url);
-    final hostHeader = '${uri.host}${uri.hasPort ? ':${uri.port}' : ''}';
-
-    await _dio.request(
-      _buildUrl(oldPath),
-      options: Options(
-        method: 'MOVE',
-        headers: {
-          'Destination': destination,
-          'Overwrite': 'F',
-          'Host': hostHeader,
-        },
-      ),
-    );
+    await _client.rename(oldPath, newPath, false);
   }
 
   /// Get specific file info
   Future<WebDavFile> stat(String path) async {
-    final uri = Uri.parse(url);
-    final hostHeader = '${uri.host}${uri.hasPort ? ':${uri.port}' : ''}';
-
-    final response = await _dio.request(
-      _buildUrl(path),
-      options: Options(
-        method: 'PROPFIND',
-        headers: {
-          'Depth': '0',
-          'Host': hostHeader,
-        },
-        responseType: ResponseType.plain,
-      ),
-    );
-
-    if (response.statusCode != null && response.statusCode! >= 400) {
-      throw Exception('Failed to get file info: ${response.statusCode}');
-    }
-
-    final body = response.data.toString();
-    final document = XmlDocument.parse(body);
-    final responses = document.findAllElements('d:response').toList();
-    if (responses.isEmpty) {
-      responses.addAll(document.findAllElements('response'));
-    }
-
-    if (responses.isEmpty) throw Exception('File not found');
-
-    var r = responses.first;
-    var href = r.findElements('d:href').firstOrNull?.innerText ?? r.findElements('href').firstOrNull?.innerText ?? '';
-    href = Uri.decodeComponent(href);
-
-    final propstat = r.findElements('d:propstat').firstOrNull ?? r.findElements('propstat').firstOrNull;
-    final prop = propstat?.findElements('d:prop').firstOrNull ?? propstat?.findElements('prop').firstOrNull;
-
-    if (prop != null) {
-      final resourcetype = prop.findElements('d:resourcetype').firstOrNull ?? prop.findElements('resourcetype').firstOrNull;
-      final isCollection = (resourcetype?.findElements('d:collection').isNotEmpty ?? false) || (resourcetype?.findElements('collection').isNotEmpty ?? false);
-
-      final getcontentlength = prop.findElements('d:getcontentlength').firstOrNull?.innerText ?? prop.findElements('getcontentlength').firstOrNull?.innerText ?? '0';
-      final size = int.tryParse(getcontentlength) ?? 0;
-
-      final getlastmodified = prop.findElements('d:getlastmodified').firstOrNull?.innerText ?? prop.findElements('getlastmodified').firstOrNull?.innerText;
-      DateTime? lastModified;
-      if (getlastmodified != null) {
-        try {
-          lastModified = HttpDate.parse(getlastmodified);
-        } catch (e) {
-          // Ignore parse error
-        }
-      }
-
-      String name = href;
-      if (name.endsWith('/')) {
-        name = name.substring(0, name.length - 1);
-      }
-      name = name.split('/').last;
-
-      return WebDavFile(
-        name: name,
-        path: href,
-        isDirectory: isCollection,
-        size: size,
-        lastModified: lastModified,
-      );
-    }
-
-    throw Exception('Failed to parse file info');
+    final f = await _client.readProps(path);
+    return _mapFile(f);
   }
 }

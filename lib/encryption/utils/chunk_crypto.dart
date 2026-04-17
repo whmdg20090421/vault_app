@@ -80,31 +80,31 @@ class ChunkCrypto {
     return out.sublist(0, outLen);
   }
 
-  /// 按 Chunk 加密 (异步, 使用 Isolate)
-  Future<Uint8List> encryptChunk({
+  /// 按 Chunk 加密 (同步)
+  Uint8List encryptChunkSync({
     required Uint8List chunkData,
     required Uint8List fileId,
     required int chunkIndex,
   }) {
-    return Isolate.run(() => _encryptChunkSync(ChunkEncryptArgs(
+    return _encryptChunkSync(ChunkEncryptArgs(
       masterKey: masterKey,
       chunkData: chunkData,
       fileId: fileId,
       chunkIndex: chunkIndex,
-    )));
+    ));
   }
 
-  /// 按 Chunk 解密 (异步, 使用 Isolate)
-  Future<Uint8List> decryptChunk({
+  /// 按 Chunk 解密 (同步)
+  Uint8List decryptChunkSync({
     required Uint8List chunkData,
     required Uint8List fileId,
     required int chunkIndex,
   }) {
-    return Isolate.run(() => _decryptChunkSync(ChunkDecryptArgs(
+    return _decryptChunkSync(ChunkDecryptArgs(
       masterKey: masterKey,
       chunkData: chunkData,
       fileId: fileId,
       chunkIndex: chunkIndex,
-    )));
+    ));
   }
 }
