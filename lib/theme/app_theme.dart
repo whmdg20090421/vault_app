@@ -32,6 +32,16 @@ ThemeData buildTheme(AppTheme theme, bool bgEnabled, double uiOpacity) {
       useMaterial3: true,
       colorScheme: scheme,
       scaffoldBackgroundColor: Colors.transparent,
+      canvasColor: Colors.transparent,
+      pageTransitionsTheme: const PageTransitionsTheme(
+        builders: {
+          TargetPlatform.android: FadeUpwardsPageTransitionsBuilder(),
+          TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+          TargetPlatform.linux: FadeUpwardsPageTransitionsBuilder(),
+          TargetPlatform.macOS: FadeUpwardsPageTransitionsBuilder(),
+          TargetPlatform.windows: FadeUpwardsPageTransitionsBuilder(),
+        },
+      ),
       cardTheme: CardThemeData(
         color: applyUiOpacity(scheme.surfaceContainer),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -93,6 +103,16 @@ ThemeData buildTheme(AppTheme theme, bool bgEnabled, double uiOpacity) {
       useMaterial3: true,
       colorScheme: scheme,
       scaffoldBackgroundColor: Colors.transparent,
+      canvasColor: Colors.transparent,
+      pageTransitionsTheme: const PageTransitionsTheme(
+        builders: {
+          TargetPlatform.android: FadeUpwardsPageTransitionsBuilder(),
+          TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+          TargetPlatform.linux: FadeUpwardsPageTransitionsBuilder(),
+          TargetPlatform.macOS: FadeUpwardsPageTransitionsBuilder(),
+          TargetPlatform.windows: FadeUpwardsPageTransitionsBuilder(),
+        },
+      ),
       cardTheme: CardThemeData(
         color: applyUiOpacity(scheme.surfaceContainer),
         shape: RoundedRectangleBorder(
@@ -164,6 +184,16 @@ ThemeData buildTheme(AppTheme theme, bool bgEnabled, double uiOpacity) {
     useMaterial3: true,
     colorScheme: scheme,
     scaffoldBackgroundColor: Colors.transparent,
+    canvasColor: Colors.transparent,
+    pageTransitionsTheme: const PageTransitionsTheme(
+      builders: {
+        TargetPlatform.android: FadeUpwardsPageTransitionsBuilder(),
+        TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+        TargetPlatform.linux: FadeUpwardsPageTransitionsBuilder(),
+        TargetPlatform.macOS: FadeUpwardsPageTransitionsBuilder(),
+        TargetPlatform.windows: FadeUpwardsPageTransitionsBuilder(),
+      },
+    ),
     appBarTheme: AppBarTheme(
       backgroundColor: applyUiOpacity(scheme.surface),
       foregroundColor: scheme.onSurface,

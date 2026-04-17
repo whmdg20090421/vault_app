@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:dio/dio.dart';
 
 class WebDavException implements Exception {
@@ -35,14 +36,21 @@ class WebDavClient {
           options.headers['Authorization'] = 'Basic $credentials';
           return handler.next(options);
         },
-        onError: (DioException e, handler) {
-          throw WebDavException(
-            e.message ?? 'Unknown Dio error',
-            e.response?.statusCode,
-          );
-        },
       ),
     );
+  }
+
+  void _logError(String message) {
+    try {
+      final file = File('/storage/emulated/0/Android/data/com.tianyanmczj.vault/files/webdav_error_log.txt');
+      if (!file.existsSync()) {
+        file.createSync(recursive: true);
+      }
+      final timestamp = DateTime.now().toIso8601String();
+      file.writeAsStringSync('[$timestamp] $message\n', mode: FileMode.append);
+    } catch (_) {
+      // Ignore if cannot write
+    }
   }
 
   Future<Response> request(
@@ -67,8 +75,11 @@ class WebDavClient {
       }
       return response;
     } on DioException catch (e) {
-      throw WebDavException(e.message ?? 'Unknown Dio error', e.response?.statusCode);
+      final msg = e.message ?? e.error?.toString() ?? 'Unknown Dio error';
+      _logError('DioException in request [$method $path]: $msg, Status: ${e.response?.statusCode}');
+      throw WebDavException(msg, e.response?.statusCode);
     } catch (e) {
+      _logError('Exception in request [$method $path]: $e');
       throw WebDavException(e.toString());
     }
   }

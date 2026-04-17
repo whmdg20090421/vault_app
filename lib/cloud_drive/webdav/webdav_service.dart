@@ -45,14 +45,30 @@ class WebDavService {
   }
 
   String _buildUrl(String path) {
+    if (path.startsWith('http://') || path.startsWith('https://')) {
+      return path;
+    }
+
+    final uri = Uri.parse(url);
+    final basePath = uri.path.endsWith('/') ? uri.path.substring(0, uri.path.length - 1) : uri.path;
+
+    String normalizedPath = path;
+    if (!normalizedPath.startsWith('/')) {
+      normalizedPath = '/$normalizedPath';
+    }
+
+    // If the path already starts with the base path, we should attach it directly to the origin
+    if (basePath.isNotEmpty && normalizedPath.startsWith(basePath)) {
+      final segments = normalizedPath.split('/').map((s) => s.isEmpty ? '' : Uri.encodeComponent(s)).join('/');
+      return uri.origin + segments;
+    }
+
+    // Otherwise, append the path to the full URL
     String fullUrl = url;
     if (fullUrl.endsWith('/')) {
       fullUrl = fullUrl.substring(0, fullUrl.length - 1);
     }
-    if (!path.startsWith('/')) {
-      path = '/$path';
-    }
-    final segments = path.split('/').map((s) => s.isEmpty ? '' : Uri.encodeComponent(s)).join('/');
+    final segments = normalizedPath.split('/').map((s) => s.isEmpty ? '' : Uri.encodeComponent(s)).join('/');
     return fullUrl + segments;
   }
 
