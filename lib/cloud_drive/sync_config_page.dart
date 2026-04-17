@@ -186,11 +186,14 @@ class _SyncConfigPageState extends State<SyncConfigPage> {
     // Init Local VFS
     final localVfs = LocalVfs(rootPath: item.path);
     if (item.config!.encryptFilename) {
-      final encryptedVfs = EncryptedVfs(baseVfs: localVfs, masterKey: key);
+      final encryptedVfs = EncryptedVfs(baseVfs: localVfs, masterKey: key, encryptFilename: true);
       await encryptedVfs.initEncryptedDomain('/');
       _localVfs = encryptedVfs;
     } else {
-      _localVfs = localVfs;
+      // Create EncryptedVfs with encryptFilename: false, so contents are still encrypted if needed
+      final encryptedVfs = EncryptedVfs(baseVfs: localVfs, masterKey: key, encryptFilename: false);
+      await encryptedVfs.initEncryptedDomain('/');
+      _localVfs = encryptedVfs;
     }
     
     _localPath = '/';

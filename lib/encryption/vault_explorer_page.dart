@@ -17,6 +17,7 @@ import '../vfs/encrypted_vfs.dart';
 import 'services/encryption_task_manager.dart';
 import 'dart:isolate';
 import '../theme/app_theme.dart';
+import 'encryption_page.dart';
 
 @visibleForTesting
 Future<void> doImportFileIsolate(Map<String, dynamic> args) async {
@@ -28,14 +29,9 @@ Future<void> doImportFileIsolate(Map<String, dynamic> args) async {
   final taskId = args['taskId'] as String;
 
   final localVfs = LocalVfs(rootPath: vaultDirectoryPath);
-  VirtualFileSystem vfs;
-  if (encryptFilename) {
-    final encryptedVfs = EncryptedVfs(baseVfs: localVfs, masterKey: masterKey);
-    await encryptedVfs.initEncryptedDomain('/');
-    vfs = encryptedVfs;
-  } else {
-    vfs = localVfs;
-  }
+  final encryptedVfs = EncryptedVfs(baseVfs: localVfs, masterKey: masterKey, encryptFilename: encryptFilename);
+  await encryptedVfs.initEncryptedDomain('/');
+  VirtualFileSystem vfs = encryptedVfs;
 
   try {
     for (final fileInfo in files) {
@@ -94,14 +90,9 @@ Future<void> doImportFolderIsolate(Map<String, dynamic> args) async {
   final taskId = args['taskId'] as String;
 
   final localVfs = LocalVfs(rootPath: vaultDirectoryPath);
-  VirtualFileSystem vfs;
-  if (encryptFilename) {
-    final encryptedVfs = EncryptedVfs(baseVfs: localVfs, masterKey: masterKey);
-    await encryptedVfs.initEncryptedDomain('/');
-    vfs = encryptedVfs;
-  } else {
-    vfs = localVfs;
-  }
+  final encryptedVfs = EncryptedVfs(baseVfs: localVfs, masterKey: masterKey, encryptFilename: encryptFilename);
+  await encryptedVfs.initEncryptedDomain('/');
+  VirtualFileSystem vfs = encryptedVfs;
 
   try {
     final dir = Directory(result);
@@ -198,14 +189,9 @@ Future<void> doExportFileIsolate(Map<String, dynamic> args) async {
   final encryptFilename = args['encryptFilename'] as bool;
 
   final localVfs = LocalVfs(rootPath: vaultDirectoryPath);
-  VirtualFileSystem vfs;
-  if (encryptFilename) {
-    final encryptedVfs = EncryptedVfs(baseVfs: localVfs, masterKey: masterKey);
-    await encryptedVfs.initEncryptedDomain('/');
-    vfs = encryptedVfs;
-  } else {
-    vfs = localVfs;
-  }
+  final encryptedVfs = EncryptedVfs(baseVfs: localVfs, masterKey: masterKey, encryptFilename: encryptFilename);
+  await encryptedVfs.initEncryptedDomain('/');
+  VirtualFileSystem vfs = encryptedVfs;
 
   final stream = await vfs.open(nodePath);
   final outFile = File(outFilePath);
@@ -225,14 +211,9 @@ Future<void> _doShareFilesIsolate(Map<String, dynamic> args) async {
   final encryptFilename = args['encryptFilename'] as bool;
 
   final localVfs = LocalVfs(rootPath: vaultDirectoryPath);
-  VirtualFileSystem vfs;
-  if (encryptFilename) {
-    final encryptedVfs = EncryptedVfs(baseVfs: localVfs, masterKey: masterKey);
-    await encryptedVfs.initEncryptedDomain('/');
-    vfs = encryptedVfs;
-  } else {
-    vfs = localVfs;
-  }
+  final encryptedVfs = EncryptedVfs(baseVfs: localVfs, masterKey: masterKey, encryptFilename: encryptFilename);
+  await encryptedVfs.initEncryptedDomain('/');
+  VirtualFileSystem vfs = encryptedVfs;
 
   for (final node in nodes) {
     final nodePath = node['path']!;
@@ -305,13 +286,9 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
 
   void _initVfs() async {
     final localVfs = LocalVfs(rootPath: widget.vaultDirectoryPath);
-    if (widget.vaultConfig.encryptFilename) {
-      final encryptedVfs = EncryptedVfs(baseVfs: localVfs, masterKey: widget.masterKey);
-      await encryptedVfs.initEncryptedDomain('/');
-      _vfs = encryptedVfs;
-    } else {
-      _vfs = localVfs;
-    }
+    final encryptedVfs = EncryptedVfs(baseVfs: localVfs, masterKey: widget.masterKey, encryptFilename: widget.vaultConfig.encryptFilename);
+    await encryptedVfs.initEncryptedDomain('/');
+    _vfs = encryptedVfs;
     _loadFiles();
   }
 
@@ -904,7 +881,33 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
                     onPressed: _selectedNodes.isNotEmpty ? _deleteSelected : null,
                   ),
                 ]
-              : null,
+              : [
+                  IconButton(
+                    icon: const Icon(Icons.sync),
+                    tooltip: '加密进度',
+                    onPressed: () {
+                      showModalBottomSheet(
+                        context: context,
+                        isScrollControlled: true,
+                        backgroundColor: Colors.transparent,
+                        barrierColor: theme.colorScheme.scrim.withValues(alpha: 0.6),
+                        shape: theme.isCyberpunk 
+                            ? const RoundedRectangleBorder(borderRadius: BorderRadius.zero)
+                            : const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+                        clipBehavior: Clip.antiAlias,
+                        builder: (context) => DraggableScrollableSheet(
+                          initialChildSize: 0.6,
+                          minChildSize: 0.4,
+                          maxChildSize: 0.9,
+                          expand: false,
+                          builder: (context, scrollController) => EncryptionProgressPanel(
+                            scrollController: scrollController,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ],
         ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())

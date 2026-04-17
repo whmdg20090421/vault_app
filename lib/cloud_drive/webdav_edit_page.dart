@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import 'webdav_config.dart';
+import 'webdav_client_service.dart';
+import 'webdav_storage.dart';
 
 class WebDavEditResult {
   const WebDavEditResult({
@@ -36,6 +38,8 @@ class _WebDavEditPageState extends State<WebDavEditPage> {
   late final TextEditingController _passwordController;
 
   bool get _isEdit => widget.initial != null;
+
+  bool _isTesting = false;
 
   String? get _passwordStatusText {
     if (!_isEdit) {
@@ -114,6 +118,68 @@ class _WebDavEditPageState extends State<WebDavEditPage> {
     return _validateNotEmpty(value);
   }
 
+  Future<void> _testAndSubmit() async {
+    final form = _formKey.currentState;
+    if (form == null || !form.validate()) {
+      return;
+    }
+
+    setState(() {
+      _isTesting = true;
+    });
+
+    try {
+      final url = _urlController.text.trim();
+      final username = _usernameController.text.trim();
+      String password = _passwordController.text;
+
+      if (_isEdit && password.isEmpty) {
+        final repo = WebDavConfigRepository();
+        final storedPassword = await repo.readPassword(widget.initial!.id);
+        if (storedPassword != null) {
+          password = storedPassword;
+        }
+      }
+
+      final service = WebDavService(
+        url: url,
+        username: username,
+        password: password,
+      );
+
+      await service.readDir('/');
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('连接成功')),
+        );
+        _submit();
+      }
+    } catch (e) {
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('连接失败'),
+            content: Text(translateWebDavError(e)),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('确定'),
+              ),
+            ],
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isTesting = false;
+        });
+      }
+    }
+  }
+
   void _submit() {
     final form = _formKey.currentState;
     if (form == null || !form.validate()) {
@@ -146,8 +212,14 @@ class _WebDavEditPageState extends State<WebDavEditPage> {
         centerTitle: true,
         actions: [
           TextButton(
-            onPressed: _submit,
-            child: const Text('保存'),
+            onPressed: _isTesting ? null : _testAndSubmit,
+            child: _isTesting
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Text('测试/连接'),
           ),
         ],
       ),
@@ -197,7 +269,7 @@ class _WebDavEditPageState extends State<WebDavEditPage> {
               validator: _validatePassword,
               obscureText: true,
               textInputAction: TextInputAction.done,
-              onFieldSubmitted: (_) => _submit(),
+              onFieldSubmitted: (_) => _testAndSubmit(),
             ),
             if (_passwordStatusText != null) ...[
               const SizedBox(height: 10),

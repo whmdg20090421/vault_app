@@ -23,6 +23,7 @@ class EncryptedVfs implements VirtualFileSystem {
 
   final VirtualFileSystem baseVfs;
   final Uint8List masterKey;
+  final bool encryptFilename;
   late final ChunkCrypto _chunkCrypto;
 
   // 缓存虚拟（解密）路径到真实（加密）路径的映射
@@ -35,6 +36,7 @@ class EncryptedVfs implements VirtualFileSystem {
   EncryptedVfs({
     required this.baseVfs,
     required this.masterKey,
+    this.encryptFilename = true,
   }) {
     if (masterKey.length != 32) {
       throw ArgumentError('MasterKey must be 32 bytes for AES-256-GCM');
@@ -100,7 +102,7 @@ class EncryptedVfs implements VirtualFileSystem {
         // 如果是未知路径段，说明是新建文件/目录或未缓存的路径
         // 我们需要判断当前层级是否在加密域，以决定是否加密新名称
         bool isEncrypted = _isEncryptedDomain(currentVirtual);
-        String realSegment = isEncrypted ? _encryptName(segment) : segment;
+        String realSegment = (isEncrypted && encryptFilename) ? _encryptName(segment) : segment;
         
         currentReal = currentReal == '/' ? '/$realSegment' : '$currentReal/$realSegment';
 
@@ -212,7 +214,7 @@ class EncryptedVfs implements VirtualFileSystem {
       }
 
       String decryptedName = realNode.name;
-      if (isEncrypted) {
+      if (isEncrypted && encryptFilename) {
         decryptedName = _decryptName(realNode.name);
       }
 
@@ -368,7 +370,9 @@ class EncryptedVfs implements VirtualFileSystem {
     int finalSize = realNode.size;
 
     if (isEncrypted && realNode.name != _markerFileName) {
-      decryptedName = _decryptName(realNode.name);
+      if (encryptFilename) {
+        decryptedName = _decryptName(realNode.name);
+      }
       if (!realNode.isDirectory) {
         finalSize = _getPlaintextSize(realNode.size);
       }
