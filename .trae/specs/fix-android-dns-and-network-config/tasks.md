@@ -1,0 +1,12 @@
+# Tasks
+- [ ] Task 1: 检查并修复 Android `build.gradle.kts` 的 SDK 版本配置
+  - 说明：现代 Flutter 使用 `flutter.compileSdkVersion`，但在 Android 14/15 情况下，可能需要将其覆盖为特定的 `34` 或 `35`，并提供修复代码或建议。
+- [ ] Task 2: 创建并配置 `network_security_config.xml`
+  - 路径：`android/app/src/main/res/xml/network_security_config.xml`
+  - 内容：标准的信任系统/用户证书并放开明文流量配置。
+- [ ] Task 3: 更新 `AndroidManifest.xml` 挂载配置
+  - 说明：在 `<application>` 标签中添加 `android:networkSecurityConfig="@xml/network_security_config"`。
+- [ ] Task 4: 编写 Dart 终极诊断脚本
+  - 说明：仅使用原生 `dart:io` 的 `Socket.connect` 和 `InternetAddress.lookup` 编写诊断函数，并返回相关日志。
+- [ ] Task 5: 总结与原因分析
+  - 说明：输出修复方案并解释为什么在 Android 14/15 上即使配置了 `INTERNET` 权限仍会出现 DNS 拦截（证书不受信、targetSdk>33 引入的更严格的 cleartext 和网络访问限制等）。
