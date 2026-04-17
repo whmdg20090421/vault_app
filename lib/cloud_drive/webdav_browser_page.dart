@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import 'webdav_config.dart';
 import 'webdav_storage.dart';
+import 'webdav_new/webdav_client.dart';
+import 'webdav_new/webdav_service.dart';
 
 import '../vfs/virtual_file_system.dart';
 import '../vfs/standard_vfs.dart';
@@ -71,8 +73,16 @@ class _WebDavBrowserPageState extends State<WebDavBrowserPage> {
 
   Future<void> _initClient() async {
     try {
-      // 网络逻辑被移除，替换为使用空实现的 StandardVfs 占位
-      _vfs = StandardVfs();
+      final repository = WebDavConfigRepository();
+      final password = await repository.readPassword(widget.config.id) ?? '';
+
+      final client = WebDavClient(
+        baseUrl: widget.config.url,
+        username: widget.config.username,
+        password: password,
+      );
+      final service = WebDavService(client);
+      _vfs = StandardVfs(service);
 
       await _loadCurrentPath();
     } catch (e) {
