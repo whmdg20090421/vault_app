@@ -1,5 +1,0 @@
-- [x] `EncryptedVfs` correctly encrypts file content even when `encryptFilename` is false.
-- [x] Importing a folder into a vault utilizes CPU and updates progress because `EncryptedVfs` is used.
-- [x] `VaultExplorerPage` has a sync progress button in the top right corner.
-- [x] `WebDavEditPage` requires a successful connection test before saving.
-- [x] `WebDavBrowserPage` only shows directory listing, with other features temporarily disabled.
