@@ -1,0 +1,7 @@
+- [ ] The `WebDavFile` model correctly extracts and holds `href`, `getcontentlength`, `getetag`, and `resourcetype`.
+- [ ] The `WebDavClient` correctly configures Dio, uses a Basic Auth interceptor (with Base64 encoding), and handles custom methods like `PROPFIND` and `MKCOL`.
+- [ ] The `WebDavParser` uses the `xml` package to successfully parse a multistatus response, decoding `href` URLs and filtering out the parent directory from the results.
+- [ ] The `WebDavService` exposes business-level methods (`readDir`, `upload`, `download`, `move`) without exposing Dio internals.
+- [ ] A sync strategy (e.g., `SyncEngine`) has been outlined, comparing ETags/Last-Modified to avoid redundant downloads and implementing concurrency control for uploading/downloading.
+- [ ] The application's UI (e.g., `WebDavEditPage`, `WebDavBrowserPage`) has been updated to use the new `WebDavService` via `StandardVfs`.
+- [ ] The Dart code is well-commented, strictly typed, and structured according to Clean Architecture principles.
