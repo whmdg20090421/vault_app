@@ -22,6 +22,7 @@ class EncryptionTask {
   String? error;
   final List<EncryptionTask> children;
   Map<String, dynamic>? taskArgs;
+  int completedAt;
 
   int _lastReportTime = 0;
   int _lastProcessedBytes = 0;
@@ -38,6 +39,7 @@ class EncryptionTask {
     this.error,
     List<EncryptionTask>? children,
     this.taskArgs,
+    this.completedAt = 0,
   })  : _totalBytes = totalBytes,
         _processedBytes = processedBytes,
         _status = status,
@@ -57,6 +59,7 @@ class EncryptionTask {
       'processedBytes': _processedBytes,
       'status': _status,
       'error': error,
+      'completedAt': completedAt,
       'children': children.map((c) => c.toJson()).toList(),
       'taskArgs': safeArgs,
     };
@@ -71,6 +74,7 @@ class EncryptionTask {
       processedBytes: json['processedBytes'] as int? ?? 0,
       status: json['status'] as String? ?? 'pending',
       error: json['error'] as String?,
+      completedAt: json['completedAt'] as int? ?? 0,
       children: (json['children'] as List<dynamic>?)
           ?.map((c) => EncryptionTask.fromJson(c as Map<String, dynamic>))
           .toList(),
@@ -245,12 +249,87 @@ Future<void> doEncryptFileIsolate(Map<String, dynamic> args) async {
 class EncryptionTaskManager extends ChangeNotifier {
   static final EncryptionTaskManager _instance = EncryptionTaskManager._internal();
 
+  EncryptionTaskManager._internal() {
+    _loadHistory();
+  }
+
   factory EncryptionTaskManager() => _instance;
 
   
   int _activeWorkers = 0;
   int _maxWorkers = 2;
   final ReceivePort _globalReceivePort = ReceivePort();
+
+  int _activeUIListeners = 0;
+  bool get isForeground => _activeUIListeners > 0;
+  Timer? _refreshTimer;
+
+  void enterForeground() {
+    _activeUIListeners++;
+    if (_activeUIListeners == 1) {
+      _startRefreshLoop();
+      _doRefresh();
+    }
+  }
+
+  void exitForeground() {
+    if (_activeUIListeners > 0) {
+      _activeUIListeners--;
+    }
+    if (_activeUIListeners == 0) {
+      _startRefreshLoop();
+    }
+  }
+
+  void _startRefreshLoop() {
+    _refreshTimer?.cancel();
+    
+    if (!hasActiveTasks && !hasActiveTasksV4) {
+      return;
+    }
+
+    int minMs = isForeground ? 500 : 5000;
+    int maxMs = isForeground ? 1000 : 10000;
+    int delay = minMs + (DateTime.now().millisecondsSinceEpoch % (maxMs - minMs + 1));
+
+    _refreshTimer = Timer(Duration(milliseconds: delay), () {
+      _doRefresh();
+      _startRefreshLoop(); // Schedule next refresh
+    });
+  }
+
+  void _doRefresh() {
+    persistGlobalTasks();
+    // _saveQueue() can be called here if needed, but currently it's a mock
+    
+    if (isForeground) {
+      notifyListeners();
+    }
+
+    if (!hasActiveTasks && !hasActiveTasksV4) {
+      _refreshTimer?.cancel();
+      _refreshTimer = null;
+    }
+  }
+
+  bool get hasActiveTasksV4 {
+    for (final node in _globalTasks) {
+      if (_hasActiveNodeV4(node)) return true;
+    }
+    return false;
+  }
+
+  bool _hasActiveNodeV4(EncryptionNode node) {
+    if (node.type == EncryptionNodeType.file) {
+      return node.status == EncryptionStatus.encrypting || node.status == EncryptionStatus.pendingWaiting;
+    }
+    if (node.children != null) {
+      for (final child in node.children!) {
+        if (_hasActiveNodeV4(child)) return true;
+      }
+    }
+    return false;
+  }
 
   EncryptionTaskManager._internal() {
     _loadQueue();
@@ -273,8 +352,7 @@ class EncryptionTaskManager extends ChangeNotifier {
         // V4 message handling
         if (type == 'progress') {
           // Just update bytes if needed, but in V4 we track size/rawSize
-          // For now just notify
-          notifyListeners();
+          // Refresh loop will handle UI updates
         } else if (type == 'done') {
           _updateNodeStatusV4(absolutePath, EncryptionStatus.completed);
           _recordLocalIndex(
@@ -504,6 +582,113 @@ class EncryptionTaskManager extends ChangeNotifier {
   final List<EncryptionNode> _globalTasks = [];
   List<EncryptionNode> get globalTasks => List.unmodifiable(_globalTasks);
 
+  void pauseNodeV4(EncryptionNode node) {
+    _setNodePausedState(node, true);
+    _killIsolatesForNodeV4(node);
+    persistGlobalTasks();
+    notifyListeners();
+  }
+
+  void resumeNodeV4(EncryptionNode node) {
+    _setNodePausedState(node, false);
+    persistGlobalTasks();
+    notifyListeners();
+    pumpQueueV4();
+  }
+
+  void _setNodePausedState(EncryptionNode node, bool paused) {
+    node.isPaused = paused;
+    if (node.type == EncryptionNodeType.file) {
+      if (paused) {
+        if (node.status == EncryptionStatus.encrypting || node.status == EncryptionStatus.pendingWaiting) {
+          node.status = EncryptionStatus.pendingPaused;
+        }
+      } else {
+        if (node.status == EncryptionStatus.pendingPaused) {
+          node.status = EncryptionStatus.pendingWaiting;
+        }
+      }
+    } else if (node.children != null) {
+      for (final child in node.children!) {
+        _setNodePausedState(child, paused);
+      }
+    }
+  }
+
+  void _killIsolatesForNodeV4(EncryptionNode node) {
+    if (node.type == EncryptionNodeType.file) {
+      final taskId = node.absolutePath;
+      if (_isolates.containsKey(taskId)) {
+        _isolates[taskId]?.kill(priority: Isolate.immediate);
+        _isolates.remove(taskId);
+        _activeWorkers--;
+      }
+    } else if (node.children != null) {
+      for (final child in node.children!) {
+        _killIsolatesForNodeV4(child);
+      }
+    }
+  }
+
+  void deleteNodeV4(EncryptionNode node) {
+    _killIsolatesForNodeV4(node);
+    // Find parent and remove it
+    bool removed = _removeNodeFromGlobalTasks(node);
+    if (removed) {
+      persistGlobalTasks();
+      notifyListeners();
+    }
+  }
+
+  bool _removeNodeFromGlobalTasks(EncryptionNode target) {
+    for (int i = 0; i < _globalTasks.length; i++) {
+      if (_globalTasks[i].absolutePath == target.absolutePath) {
+        _globalTasks.removeAt(i);
+        return true;
+      }
+      if (_globalTasks[i].children != null) {
+        if (_removeChildNodeV4(_globalTasks[i].children!, target)) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  bool _removeChildNodeV4(List<EncryptionNode> children, EncryptionNode target) {
+    for (int i = 0; i < children.length; i++) {
+      if (children[i].absolutePath == target.absolutePath) {
+        children.removeAt(i);
+        return true;
+      }
+      if (children[i].children != null) {
+        if (_removeChildNodeV4(children[i].children!, target)) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  void markNodeAsFixedV4(EncryptionNode node) {
+    _markNodeAsFixedRecursive(node);
+    persistGlobalTasks();
+    notifyListeners();
+    pumpQueueV4();
+  }
+
+  void _markNodeAsFixedRecursive(EncryptionNode node) {
+    if (node.type == EncryptionNodeType.file) {
+      if (node.status == EncryptionStatus.error) {
+        node.status = EncryptionStatus.pendingWaiting;
+      }
+    } else if (node.children != null) {
+      for (final child in node.children!) {
+        _markNodeAsFixedRecursive(child);
+      }
+    }
+  }
+
   EncryptionNode? _findNextPendingV4(List<EncryptionNode> nodes) {
     for (final node in nodes) {
       if (node.isPaused) continue;
@@ -630,7 +815,10 @@ class EncryptionTaskManager extends ChangeNotifier {
     }
     
     await persistGlobalTasks();
-    notifyListeners();
+    if (isForeground) {
+      notifyListeners();
+    }
+    _startRefreshLoop();
     pumpQueueV4();
   }
 
@@ -822,13 +1010,51 @@ class EncryptionTaskManager extends ChangeNotifier {
   }
 
   Future<void> _saveHistory() async {
-    debugPrint('Mock _saveHistory: History saving skipped.');
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final jsonList = _historyTasks.map((t) => t.toJson()).toList();
+      await prefs.setString('encryption_history_v4.json', jsonEncode(jsonList));
+    } catch (e) {
+      debugPrint('Failed to save history: $e');
+    }
+  }
+
+  Future<void> _loadHistory() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final jsonStr = prefs.getString('encryption_history_v4.json');
+      if (jsonStr != null) {
+        final jsonList = jsonDecode(jsonStr) as List<dynamic>;
+        _historyTasks.clear();
+        for (final item in jsonList) {
+          _historyTasks.add(EncryptionTask.fromJson(item as Map<String, dynamic>));
+        }
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint('Failed to load history: $e');
+    }
+  }
+
+  Future<void> deleteHistoryTask(String taskId) async {
+    _historyTasks.removeWhere((t) => t.id == taskId);
+    await _saveHistory();
+    notifyListeners();
+  }
+
+  Future<void> clearHistory() async {
+    _historyTasks.clear();
+    await _saveHistory();
+    notifyListeners();
   }
 
   void addTask(EncryptionTask task) {
     _tasks.add(task);
     _saveQueue();
-    notifyListeners();
+    if (isForeground) {
+      notifyListeners();
+    }
+    _startRefreshLoop();
   }
 
   EncryptionTask? findTask(String id) {
@@ -883,8 +1109,7 @@ class EncryptionTaskManager extends ChangeNotifier {
     final task = findTask(id);
     if (task != null) {
       task.processedBytes = processedBytes;
-      _scheduleSave();
-      notifyListeners();
+      // Refresh loop will handle saving and notify
     }
   }
 
@@ -911,6 +1136,7 @@ class EncryptionTaskManager extends ChangeNotifier {
     if (root.status == 'completed') {
       if (_tasks.contains(root)) {
         _tasks.remove(root);
+        root.completedAt = DateTime.now().millisecondsSinceEpoch;
         _historyTasks.add(root);
         _saveQueue();
         _saveHistory();

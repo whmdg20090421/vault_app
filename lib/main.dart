@@ -3,7 +3,6 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-
 import 'services/stats_service.dart';
 import 'cloud_drive/cloud_drive_page.dart';
 import 'encryption/encryption_page.dart';
@@ -20,6 +19,11 @@ import 'settings/theme_settings_page.dart';
 import 'settings/security_settings_page.dart';
 import 'encryption/performance_settings_page.dart';
 import 'security/security_check.dart';
+
+import 'encryption/services/encryption_task_manager.dart';
+import 'encryption/widgets/four_color_progress_bar.dart';
+import 'encryption/widgets/sync_progress_modal.dart';
+import 'utils/format_utils.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -204,6 +208,52 @@ class _MainShellState extends State<MainShell> {
       appBar: AppBar(
         title: Text(titles[_index].toUpperCase()),
         centerTitle: true,
+        actions: _index == 0 ? [
+          ListenableBuilder(
+            listenable: EncryptionTaskManager(),
+            builder: (context, _) {
+              final manager = EncryptionTaskManager();
+              final stats = manager.getV4Stats();
+              final total = stats['total'] ?? 0;
+              final completed = stats['completed'] ?? 0;
+              final encrypting = stats['encrypting'] ?? 0;
+              final pending = stats['pending'] ?? 0;
+              final pausedError = stats['pausedError'] ?? 0;
+
+              if (total == 0) return const SizedBox.shrink();
+
+              final tooltipText = '已加密: ${FormatUtils.formatBytes(completed)} / 总大小: ${FormatUtils.formatBytes(total)}';
+
+              return Row(
+                children: [
+                  Tooltip(
+                    message: tooltipText,
+                    child: Container(
+                      width: 60,
+                      alignment: Alignment.center,
+                      child: FourColorProgressBar(
+                        completed: completed,
+                        encrypting: encrypting,
+                        pending: pending,
+                        pausedError: pausedError,
+                        total: total,
+                        height: 6.0,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.sync_alt, size: 20),
+                    tooltip: '查看同步进度',
+                    onPressed: () {
+                      SyncProgressModal.show(context);
+                    },
+                  ),
+                  const SizedBox(width: 8),
+                ],
+              );
+            },
+          ),
+        ] : null,
       ),
       body: IndexedStack(index: _index, children: pages),
       bottomNavigationBar: NavigationBar(

@@ -398,11 +398,13 @@ class _EncryptionProgressPanelState extends State<EncryptionProgressPanel> with 
   @override
   void initState() {
     super.initState();
+    EncryptionTaskManager().enterForeground();
     _tabController = TabController(length: 2, vsync: this);
   }
 
   @override
   void dispose() {
+    EncryptionTaskManager().exitForeground();
     _tabController.dispose();
     super.dispose();
   }
@@ -575,6 +577,7 @@ class _EncryptionProgressPanelState extends State<EncryptionProgressPanel> with 
                 child: _TaskCard(
                   task: task,
                   onFolderTap: isHistory ? (_) {} : _navigateTo,
+                  isHistory: isHistory,
                 ),
               ),
             );
@@ -588,10 +591,12 @@ class _EncryptionProgressPanelState extends State<EncryptionProgressPanel> with 
 class _TaskCard extends StatelessWidget {
   final EncryptionTask task;
   final ValueChanged<String> onFolderTap;
+  final bool isHistory;
 
   const _TaskCard({
     required this.task,
     required this.onFolderTap,
+    this.isHistory = false,
   });
 
   String _formatEta(int seconds) {
@@ -607,6 +612,32 @@ class _TaskCard extends StatelessWidget {
   String _formatSpeed(double bytesPerSec) {
     if (bytesPerSec <= 0) return '';
     return ' (速度: ${FormatUtils.formatBytes(bytesPerSec.round())}/s)';
+  }
+
+  void _showDeleteHistoryDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('删除历史'),
+          content: const Text('确定要删除这条历史记录吗？这不会删除实际的文件或索引。'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('取消'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(foregroundColor: Colors.white, backgroundColor: Colors.red),
+              onPressed: () {
+                EncryptionTaskManager().deleteHistoryTask(task.id);
+                Navigator.of(context).pop();
+              },
+              child: const Text('删除'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   @override
@@ -644,6 +675,7 @@ class _TaskCard extends StatelessWidget {
         borderRadius: isCyberpunk ? BorderRadius.zero : BorderRadius.circular(16),
         child: InkWell(
           borderRadius: isCyberpunk ? BorderRadius.zero : BorderRadius.circular(16),
+          onLongPress: isHistory ? () => _showDeleteHistoryDialog(context) : null,
           onTap: task.isDirectory && task.children.isNotEmpty
               ? () => onFolderTap(task.id)
               : null,
@@ -682,38 +714,62 @@ class _TaskCard extends StatelessWidget {
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
-              ClipRRect(
-                borderRadius: isCyberpunk ? BorderRadius.zero : BorderRadius.circular(4),
-                child: LinearProgressIndicator(
-                  value: progress,
-                  backgroundColor: theme.colorScheme.onSurface.withOpacity(0.1),
-                  valueColor: AlwaysStoppedAnimation<Color>(statusColor),
-                  minHeight: isCyberpunk ? 2 : 4,
+              if (!isHistory) ...[
+                const SizedBox(height: 12),
+                ClipRRect(
+                  borderRadius: isCyberpunk ? BorderRadius.zero : BorderRadius.circular(4),
+                  child: LinearProgressIndicator(
+                    value: progress,
+                    backgroundColor: theme.colorScheme.onSurface.withOpacity(0.1),
+                    valueColor: AlwaysStoppedAnimation<Color>(statusColor),
+                    minHeight: isCyberpunk ? 2 : 4,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 8),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    '${(progress * 100).toStringAsFixed(1)}%${(task.status == 'encrypting' || task.status == 'pending') ? _formatEta(task.etaSeconds) : ''}',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: theme.colorScheme.onSurface.withOpacity(0.7),
-                      fontFamily: isCyberpunk ? 'Courier' : null,
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      '${(progress * 100).toStringAsFixed(1)}%${(task.status == 'encrypting' || task.status == 'pending') ? _formatEta(task.etaSeconds) : ''}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: theme.colorScheme.onSurface.withOpacity(0.7),
+                        fontFamily: isCyberpunk ? 'Courier' : null,
+                      ),
                     ),
-                  ),
-                  Text(
-                    '${FormatUtils.formatBytes(task.processedBytes)} / ${FormatUtils.formatBytes(task.totalBytes)}${(task.status == 'encrypting' || task.status == 'pending') ? _formatSpeed(task.currentSpeed) : ''}',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: theme.colorScheme.onSurface.withOpacity(0.7),
-                      fontFamily: isCyberpunk ? 'Courier' : null,
+                    Text(
+                      '${FormatUtils.formatBytes(task.processedBytes)} / ${FormatUtils.formatBytes(task.totalBytes)}${(task.status == 'encrypting' || task.status == 'pending') ? _formatSpeed(task.currentSpeed) : ''}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: theme.colorScheme.onSurface.withOpacity(0.7),
+                        fontFamily: isCyberpunk ? 'Courier' : null,
+                      ),
                     ),
-                  ),
-                ],
-              ),
+                  ],
+                ),
+              ] else ...[
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      '文件大小: ${FormatUtils.formatBytes(task.totalBytes)}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: theme.colorScheme.onSurface.withOpacity(0.7),
+                      ),
+                    ),
+                    if (task.completedAt > 0)
+                      Text(
+                        '完成时间: ${DateTime.fromMillisecondsSinceEpoch(task.completedAt).toString().split('.').first}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: theme.colorScheme.onSurface.withOpacity(0.7),
+                        ),
+                      ),
+                  ],
+                ),
+              ],
               if (task.error != null) ...[
                 const SizedBox(height: 8),
                 Text(
