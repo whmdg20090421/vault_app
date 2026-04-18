@@ -96,11 +96,8 @@ class SyncEngine {
 
   /// 计算文件 SHA256 哈希
   Future<String> _calculateFileHash(File file) async {
-    final hasher = sha256.newInstance();
-    await for (final chunk in file.openRead()) {
-      hasher.add(chunk);
-    }
-    return hasher.close().toString();
+    final digest = await sha256.bind(file.openRead()).first;
+    return digest.toString();
   }
 
   /// 递归同步目录内容
