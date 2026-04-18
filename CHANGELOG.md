@@ -1,3 +1,12 @@
+# 版本 1.4.2 (2026-04-18)
+
+### ✨ Bug Fixes & Improvements
+- **Sync Settings UI**: 修复了同步模式下拉弹窗背景透明导致与底层内容重叠的问题，完美适配普通模式与赛博朋克主题。
+- **Folder Selection Granularity**: 修改了本地与云端文件夹选择粒度，现在允许用户在配置同步时进入并选择具体的加密子文件夹或云端子目录，而不再局限于根目录。
+- **WebDAV Auth**: 彻底修复了同步任务期间报出的 `DioException [bad response]: 401 Unauthorized` 鉴权失败问题。现在 `Authorization` (Basic Auth) 凭证被可靠地注入到 Dio 全局配置中。
+- **Encryption Integrity**: 对加密核心链路进行了深层追踪与验证，确认文件底层流均强制经过 `ChunkCrypto` 处理，修复了此前因配置错误可能导致的“明文透传”或“假加密”漏洞，确保导入文件必然落地为不可读的密文。
+- **Folder Import & Stats**: 修复了“导入明文文件夹”时任务被错误识别为单文件导致瞬间完成且未加密的问题；同时修复了首页统计大小不刷新的问题，现在文件夹导入完成后会自动精确重算真实体积。
+
 # 版本 1.4.1 (2026-04-18)
 
 ### ✨ Features
