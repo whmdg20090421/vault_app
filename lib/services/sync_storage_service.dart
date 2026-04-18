@@ -55,19 +55,18 @@ class SyncStorageService {
       return [];
     }
   }
-}
 
   /// 保存单个同步任务（添加或更新）
   Future<void> saveTask(SyncTask task) async {
     final tasks = await loadTasks();
     final index = tasks.indexWhere((t) => t.id == task.id);
-    
+
     if (index >= 0) {
       tasks[index] = task;
     } else {
       tasks.add(task);
     }
-    
+
     await saveTasks(tasks);
   }
 
