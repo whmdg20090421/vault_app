@@ -5,9 +5,13 @@
 ## 最新版本概览
 
 <!-- RELEASE_SUMMARY_START -->
-- 当前版本：1.3.7
-- 修复了预览文件与导出文件时引发的语法树编译报错（移除了多余的括号），确保能顺利通过 Flutter 构建系统编译出 APK 安装包。
-- 完整更新：https://github.com/whmdg20090421/vault_app/releases/tag/v1.3.7
+- 当前版本：1.4.0
+- **UI Upgrade**: 全新“QQ弹弹”圆角弹性动画设计，适配纯黑、亮色、赛博朋克三大主题。
+- **Sync Settings**: 新增云盘同步设置功能，支持自定义加密文件夹、同步文件夹、双向同步/单向同步以及时间优先/覆盖替换策略。
+- **Security Validation**: 引入启动安全哈希校验（包哈希、签名校验），通过 `Whm20090421` 混淆密码机制防止被篡改。
+- **History Separation**: 将加密任务历史记录与云盘同步历史记录从活动队列中分离，使用双页签 UI 便于查看。
+- **Multi-threading Fix**: 修复由于加密进程缺乏 `masterKey` 与文件路径参数导致的“瞬间完成却未加密”的问题。
+- 完整更新：https://github.com/whmdg20090421/vault_app/releases/tag/v1.4.0
 <!-- RELEASE_SUMMARY_END -->
 
 ## 更新历史 (Changelog)
