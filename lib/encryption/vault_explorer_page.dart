@@ -556,7 +556,7 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
         'vaultDirectoryPath': widget.vaultDirectoryPath,
         'masterKey': widget.masterKey,
         'encryptFilename': widget.vaultConfig.encryptFilename,
-      }));
+      });
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -759,7 +759,7 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
         'vaultDirectoryPath': widget.vaultDirectoryPath,
         'masterKey': widget.masterKey,
         'encryptFilename': widget.vaultConfig.encryptFilename,
-      }));
+      });
 
       if (mounted) {
         Navigator.of(context).pop(); // Close loading
