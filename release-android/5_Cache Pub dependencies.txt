@@ -1,0 +1,29 @@
+﻿2026-04-18T10:39:22.9644826Z ##[group]Run actions/cache@v4
+2026-04-18T10:39:22.9645110Z with:
+2026-04-18T10:39:22.9645345Z   path: /home/runner/.pub-cache
+~/.pub-cache
+
+2026-04-18T10:39:22.9645823Z   key: Linux-pub-578c285965428b4364d0b720967faeed3b5b98464ad4ba4442eb826cd7f4d93d
+2026-04-18T10:39:22.9646317Z   restore-keys: Linux-pub-
+
+2026-04-18T10:39:22.9646962Z   enableCrossOsArchive: false
+2026-04-18T10:39:22.9647239Z   fail-on-cache-miss: false
+2026-04-18T10:39:22.9647480Z   lookup-only: false
+2026-04-18T10:39:22.9647695Z   save-always: false
+2026-04-18T10:39:22.9647893Z env:
+2026-04-18T10:39:22.9648100Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-04-18T10:39:22.9648490Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.18-8/x64
+2026-04-18T10:39:22.9648978Z   JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.18-8/x64
+2026-04-18T10:39:22.9649455Z   FLUTTER_ROOT: /opt/hostedtoolcache/flutter/stable-3.41.7-x64/flutter
+2026-04-18T10:39:22.9649829Z   PUB_CACHE: /home/runner/.pub-cache
+2026-04-18T10:39:22.9650131Z ##[endgroup]
+2026-04-18T10:39:23.0716814Z (node:2391) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-04-18T10:39:23.0718532Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-04-18T10:39:23.2649047Z Cache hit for: Linux-pub-578c285965428b4364d0b720967faeed3b5b98464ad4ba4442eb826cd7f4d93d
+2026-04-18T10:39:23.2764782Z (node:2391) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-04-18T10:39:24.5375763Z Received 12582912 of 79510599 (15.8%), 12.0 MBs/sec
+2026-04-18T10:39:25.1313994Z Received 79510599 of 79510599 (100.0%), 47.6 MBs/sec
+2026-04-18T10:39:25.1316828Z Cache Size: ~76 MB (79510599 B)
+2026-04-18T10:39:25.1401222Z [command]/usr/bin/tar -xf /home/runner/work/_temp/a6beda31-4816-48f9-af7e-2431c6468c3c/cache.tzst -P -C /home/runner/work/vault_app/vault_app --use-compress-program unzstd
+2026-04-18T10:39:26.5718405Z Cache restored successfully
+2026-04-18T10:39:26.5839290Z Cache restored from key: Linux-pub-578c285965428b4364d0b720967faeed3b5b98464ad4ba4442eb826cd7f4d93d

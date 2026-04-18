@@ -1,0 +1,36 @@
+﻿2026-04-18T10:40:04.9814471Z ##[group]Run flutter pub get
+2026-04-18T10:40:04.9815033Z [36;1mflutter pub get[0m
+2026-04-18T10:40:04.9839904Z shell: /usr/bin/bash -e {0}
+2026-04-18T10:40:04.9840183Z env:
+2026-04-18T10:40:04.9840410Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-04-18T10:40:04.9840849Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.18-8/x64
+2026-04-18T10:40:04.9841352Z   JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.18-8/x64
+2026-04-18T10:40:04.9841881Z   FLUTTER_ROOT: /opt/hostedtoolcache/flutter/stable-3.41.7-x64/flutter
+2026-04-18T10:40:04.9842295Z   PUB_CACHE: /home/runner/.pub-cache
+2026-04-18T10:40:04.9842575Z ##[endgroup]
+2026-04-18T10:40:05.3822414Z Resolving dependencies...
+2026-04-18T10:40:05.6851349Z Downloading packages...
+2026-04-18T10:40:05.8487118Z   file_picker 8.3.7 (11.0.2 available)
+2026-04-18T10:40:05.8488000Z   fl_chart 0.68.0 (1.2.0 available)
+2026-04-18T10:40:05.8488985Z   flutter_secure_storage 9.2.4 (10.0.0 available)
+2026-04-18T10:40:05.8489856Z   flutter_secure_storage_linux 1.2.3 (3.0.0 available)
+2026-04-18T10:40:05.8490968Z   flutter_secure_storage_macos 3.1.3 (4.0.0 available)
+2026-04-18T10:40:05.8495925Z   flutter_secure_storage_platform_interface 1.1.2 (2.0.1 available)
+2026-04-18T10:40:05.8497134Z   flutter_secure_storage_web 1.2.1 (2.1.0 available)
+2026-04-18T10:40:05.8497999Z   flutter_secure_storage_windows 3.1.2 (4.1.0 available)
+2026-04-18T10:40:05.8498777Z   intl 0.19.0 (0.20.2 available)
+2026-04-18T10:40:05.8499433Z   js 0.6.7 (0.7.2 available)
+2026-04-18T10:40:05.8500046Z   meta 1.17.0 (1.18.2 available)
+2026-04-18T10:40:05.8500722Z + package_info_plus 8.3.1 (10.0.0 available)
+2026-04-18T10:40:05.8501555Z + package_info_plus_platform_interface 3.2.1 (4.0.0 available)
+2026-04-18T10:40:05.8502416Z   permission_handler 11.4.0 (12.0.1 available)
+2026-04-18T10:40:05.8503216Z   permission_handler_android 12.1.0 (13.0.1 available)
+2026-04-18T10:40:05.8503979Z   pointycastle 3.9.1 (4.0.0 available)
+2026-04-18T10:40:05.8504654Z   share_plus 10.1.4 (13.0.0 available)
+2026-04-18T10:40:05.8505424Z   share_plus_platform_interface 5.0.2 (7.0.0 available)
+2026-04-18T10:40:05.8506194Z   test_api 0.7.10 (0.7.11 available)
+2026-04-18T10:40:05.8507099Z   vector_math 2.2.0 (2.3.0 available)
+2026-04-18T10:40:05.8507758Z   win32 5.15.0 (6.0.1 available)
+2026-04-18T10:40:05.8508386Z Changed 2 dependencies!
+2026-04-18T10:40:05.8509241Z 21 packages have newer versions incompatible with dependency constraints.
+2026-04-18T10:40:05.8510223Z Try `flutter pub outdated` for more information.

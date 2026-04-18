@@ -1,0 +1,70 @@
+﻿2026-04-18T10:40:01.3306041Z ##[group]Run set -euo pipefail
+2026-04-18T10:40:01.3307008Z [36;1mset -euo pipefail[0m
+2026-04-18T10:40:01.3307859Z [36;1mif [ -z "$KEY_STORE_BASE64" ] || [ -z "$KEY_ALIAS" ] || [ -z "$KEY_PASSWORD" ] || [ -z "$STORE_PASSWORD" ]; then[0m
+2026-04-18T10:40:01.3309673Z [36;1m  echo "Signing secrets not configured. Please configure one of KEY_STORE_BASE64/KEYSTORE_B64, KEY_ALIAS, KEY_PASSWORD, and one of STORE_PASSWORD/KEYSTORE_PASSWORD in repository secrets."[0m
+2026-04-18T10:40:01.3311426Z [36;1m  exit 1[0m
+2026-04-18T10:40:01.3311831Z [36;1mfi[0m
+2026-04-18T10:40:01.3312203Z [36;1m[0m
+2026-04-18T10:40:01.3312428Z [36;1mmkdir -p android/app[0m
+2026-04-18T10:40:01.3312850Z [36;1mprintf '%s' "$KEY_STORE_BASE64" | base64 --decode > android/app/keystore.src[0m
+2026-04-18T10:40:01.3313276Z [36;1m[0m
+2026-04-18T10:40:01.3313489Z [36;1mDETECTED_STORE_TYPE=""[0m
+2026-04-18T10:40:01.3313793Z [36;1mif [ -n "$KEY_STORE_TYPE" ]; then[0m
+2026-04-18T10:40:01.3314126Z [36;1m  DETECTED_STORE_TYPE="$KEY_STORE_TYPE"[0m
+2026-04-18T10:40:01.3326248Z [36;1melse[0m
+2026-04-18T10:40:01.3327343Z [36;1m  if keytool -list -keystore android/app/keystore.src -storetype PKCS12 -storepass "$STORE_PASSWORD" >/dev/null 2>&1; then[0m
+2026-04-18T10:40:01.3328006Z [36;1m    DETECTED_STORE_TYPE="PKCS12"[0m
+2026-04-18T10:40:01.3328636Z [36;1m  elif keytool -list -keystore android/app/keystore.src -storetype JKS -storepass "$STORE_PASSWORD" >/dev/null 2>&1; then[0m
+2026-04-18T10:40:01.3329256Z [36;1m    DETECTED_STORE_TYPE="JKS"[0m
+2026-04-18T10:40:01.3329545Z [36;1m  fi[0m
+2026-04-18T10:40:01.3329756Z [36;1mfi[0m
+2026-04-18T10:40:01.3329947Z [36;1m[0m
+2026-04-18T10:40:01.3330171Z [36;1mif [ -z "$DETECTED_STORE_TYPE" ]; then[0m
+2026-04-18T10:40:01.3330559Z [36;1m  echo "Could not detect keystore type (PKCS12/JKS)." >&2[0m
+2026-04-18T10:40:01.3330907Z [36;1m  exit 1[0m
+2026-04-18T10:40:01.3331113Z [36;1mfi[0m
+2026-04-18T10:40:01.3331307Z [36;1m[0m
+2026-04-18T10:40:01.3331547Z [36;1mif [ "$DETECTED_STORE_TYPE" = "PKCS12" ]; then[0m
+2026-04-18T10:40:01.3331885Z [36;1m  keytool -importkeystore \[0m
+2026-04-18T10:40:01.3332212Z [36;1m    -srckeystore android/app/keystore.src \[0m
+2026-04-18T10:40:01.3332531Z [36;1m    -srcstoretype PKCS12 \[0m
+2026-04-18T10:40:01.3332827Z [36;1m    -srcstorepass "$STORE_PASSWORD" \[0m
+2026-04-18T10:40:01.3333166Z [36;1m    -destkeystore android/app/keystore.jks \[0m
+2026-04-18T10:40:01.3333483Z [36;1m    -deststoretype JKS \[0m
+2026-04-18T10:40:01.3333782Z [36;1m    -deststorepass "$STORE_PASSWORD" \[0m
+2026-04-18T10:40:01.3334089Z [36;1m    -srcalias "$KEY_ALIAS" \[0m
+2026-04-18T10:40:01.3334367Z [36;1m    -destalias "$KEY_ALIAS" \[0m
+2026-04-18T10:40:01.3334666Z [36;1m    -srckeypass "$KEY_PASSWORD" \[0m
+2026-04-18T10:40:01.3335269Z [36;1m    -destkeypass "$KEY_PASSWORD" \[0m
+2026-04-18T10:40:01.3335774Z [36;1m    -noprompt[0m
+2026-04-18T10:40:01.3336167Z [36;1melse[0m
+2026-04-18T10:40:01.3336830Z [36;1m  mv android/app/keystore.src android/app/keystore.jks[0m
+2026-04-18T10:40:01.3337435Z [36;1mfi[0m
+2026-04-18T10:40:01.3337759Z [36;1m[0m
+2026-04-18T10:40:01.3338121Z [36;1mrm -f android/app/keystore.src[0m
+2026-04-18T10:40:01.3338650Z [36;1mcat > android/key.properties <<EOF[0m
+2026-04-18T10:40:01.3339232Z [36;1mstorePassword=$STORE_PASSWORD[0m
+2026-04-18T10:40:01.3339525Z [36;1mkeyPassword=$KEY_PASSWORD[0m
+2026-04-18T10:40:01.3339804Z [36;1mkeyAlias=$KEY_ALIAS[0m
+2026-04-18T10:40:01.3340067Z [36;1mstoreFile=app/keystore.jks[0m
+2026-04-18T10:40:01.3340334Z [36;1mEOF[0m
+2026-04-18T10:40:01.3340559Z [36;1mif [ -n "$KEY_STORE_TYPE" ]; then[0m
+2026-04-18T10:40:01.3340923Z [36;1m  echo "storeType=$KEY_STORE_TYPE" >> android/key.properties[0m
+2026-04-18T10:40:01.3341279Z [36;1mfi[0m
+2026-04-18T10:40:02.2117487Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-04-18T10:40:02.2117955Z env:
+2026-04-18T10:40:02.2118225Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-04-18T10:40:02.2118737Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.18-8/x64
+2026-04-18T10:40:02.2121865Z   JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.18-8/x64
+2026-04-18T10:40:02.2135727Z   FLUTTER_ROOT: /opt/hostedtoolcache/flutter/stable-3.41.7-x64/flutter
+2026-04-18T10:40:02.2136197Z   PUB_CACHE: /home/runner/.pub-cache
+2026-04-18T10:40:02.2155595Z   KEY_STORE_BASE64: ***
+2026-04-18T10:40:02.2155879Z   KEY_STORE_TYPE: 
+2026-04-18T10:40:02.2156124Z   KEY_ALIAS: ***
+2026-04-18T10:40:02.2157040Z   KEY_PASSWORD: ***
+2026-04-18T10:40:02.2157304Z   STORE_PASSWORD: ***
+2026-04-18T10:40:02.2157539Z ##[endgroup]
+2026-04-18T10:40:04.6050190Z Importing keystore android/app/keystore.src to android/app/keystore.jks...
+2026-04-18T10:40:04.9570859Z 
+2026-04-18T10:40:04.9573053Z Warning:
+2026-04-18T10:40:04.9582786Z The JKS keystore uses a proprietary format. It is recommended to migrate to PKCS12 which is an industry standard format using "keytool -importkeystore -srckeystore android/app/keystore.jks -destkeystore android/app/keystore.jks -deststoretype pkcs12".

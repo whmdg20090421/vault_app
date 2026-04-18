@@ -1,0 +1,59 @@
+﻿2026-04-18T10:40:09.3595738Z ##[group]Run flutter build apk --release --target-platform android-arm64
+2026-04-18T10:40:09.3597210Z [36;1mflutter build apk --release --target-platform android-arm64[0m
+2026-04-18T10:40:09.3647776Z shell: /usr/bin/bash -e {0}
+2026-04-18T10:40:09.3648231Z env:
+2026-04-18T10:40:09.3648626Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-04-18T10:40:09.3649322Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.18-8/x64
+2026-04-18T10:40:09.3650242Z   JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.18-8/x64
+2026-04-18T10:40:09.3651159Z   FLUTTER_ROOT: /opt/hostedtoolcache/flutter/stable-3.41.7-x64/flutter
+2026-04-18T10:40:09.3651877Z   PUB_CACHE: /home/runner/.pub-cache
+2026-04-18T10:40:09.3652368Z ##[endgroup]
+2026-04-18T10:40:09.7341258Z Resolving dependencies...
+2026-04-18T10:40:09.8675930Z Downloading packages...
+2026-04-18T10:40:09.9113926Z   file_picker 8.3.7 (11.0.2 available)
+2026-04-18T10:40:09.9156988Z   fl_chart 0.68.0 (1.2.0 available)
+2026-04-18T10:40:09.9181948Z   flutter_secure_storage 9.2.4 (10.0.0 available)
+2026-04-18T10:40:09.9184209Z   flutter_secure_storage_linux 1.2.3 (3.0.0 available)
+2026-04-18T10:40:09.9187284Z   flutter_secure_storage_macos 3.1.3 (4.0.0 available)
+2026-04-18T10:40:09.9207382Z   flutter_secure_storage_platform_interface 1.1.2 (2.0.1 available)
+2026-04-18T10:40:09.9208397Z   flutter_secure_storage_web 1.2.1 (2.1.0 available)
+2026-04-18T10:40:09.9209285Z   flutter_secure_storage_windows 3.1.2 (4.1.0 available)
+2026-04-18T10:40:09.9210083Z   intl 0.19.0 (0.20.2 available)
+2026-04-18T10:40:09.9210798Z   js 0.6.7 (0.7.2 available)
+2026-04-18T10:40:09.9211415Z   meta 1.17.0 (1.18.2 available)
+2026-04-18T10:40:09.9212067Z   package_info_plus 8.3.1 (10.0.0 available)
+2026-04-18T10:40:09.9212934Z   package_info_plus_platform_interface 3.2.1 (4.0.0 available)
+2026-04-18T10:40:09.9213804Z   permission_handler 11.4.0 (12.0.1 available)
+2026-04-18T10:40:09.9214631Z   permission_handler_android 12.1.0 (13.0.1 available)
+2026-04-18T10:40:09.9215427Z   pointycastle 3.9.1 (4.0.0 available)
+2026-04-18T10:40:09.9216141Z   share_plus 10.1.4 (13.0.0 available)
+2026-04-18T10:40:09.9217207Z   share_plus_platform_interface 5.0.2 (7.0.0 available)
+2026-04-18T10:40:09.9218036Z   test_api 0.7.10 (0.7.11 available)
+2026-04-18T10:40:09.9218637Z   vector_math 2.2.0 (2.3.0 available)
+2026-04-18T10:40:09.9219226Z   win32 5.15.0 (6.0.1 available)
+2026-04-18T10:40:09.9219787Z Got dependencies!
+2026-04-18T10:40:09.9220515Z 21 packages have newer versions incompatible with dependency constraints.
+2026-04-18T10:40:09.9221473Z Try `flutter pub outdated` for more information.
+2026-04-18T10:40:48.7502726Z Running Gradle task 'assembleRelease'...                        
+2026-04-18T10:40:48.7518717Z lib/cloud_drive/sync_settings_dialog.dart:418:50: Error: 'Uint8List' isn't a type.
+2026-04-18T10:40:48.7529231Z       final derivedKey = result['derivedKey'] as Uint8List;
+2026-04-18T10:40:48.7534629Z                                                  ^^^^^^^^^
+2026-04-18T10:40:55.4346824Z Target kernel_snapshot_program failed: Exception
+2026-04-18T10:40:55.4396987Z 
+2026-04-18T10:40:55.5365288Z 
+2026-04-18T10:40:55.5407455Z FAILURE: Build failed with an exception.
+2026-04-18T10:40:55.5437045Z 
+2026-04-18T10:40:55.5447324Z * What went wrong:
+2026-04-18T10:40:55.5465953Z Execution failed for task ':app:compileFlutterBuildRelease'.
+2026-04-18T10:40:55.5477559Z > Process 'command '/opt/hostedtoolcache/flutter/stable-3.41.7-x64/flutter/bin/flutter'' finished with non-zero exit value 1
+2026-04-18T10:40:55.5496854Z 
+2026-04-18T10:40:55.5512286Z * Try:
+2026-04-18T10:40:55.5557328Z > Run with --stacktrace option to get the stack trace.
+2026-04-18T10:40:55.5558084Z > Run with --info or --debug option to get more log output.
+2026-04-18T10:40:55.5558740Z > Run with --scan to get full insights.
+2026-04-18T10:40:55.5559355Z > Get more help at https://help.gradle.org.
+2026-04-18T10:40:55.5586945Z 
+2026-04-18T10:40:55.5607226Z BUILD FAILED in 44s
+2026-04-18T10:40:56.2430212Z Running Gradle task 'assembleRelease'...                           45.7s
+2026-04-18T10:40:56.2531388Z Gradle task assembleRelease failed with exit code 1
+2026-04-18T10:40:56.2598351Z ##[error]Process completed with exit code 1.

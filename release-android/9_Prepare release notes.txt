@@ -1,0 +1,11 @@
+﻿2026-04-18T10:40:06.3147536Z ##[group]Run dart run tool/release/release_prepare.dart --check --require-changelog --write-release-notes release_notes.md
+2026-04-18T10:40:06.3148515Z [36;1mdart run tool/release/release_prepare.dart --check --require-changelog --write-release-notes release_notes.md[0m
+2026-04-18T10:40:06.3170928Z shell: /usr/bin/bash -e {0}
+2026-04-18T10:40:06.3171210Z env:
+2026-04-18T10:40:06.3171432Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-04-18T10:40:06.3171861Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.18-8/x64
+2026-04-18T10:40:06.3172377Z   JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.18-8/x64
+2026-04-18T10:40:06.3172883Z   FLUTTER_ROOT: /opt/hostedtoolcache/flutter/stable-3.41.7-x64/flutter
+2026-04-18T10:40:06.3173271Z   PUB_CACHE: /home/runner/.pub-cache
+2026-04-18T10:40:06.3173542Z ##[endgroup]
+2026-04-18T10:40:07.8300113Z Running build hooks...Running build hooks...

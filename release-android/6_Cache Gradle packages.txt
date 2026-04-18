@@ -1,0 +1,43 @@
+﻿2026-04-18T10:39:26.7352317Z ##[group]Run actions/cache@v4
+2026-04-18T10:39:26.7352831Z with:
+2026-04-18T10:39:26.7353445Z   path: ~/.gradle/caches
+~/.gradle/wrapper
+!~/.gradle/caches/**/version.properties
+
+2026-04-18T10:39:26.7354301Z   key: Linux-gradle-2f7a72f5437890a7a5fafb8f553012643badf7d0b299b0bd538a1c588740fef7
+2026-04-18T10:39:26.7354799Z   restore-keys: Linux-gradle-
+
+2026-04-18T10:39:26.7355079Z   enableCrossOsArchive: false
+2026-04-18T10:39:26.7355337Z   fail-on-cache-miss: false
+2026-04-18T10:39:26.7355585Z   lookup-only: false
+2026-04-18T10:39:26.7355807Z   save-always: false
+2026-04-18T10:39:26.7356023Z env:
+2026-04-18T10:39:26.7356237Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-04-18T10:39:26.7356967Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.18-8/x64
+2026-04-18T10:39:26.7357486Z   JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.18-8/x64
+2026-04-18T10:39:26.7358020Z   FLUTTER_ROOT: /opt/hostedtoolcache/flutter/stable-3.41.7-x64/flutter
+2026-04-18T10:39:26.7358404Z   PUB_CACHE: /home/runner/.pub-cache
+2026-04-18T10:39:26.7358712Z ##[endgroup]
+2026-04-18T10:39:26.8453889Z (node:2419) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-04-18T10:39:26.8455666Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-04-18T10:39:27.0492308Z Cache hit for: Linux-gradle-2f7a72f5437890a7a5fafb8f553012643badf7d0b299b0bd538a1c588740fef7
+2026-04-18T10:39:27.0618824Z (node:2419) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-04-18T10:39:28.3061447Z Received 20971520 of 1785018073 (1.2%), 20.0 MBs/sec
+2026-04-18T10:39:29.3169999Z Received 142606336 of 1785018073 (8.0%), 67.6 MBs/sec
+2026-04-18T10:39:30.3179069Z Received 272629760 of 1785018073 (15.3%), 86.3 MBs/sec
+2026-04-18T10:39:31.3252864Z Received 452984832 of 1785018073 (25.4%), 107.4 MBs/sec
+2026-04-18T10:39:32.3258939Z Received 536870912 of 1785018073 (30.1%), 102.0 MBs/sec
+2026-04-18T10:39:33.3271357Z Received 671088640 of 1785018073 (37.6%), 106.3 MBs/sec
+2026-04-18T10:39:34.3341905Z Received 805306368 of 1785018073 (45.1%), 109.2 MBs/sec
+2026-04-18T10:39:35.3348495Z Received 935329792 of 1785018073 (52.4%), 111.1 MBs/sec
+2026-04-18T10:39:36.3593751Z Received 1073741824 of 1785018073 (60.2%), 113.1 MBs/sec
+2026-04-18T10:39:37.3565818Z Received 1207959552 of 1785018073 (67.7%), 114.6 MBs/sec
+2026-04-18T10:39:38.3572754Z Received 1342177280 of 1785018073 (75.2%), 115.8 MBs/sec
+2026-04-18T10:39:39.3627848Z Received 1480589312 of 1785018073 (82.9%), 117.1 MBs/sec
+2026-04-18T10:39:40.3635435Z Received 1631584256 of 1785018073 (91.4%), 119.2 MBs/sec
+2026-04-18T10:39:41.3652283Z Received 1778384896 of 1785018073 (99.6%), 120.6 MBs/sec
+2026-04-18T10:39:41.4141861Z Received 1785018073 of 1785018073 (100.0%), 120.7 MBs/sec
+2026-04-18T10:39:41.4147263Z Cache Size: ~1702 MB (1785018073 B)
+2026-04-18T10:39:41.4195686Z [command]/usr/bin/tar -xf /home/runner/work/_temp/0f4f73e6-8246-444c-af78-a086e85a781c/cache.tzst -P -C /home/runner/work/vault_app/vault_app --use-compress-program unzstd
+2026-04-18T10:40:01.0491224Z Cache restored successfully
+2026-04-18T10:40:01.3118220Z Cache restored from key: Linux-gradle-2f7a72f5437890a7a5fafb8f553012643badf7d0b299b0bd538a1c588740fef7

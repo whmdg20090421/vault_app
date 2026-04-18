@@ -1,0 +1,130 @@
+﻿2026-04-18T10:38:50.3111067Z ##[group]Run actions/checkout@v4
+2026-04-18T10:38:50.3111751Z with:
+2026-04-18T10:38:50.3111968Z   fetch-depth: 0
+2026-04-18T10:38:50.3112200Z   repository: whmdg20090421/vault_app
+2026-04-18T10:38:50.3112591Z   token: ***
+2026-04-18T10:38:50.3112782Z   ssh-strict: true
+2026-04-18T10:38:50.3112984Z   ssh-user: git
+2026-04-18T10:38:50.3113195Z   persist-credentials: true
+2026-04-18T10:38:50.3113418Z   clean: true
+2026-04-18T10:38:50.3113632Z   sparse-checkout-cone-mode: true
+2026-04-18T10:38:50.3113883Z   fetch-tags: false
+2026-04-18T10:38:50.3114077Z   show-progress: true
+2026-04-18T10:38:50.3114301Z   lfs: false
+2026-04-18T10:38:50.3114488Z   submodules: false
+2026-04-18T10:38:50.3114693Z   set-safe-directory: true
+2026-04-18T10:38:50.3115102Z env:
+2026-04-18T10:38:50.3115316Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-04-18T10:38:50.3115579Z ##[endgroup]
+2026-04-18T10:38:50.4167805Z Syncing repository: whmdg20090421/vault_app
+2026-04-18T10:38:50.4169152Z ##[group]Getting Git version info
+2026-04-18T10:38:50.4169634Z Working directory is '/home/runner/work/vault_app/vault_app'
+2026-04-18T10:38:50.4171821Z [command]/usr/bin/git version
+2026-04-18T10:38:50.4214662Z git version 2.53.0
+2026-04-18T10:38:50.4230226Z ##[endgroup]
+2026-04-18T10:38:50.4245198Z Temporarily overriding HOME='/home/runner/work/_temp/ba8d6f7a-6709-4e76-bf4f-1b678de6b0b5' before making global git config changes
+2026-04-18T10:38:50.4247682Z Adding repository directory to the temporary git global config as a safe directory
+2026-04-18T10:38:50.4251988Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/vault_app/vault_app
+2026-04-18T10:38:50.4290339Z Deleting the contents of '/home/runner/work/vault_app/vault_app'
+2026-04-18T10:38:50.4295024Z ##[group]Initializing the repository
+2026-04-18T10:38:50.4301946Z [command]/usr/bin/git init /home/runner/work/vault_app/vault_app
+2026-04-18T10:38:50.4392600Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-04-18T10:38:50.4396711Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-04-18T10:38:50.4407653Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-04-18T10:38:50.4411063Z hint: call:
+2026-04-18T10:38:50.4411870Z hint:
+2026-04-18T10:38:50.4412552Z hint: 	git config --global init.defaultBranch <name>
+2026-04-18T10:38:50.4414232Z hint:
+2026-04-18T10:38:50.4425505Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-04-18T10:38:50.4427078Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-04-18T10:38:50.4428212Z hint:
+2026-04-18T10:38:50.4428900Z hint: 	git branch -m <name>
+2026-04-18T10:38:50.4429609Z hint:
+2026-04-18T10:38:50.4430493Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-04-18T10:38:50.4431941Z Initialized empty Git repository in /home/runner/work/vault_app/vault_app/.git/
+2026-04-18T10:38:50.4434957Z [command]/usr/bin/git remote add origin https://github.com/whmdg20090421/vault_app
+2026-04-18T10:38:50.4449324Z ##[endgroup]
+2026-04-18T10:38:50.4450587Z ##[group]Disabling automatic garbage collection
+2026-04-18T10:38:50.4451617Z [command]/usr/bin/git config --local gc.auto 0
+2026-04-18T10:38:50.4484223Z ##[endgroup]
+2026-04-18T10:38:50.4485168Z ##[group]Setting up auth
+2026-04-18T10:38:50.4492324Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-04-18T10:38:50.4526914Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-04-18T10:38:50.4817558Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-04-18T10:38:50.4850429Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-04-18T10:38:50.5087076Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-04-18T10:38:50.5130032Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-04-18T10:38:50.5357226Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-04-18T10:38:50.5405113Z ##[endgroup]
+2026-04-18T10:38:50.5405865Z ##[group]Fetching the repository
+2026-04-18T10:38:50.5407366Z [command]/usr/bin/git -c protocol.version=2 fetch --prune --no-recurse-submodules origin +refs/heads/*:refs/remotes/origin/* +refs/tags/*:refs/tags/*
+2026-04-18T10:38:52.5579646Z From https://github.com/whmdg20090421/vault_app
+2026-04-18T10:38:52.5588275Z  * [new branch]      main                   -> origin/main
+2026-04-18T10:38:52.5589801Z  * [new branch]      trae/add-webdav-cloud-drive -> origin/trae/add-webdav-cloud-drive
+2026-04-18T10:38:52.5591185Z  * [new branch]      trae/solo-agent-hqd79J -> origin/trae/solo-agent-hqd79J
+2026-04-18T10:38:52.5592388Z  * [new branch]      trae/solo-agent-iK8Y8M -> origin/trae/solo-agent-iK8Y8M
+2026-04-18T10:38:52.5593522Z  * [new branch]      trae/solo-agent-vrWMQF -> origin/trae/solo-agent-vrWMQF
+2026-04-18T10:38:52.5594661Z  * [new branch]      trae/solo-agent-w4d6CF -> origin/trae/solo-agent-w4d6CF
+2026-04-18T10:38:52.5595988Z  * [new branch]      trae/solo-agent-xiZa6D -> origin/trae/solo-agent-xiZa6D
+2026-04-18T10:38:52.5597368Z  * [new branch]      trae/solo-agent-yiQGQm -> origin/trae/solo-agent-yiQGQm
+2026-04-18T10:38:52.5598656Z  * [new tag]         v1.0.0+1               -> v1.0.0+1
+2026-04-18T10:38:52.5599505Z  * [new tag]         v1.0.1                 -> v1.0.1
+2026-04-18T10:38:52.5600443Z  * [new tag]         v1.0.2                 -> v1.0.2
+2026-04-18T10:38:52.5601256Z  * [new tag]         v1.1.0                 -> v1.1.0
+2026-04-18T10:38:52.5602070Z  * [new tag]         v1.1.1                 -> v1.1.1
+2026-04-18T10:38:52.5602863Z  * [new tag]         v1.1.2                 -> v1.1.2
+2026-04-18T10:38:52.5603746Z  * [new tag]         v1.1.3                 -> v1.1.3
+2026-04-18T10:38:52.5604548Z  * [new tag]         v1.1.4                 -> v1.1.4
+2026-04-18T10:38:52.5646963Z  * [new tag]         v1.2.0                 -> v1.2.0
+2026-04-18T10:38:52.5655894Z  * [new tag]         v1.2.1                 -> v1.2.1
+2026-04-18T10:38:52.5657095Z  * [new tag]         v1.2.2                 -> v1.2.2
+2026-04-18T10:38:52.5657984Z  * [new tag]         v1.2.3                 -> v1.2.3
+2026-04-18T10:38:52.5658856Z  * [new tag]         v1.2.4                 -> v1.2.4
+2026-04-18T10:38:52.5659739Z  * [new tag]         v1.2.5                 -> v1.2.5
+2026-04-18T10:38:52.5660642Z  * [new tag]         v1.2.6                 -> v1.2.6
+2026-04-18T10:38:52.5661606Z  * [new tag]         v1.2.7                 -> v1.2.7
+2026-04-18T10:38:52.5662424Z  * [new tag]         v1.2.8                 -> v1.2.8
+2026-04-18T10:38:52.5663197Z  * [new tag]         v1.2.9                 -> v1.2.9
+2026-04-18T10:38:52.5664051Z  * [new tag]         v1.3.0                 -> v1.3.0
+2026-04-18T10:38:52.5664945Z  * [new tag]         v1.3.1                 -> v1.3.1
+2026-04-18T10:38:52.5666165Z  * [new tag]         v1.3.2                 -> v1.3.2
+2026-04-18T10:38:52.5668153Z  * [new tag]         v1.3.3                 -> v1.3.3
+2026-04-18T10:38:52.5668981Z  * [new tag]         v1.3.4                 -> v1.3.4
+2026-04-18T10:38:52.5675850Z  * [new tag]         v1.3.5                 -> v1.3.5
+2026-04-18T10:38:52.5677223Z  * [new tag]         v1.3.6                 -> v1.3.6
+2026-04-18T10:38:52.5680704Z  * [new tag]         v1.3.7                 -> v1.3.7
+2026-04-18T10:38:52.5681960Z  * [new tag]         v1.4.0                 -> v1.4.0
+2026-04-18T10:38:52.5684668Z  * [new tag]         v1.4.1                 -> v1.4.1
+2026-04-18T10:38:52.5685810Z  * [new tag]         v1.4.2                 -> v1.4.2
+2026-04-18T10:38:52.5691753Z [command]/usr/bin/git tag --list v1.4.2
+2026-04-18T10:38:52.5715747Z v1.4.2
+2026-04-18T10:38:52.5726033Z [command]/usr/bin/git rev-parse refs/tags/v1.4.2
+2026-04-18T10:38:52.5750957Z de86d8d705371f866af4f551799476b0ab18c4fb
+2026-04-18T10:38:52.5769073Z ##[endgroup]
+2026-04-18T10:38:52.5771666Z ##[group]Determining the checkout info
+2026-04-18T10:38:52.5772389Z ##[endgroup]
+2026-04-18T10:38:52.5772793Z [command]/usr/bin/git sparse-checkout disable
+2026-04-18T10:38:52.5802409Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-04-18T10:38:52.5842414Z ##[group]Checking out the ref
+2026-04-18T10:38:52.5845277Z [command]/usr/bin/git checkout --progress --force refs/tags/v1.4.2
+2026-04-18T10:38:52.8211053Z Note: switching to 'refs/tags/v1.4.2'.
+2026-04-18T10:38:52.8213839Z 
+2026-04-18T10:38:52.8214206Z You are in 'detached HEAD' state. You can look around, make experimental
+2026-04-18T10:38:52.8215047Z changes and commit them, and you can discard any commits you make in this
+2026-04-18T10:38:52.8215873Z state without impacting any branches by switching back to a branch.
+2026-04-18T10:38:52.8216382Z 
+2026-04-18T10:38:52.8216897Z If you want to create a new branch to retain commits you create, you may
+2026-04-18T10:38:52.8218391Z do so (now or later) by using -c with the switch command. Example:
+2026-04-18T10:38:52.8218888Z 
+2026-04-18T10:38:52.8219078Z   git switch -c <new-branch-name>
+2026-04-18T10:38:52.8219408Z 
+2026-04-18T10:38:52.8219576Z Or undo this operation with:
+2026-04-18T10:38:52.8219836Z 
+2026-04-18T10:38:52.8219987Z   git switch -
+2026-04-18T10:38:52.8220195Z 
+2026-04-18T10:38:52.8220527Z Turn off this advice by setting config variable advice.detachedHead to false
+2026-04-18T10:38:52.8221359Z 
+2026-04-18T10:38:52.8221716Z HEAD is now at de86d8d chore(release): bump version to 1.4.2+20 and update changelog
+2026-04-18T10:38:52.8226274Z ##[endgroup]
+2026-04-18T10:38:52.8267902Z [command]/usr/bin/git log -1 --format=%H
+2026-04-18T10:38:52.8289969Z de86d8d705371f866af4f551799476b0ab18c4fb
