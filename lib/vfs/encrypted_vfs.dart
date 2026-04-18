@@ -247,42 +247,7 @@ class EncryptedVfs implements VirtualFileSystem {
 
   @override
   Future<Stream<List<int>>> open(String path, {int? start, int? end}) async {
-    String virtualPath = _normalizePath(path);
-    String realPath = _getRealPath(virtualPath);
-    if (path.endsWith('/') && realPath != '/') {
-      realPath += '/';
-    }
-    
-    bool isEncrypted = _isEncryptedDomain(_getParentPath(virtualPath));
-    if (!isEncrypted) {
-      return baseVfs.open(realPath, start: start, end: end);
-    }
-
-    int? cipherStart;
-    int? cipherEnd;
-
-    // To decrypt we always need the 16-byte fileId at the start of the file.
-    // So we need to read it first, or just include it in our cipher stream bounds?
-    // Let's read the fileId once by opening the first 16 bytes.
-    final headerStream = await baseVfs.open(realPath, start: 0, end: _fileIdLength - 1);
-    final fileId = await _readHeader(headerStream);
-
-    if (start != null || end != null) {
-      int safeStart = start ?? 0;
-      int startChunk = safeStart ~/ _chunkSize;
-      cipherStart = _fileIdLength + startChunk * _chunkCipherSize;
-
-      if (end != null) {
-        int endChunk = end ~/ _chunkSize;
-        cipherEnd = _fileIdLength + (endChunk + 1) * _chunkCipherSize - 1;
-      }
-    } else {
-      cipherStart = _fileIdLength;
-    }
-
-    final cipherStream = await baseVfs.open(realPath, start: cipherStart, end: cipherEnd);
-    int startChunkIndex = (start ?? 0) ~/ _chunkSize;
-    return _decryptStream(cipherStream, fileId, startChunkIndex, start ?? 0, end);
+    throw UnimplementedError('TODO: Refactor encryption flow');
   }
 
   Future<Uint8List> _readHeader(Stream<List<int>> stream) async {
@@ -298,41 +263,7 @@ class EncryptedVfs implements VirtualFileSystem {
   }
 
   Stream<List<int>> _decryptStream(Stream<List<int>> cipherStream, Uint8List fileId, int startChunkIndex, int plainStart, int? plainEnd) async* {
-    int currentPlainOffset = startChunkIndex * _chunkSize;
-    int currentChunkIndex = startChunkIndex;
-    final buffer = <int>[];
-
-    await for (final chunk in cipherStream) {
-      buffer.addAll(chunk);
-
-      while (buffer.length >= _chunkCipherSize) {
-        final cipherChunk = Uint8List.fromList(buffer.sublist(0, _chunkCipherSize));
-        buffer.removeRange(0, _chunkCipherSize);
-
-        final plainChunk = _chunkCrypto.decryptChunkSync(
-          chunkData: cipherChunk,
-          fileId: fileId,
-          chunkIndex: currentChunkIndex,
-        );
-        currentChunkIndex++;
-
-        yield* _sliceAndYield(plainChunk, currentPlainOffset, plainStart, plainEnd);
-        currentPlainOffset += plainChunk.length;
-        
-        if (plainEnd != null && currentPlainOffset > plainEnd) {
-          return;
-        }
-      }
-    }
-
-    if (buffer.isNotEmpty) {
-      final plainChunk = _chunkCrypto.decryptChunkSync(
-        chunkData: Uint8List.fromList(buffer),
-        fileId: fileId,
-        chunkIndex: currentChunkIndex,
-      );
-      yield* _sliceAndYield(plainChunk, currentPlainOffset, plainStart, plainEnd);
-    }
+    throw UnimplementedError('TODO: Refactor encryption flow');
   }
 
   Stream<List<int>> _sliceAndYield(Uint8List plainChunk, int currentOffset, int plainStart, int? plainEnd) async* {
@@ -411,53 +342,11 @@ class EncryptedVfs implements VirtualFileSystem {
 
   @override
   Future<void> uploadStream(Stream<List<int>> stream, int length, String remotePath) async {
-    String virtualPath = _normalizePath(remotePath);
-    String realPath = _getRealPath(virtualPath);
-    if (remotePath.endsWith('/') && realPath != '/') {
-      realPath += '/';
-    }
-
-    bool isEncrypted = _isEncryptedDomain(_getParentPath(virtualPath));
-    if (!isEncrypted) {
-      return baseVfs.uploadStream(stream, length, realPath);
-    }
-
-    final cipherSize = _getCiphertextSize(length);
-    final fileId = _generateRandomBytes(_fileIdLength);
-    final cipherStream = _encryptStream(stream, fileId);
-    return baseVfs.uploadStream(cipherStream, cipherSize, realPath);
+    throw UnimplementedError('TODO: Refactor encryption flow');
   }
 
   Stream<List<int>> _encryptStream(Stream<List<int>> plainStream, Uint8List fileId) async* {
-    yield fileId;
-
-    final buffer = <int>[];
-    int currentChunkIndex = 0;
-
-    await for (final chunk in plainStream) {
-      buffer.addAll(chunk);
-
-      while (buffer.length >= _chunkSize) {
-        final plainChunk = Uint8List.fromList(buffer.sublist(0, _chunkSize));
-        buffer.removeRange(0, _chunkSize);
-        yield _chunkCrypto.encryptChunkSync(
-          chunkData: plainChunk,
-          fileId: fileId,
-          chunkIndex: currentChunkIndex,
-        );
-        currentChunkIndex++;
-      }
-    }
-
-    if (buffer.isNotEmpty) {
-      yield _chunkCrypto.encryptChunkSync(
-        chunkData: Uint8List.fromList(buffer),
-        fileId: fileId,
-        chunkIndex: currentChunkIndex,
-      );
-    } else if (currentChunkIndex == 0) {
-      // For empty files, we just yield the fileId (which we already did)
-    }
+    throw UnimplementedError('TODO: Refactor encryption flow');
   }
 
   @override

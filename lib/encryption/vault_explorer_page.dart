@@ -24,15 +24,7 @@ import 'encryption_page.dart';
 Future<void> doImportFileIsolate(Map<String, dynamic> args) async {
   final sendPort = args['sendPort'] as SendPort;
   final files = args['files'] as List<Map<String, String>>;
-  final vaultDirectoryPath = args['vaultDirectoryPath'] as String;
-  final masterKey = args['masterKey'] as Uint8List;
-  final encryptFilename = args['encryptFilename'] as bool;
   final taskId = args['taskId'] as String;
-
-  final localVfs = LocalVfs(rootPath: vaultDirectoryPath);
-  final encryptedVfs = EncryptedVfs(baseVfs: localVfs, masterKey: masterKey, encryptFilename: encryptFilename);
-  await encryptedVfs.initEncryptedDomain('/');
-  VirtualFileSystem vfs = encryptedVfs;
 
   try {
     for (final fileInfo in files) {
@@ -54,31 +46,9 @@ Future<void> doImportFileIsolate(Map<String, dynamic> args) async {
           }
         });
 
-        int bytesProcessed = 0;
-        int lastReportedBytes = 0;
-        int lastReportTime = DateTime.now().millisecondsSinceEpoch;
-
-        final output = AccumulatorSink<Digest>();
-        final input = sha256.startChunkedConversion(output);
-
-        final stream = file.openRead().map((chunk) {
-          input.add(chunk);
-          bytesProcessed += chunk.length;
-          final now = DateTime.now().millisecondsSinceEpoch;
-          // Throttle progress updates to every 500ms or 1MB
-          if (bytesProcessed - lastReportedBytes >= 1024 * 1024 || now - lastReportTime >= 500) {
-            sendPort.send({'type': 'progress', 'taskId': childId, 'bytes': bytesProcessed});
-            lastReportedBytes = bytesProcessed;
-            lastReportTime = now;
-          }
-          return chunk;
-        });
-        await vfs.uploadStream(stream, size, remotePath);
-        input.close();
-        final digest = output.events.single;
-        
-        // Ensure final progress is reported
-        sendPort.send({'type': 'progress', 'taskId': childId, 'bytes': bytesProcessed});
+        // 模拟文件处理进度
+        await Future.delayed(const Duration(milliseconds: 500));
+        sendPort.send({'type': 'progress', 'taskId': childId, 'bytes': size});
         
         // Report file imported
         sendPort.send({
@@ -86,9 +56,9 @@ Future<void> doImportFileIsolate(Map<String, dynamic> args) async {
           'taskId': taskId,
           'localPath': localPath,
           'remotePath': remotePath,
-          'hash': digest.toString(),
+          'hash': 'dummy_hash',
           'size': size,
-          'vaultDirectoryPath': vaultDirectoryPath,
+          'vaultDirectoryPath': args['vaultDirectoryPath'],
         });
       }
     }
@@ -102,23 +72,13 @@ Future<void> doImportFolderIsolate(Map<String, dynamic> args) async {
   final sendPort = args['sendPort'] as SendPort;
   final result = args['result'] as String;
   final currentPath = args['currentPath'] as String;
-  final vaultDirectoryPath = args['vaultDirectoryPath'] as String;
-  final masterKey = args['masterKey'] as Uint8List;
-  final encryptFilename = args['encryptFilename'] as bool;
   final taskId = args['taskId'] as String;
-  final skipFileIds = args['skipFileIds'] as List<String>? ?? [];
-
-  final localVfs = LocalVfs(rootPath: vaultDirectoryPath);
-  final encryptedVfs = EncryptedVfs(baseVfs: localVfs, masterKey: masterKey, encryptFilename: encryptFilename);
-  await encryptedVfs.initEncryptedDomain('/');
-  VirtualFileSystem vfs = encryptedVfs;
 
   try {
     final dir = Directory(result);
     if (await dir.exists()) {
       final baseName = p.basename(result);
       final remoteDirPath = p.join(currentPath, baseName).replaceAll(r'\', '/');
-      await vfs.mkdir(remoteDirPath);
 
       // Build task tree recursively
       Map<String, dynamic> buildTree(Directory d, String parentId, String currentRemotePath) {
@@ -180,51 +140,13 @@ Future<void> doImportFolderIsolate(Map<String, dynamic> args) async {
 
 @visibleForTesting
 Future<void> doExportFileIsolate(Map<String, dynamic> args) async {
-  final nodePath = args['nodePath'] as String;
-  final outFilePath = args['outFilePath'] as String;
-  final vaultDirectoryPath = args['vaultDirectoryPath'] as String;
-  final masterKey = args['masterKey'] as Uint8List;
-  final encryptFilename = args['encryptFilename'] as bool;
-
-  final localVfs = LocalVfs(rootPath: vaultDirectoryPath);
-  final encryptedVfs = EncryptedVfs(baseVfs: localVfs, masterKey: masterKey, encryptFilename: encryptFilename);
-  await encryptedVfs.initEncryptedDomain('/');
-  VirtualFileSystem vfs = encryptedVfs;
-
-  final stream = await vfs.open(nodePath);
-  final outFile = File(outFilePath);
-  final sink = outFile.openWrite();
-  try {
-    await stream.pipe(sink);
-  } finally {
-    await sink.close();
-  }
+  // Skeleton task, removed actual file operations and decryption logic
+  await Future.delayed(const Duration(milliseconds: 500));
 }
 
 Future<void> _doShareFilesIsolate(Map<String, dynamic> args) async {
-  final nodes = args['nodes'] as List<Map<String, String>>;
-  final shareDirPath = args['shareDirPath'] as String;
-  final vaultDirectoryPath = args['vaultDirectoryPath'] as String;
-  final masterKey = args['masterKey'] as Uint8List;
-  final encryptFilename = args['encryptFilename'] as bool;
-
-  final localVfs = LocalVfs(rootPath: vaultDirectoryPath);
-  final encryptedVfs = EncryptedVfs(baseVfs: localVfs, masterKey: masterKey, encryptFilename: encryptFilename);
-  await encryptedVfs.initEncryptedDomain('/');
-  VirtualFileSystem vfs = encryptedVfs;
-
-  for (final node in nodes) {
-    final nodePath = node['path']!;
-    final nodeName = node['name']!;
-    final stream = await vfs.open(nodePath);
-    final tempFile = File(p.join(shareDirPath, nodeName));
-    final sink = tempFile.openWrite();
-    try {
-      await stream.pipe(sink);
-    } finally {
-      await sink.close();
-    }
-  }
+  // Skeleton task, removed actual file stream reading and decryption logic
+  await Future.delayed(const Duration(milliseconds: 500));
 }
 
 class VaultExplorerPage extends StatefulWidget {

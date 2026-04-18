@@ -1,7 +1,8 @@
-- [ ] 确认加密算法文件（如 `chunk_crypto.dart` 等）未被删除。
-- [ ] 确认 `encryption_page.dart` 和 `vault_explorer_page.dart` 等 UI 结构正常保留。
-- [ ] 确认 `encryption_task_manager.dart` 中的具体调度逻辑、队列管理、多线程处理等已经被清空，仅保留可编译的空方法/单例。
-- [ ] 确认 `encrypted_vfs.dart` 中的加密读写逻辑（如 `uploadStream`）已经被清空，仅保留可编译的空方法或抛出未实现异常。
-- [ ] 确认 UI 页面中的具体加密触发逻辑（如 `doImportFileIsolate`）被移除或清空。
-- [ ] 运行 `flutter analyze`，确保项目依然可以编译且没有语法错误。
-- [ ] 提交修改，标记为重构准备阶段。
+- [x] 确认加密算法文件（如 `chunk_crypto.dart` 等）未被删除。
+- [x] 确认 VFS 映射层结构（如 `encrypted_vfs.dart`）未被删除，接口保持不变。
+- [x] 确认 `encryption_page.dart` 和 `vault_explorer_page.dart` 等 UI 结构正常保留。
+- [x] 确认 `encryption_task_manager.dart` 中的实际文件读写、隔离线程通信和加密调用被清空。
+- [x] 确认 `encrypted_vfs.dart` 中 `uploadStream` 和 `downloadStream` 内部的加密流转换被清空。
+- [x] 确认 `vault_explorer_page.dart` 里的 `doImportFileIsolate` 中的明文流转加密流调用已被清空或抛出异常。
+- [x] 运行 `flutter analyze`，确保项目依然可以编译且没有语法错误。
+- [x] 提交修改，标记为重构准备阶段。

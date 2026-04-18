@@ -358,35 +358,7 @@ class EncryptionTaskManager extends ChangeNotifier {
   List<EncryptionTask> get historyTasks => List.unmodifiable(_historyTasks);
 
   Future<void> _loadQueue() async {
-    try {
-      final directory = await getApplicationDocumentsDirectory();
-      final file = File('${directory.path}/加密任务记录/encryption_queue.json');
-      if (await file.exists()) {
-        final content = await file.readAsString();
-        if (content.isNotEmpty) {
-          final List<dynamic> jsonList = jsonDecode(content);
-          final loadedTasks = jsonList.map((e) => EncryptionTask.fromJson(e as Map<String, dynamic>)).toList();
-          for (var task in loadedTasks) {
-            _pauseOrFailTaskRecursive(task);
-          }
-          _tasks.addAll(loadedTasks);
-        }
-      }
-      
-      final historyFile = File('${directory.path}/加密任务记录/encryption_history.json');
-      if (await historyFile.exists()) {
-        final content = await historyFile.readAsString();
-        if (content.isNotEmpty) {
-          final List<dynamic> jsonList = jsonDecode(content);
-          final loadedHistory = jsonList.map((e) => EncryptionTask.fromJson(e as Map<String, dynamic>)).toList();
-          _historyTasks.addAll(loadedHistory);
-        }
-      }
-      
-      notifyListeners();
-    } catch (e) {
-      debugPrint('Failed to load encryption queue/history: $e');
-    }
+    debugPrint('Mock _loadQueue: Queue loading skipped.');
   }
 
   void _pauseOrFailTaskRecursive(EncryptionTask task) {
@@ -409,24 +381,7 @@ class EncryptionTaskManager extends ChangeNotifier {
   Timer? _saveTimer;
 
   Future<void> _saveQueue() async {
-    if (_isSaving) {
-      _scheduleSave();
-      return;
-    }
-    _isSaving = true;
-    try {
-      final directory = await getApplicationDocumentsDirectory();
-      final file = File('${directory.path}/加密任务记录/encryption_queue.json');
-      if (!await file.parent.exists()) {
-        await file.parent.create(recursive: true);
-      }
-      final jsonString = jsonEncode(_tasks.map((t) => t.toJson()).toList());
-      await file.writeAsString(jsonString);
-    } catch (e) {
-      debugPrint('Failed to save encryption queue: $e');
-    } finally {
-      _isSaving = false;
-    }
+    debugPrint('Mock _saveQueue: Queue saving skipped.');
   }
 
   void _scheduleSave() {
@@ -437,17 +392,7 @@ class EncryptionTaskManager extends ChangeNotifier {
   }
 
   Future<void> _saveHistory() async {
-    try {
-      final directory = await getApplicationDocumentsDirectory();
-      final file = File('${directory.path}/加密任务记录/encryption_history.json');
-      if (!await file.parent.exists()) {
-        await file.parent.create(recursive: true);
-      }
-      final jsonString = jsonEncode(_historyTasks.map((t) => t.toJson()).toList());
-      await file.writeAsString(jsonString);
-    } catch (e) {
-      debugPrint('Failed to save encryption history: $e');
-    }
+    debugPrint('Mock _saveHistory: History saving skipped.');
   }
 
   void addTask(EncryptionTask task) {
