@@ -121,23 +121,38 @@ Future<void> doImportFolderIsolate(Map<String, dynamic> args) async {
       await vfs.mkdir(remoteDirPath);
 
       // Build task tree recursively
-      Map<String, dynamic> buildTree(Directory d, String parentId) {
+      Map<String, dynamic> buildTree(Directory d, String parentId, String currentRemotePath) {
         int totalSize = 0;
         List<Map<String, dynamic>> children = [];
-        for (final entity in d.listSync()) {
-          final id = '$parentId/${p.basename(entity.path)}';
+        List<FileSystemEntity> entities = [];
+        try {
+          entities = d.listSync(followLinks: false);
+        } catch (_) {
+          entities = [];
+        }
+
+        for (final entity in entities) {
+          final name = p.basename(entity.path);
+          final id = '$parentId/$name';
           if (entity is File) {
-            final size = entity.lengthSync();
+            int size = 0;
+            try {
+              size = entity.lengthSync();
+            } catch (_) {
+              continue;
+            }
             totalSize += size;
             children.add({
               'id': id,
-              'name': p.basename(entity.path),
+              'name': name,
               'isDirectory': false,
               'totalBytes': size,
               'path': entity.path,
+              'remotePath': p.join(currentRemotePath, name).replaceAll(r'\', '/'),
             });
           } else if (entity is Directory) {
-            final childMap = buildTree(entity, id);
+            final childRemotePath = p.join(currentRemotePath, name).replaceAll(r'\', '/');
+            final childMap = buildTree(entity, id, childRemotePath);
             totalSize += childMap['totalBytes'] as int;
             children.add(childMap);
           }
@@ -148,11 +163,12 @@ Future<void> doImportFolderIsolate(Map<String, dynamic> args) async {
           'isDirectory': true,
           'totalBytes': totalSize,
           'children': children,
+          'remotePath': currentRemotePath,
         };
       }
 
-      final treeMap = buildTree(dir, taskId);
-      sendPort.send({'type': 'tree', 'tree': treeMap});
+      final treeMap = buildTree(dir, taskId, remoteDirPath);
+      sendPort.send({'type': 'tree', 'taskId': taskId, 'tree': treeMap});
 
       // Skip processing here, let ETM (EncryptionTaskManager) pumpQueue handle the actual multi-threaded file import
       sendPort.send({'type': 'done', 'taskId': taskId});
@@ -398,9 +414,11 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
         final dir = Directory(result);
         if (await dir.exists()) {
           int totalSize = 0;
-          await for (final entity in dir.list(recursive: true)) {
+          await for (final entity in dir.list(recursive: true, followLinks: false)) {
             if (entity is File) {
-              totalSize += await entity.length();
+              try {
+                totalSize += await entity.length();
+              } catch (_) {}
             }
           }
 
@@ -420,8 +438,9 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
           final task = EncryptionTask(
             id: taskId,
             name: baseName,
+            isDirectory: true,
             totalBytes: totalSize,
-            status: 'encrypting',
+            status: 'pending',
             taskArgs: taskArgs,
           );
 
@@ -432,7 +451,8 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
           receivePort.listen((message) {
             if (message is Map<String, dynamic>) {
               final type = message['type'];
-              final tid = message['taskId'] as String;
+              final msgTaskId = message['taskId'];
+              final tid = msgTaskId is String ? msgTaskId : taskId;
               if (type == 'progress') {
                 final bytes = message['bytes'] as int;
                 EncryptionTaskManager().updateTaskProgress(tid, bytes);

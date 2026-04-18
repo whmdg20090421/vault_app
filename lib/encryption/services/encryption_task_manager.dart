@@ -6,6 +6,7 @@ import 'dart:isolate';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../services/stats_service.dart';
 import 'local_index_service.dart';
 
 class EncryptionTask {
@@ -538,6 +539,7 @@ class EncryptionTaskManager extends ChangeNotifier {
         _historyTasks.add(root);
         _saveQueue();
         _saveHistory();
+        StatsService().recalculate();
         notifyListeners();
       }
     }
