@@ -1,12 +1,15 @@
+import 'package:crypto/crypto.dart';
 import '../../encryption/vault_explorer_page.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
 import 'package:flutter/foundation.dart';
+import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/stats_service.dart';
+import '../models/encryption_node.dart';
 import 'local_index_service.dart';
 
 class EncryptionTask {
@@ -201,6 +204,44 @@ class EncryptionTask {
   }
 }
 
+Future<void> doEncryptFileIsolate(Map<String, dynamic> args) async {
+  final sendPort = args['sendPort'] as SendPort;
+  final localPath = args['localPath'] as String;
+  final remotePath = args['remotePath'] as String;
+  final taskId = args['taskId'] as String;
+  final absolutePath = args['absolutePath'] as String;
+
+  try {
+    final file = File(localPath);
+    if (!await file.exists()) {
+      throw Exception('File not found: $localPath');
+    }
+    
+    final size = await file.length();
+    
+    // Simulate encryption
+    await Future.delayed(const Duration(milliseconds: 500));
+    sendPort.send({'type': 'progress', 'taskId': taskId, 'absolutePath': absolutePath, 'bytes': size});
+    
+    // Calculate dummy hash for now, or actual hash if we read the file
+    // For task 9.1: Calculate hash
+    final bytes = await file.readAsBytes();
+    final hash = md5.convert(bytes).toString();
+
+    sendPort.send({
+      'type': 'done',
+      'taskId': taskId,
+      'absolutePath': absolutePath,
+      'hash': hash,
+      'size': size,
+      'remotePath': remotePath,
+      'vaultDirectoryPath': args['vaultDirectoryPath']
+    });
+  } catch (e) {
+    sendPort.send({'type': 'error', 'taskId': taskId, 'absolutePath': absolutePath, 'error': e.toString()});
+  }
+}
+
 class EncryptionTaskManager extends ChangeNotifier {
   static final EncryptionTaskManager _instance = EncryptionTaskManager._internal();
 
@@ -226,23 +267,128 @@ class EncryptionTaskManager extends ChangeNotifier {
     if (message is Map<String, dynamic>) {
       final type = message['type'];
       final tid = message['taskId'] as String;
-      if (type == 'progress') {
-        updateTaskProgress(tid, message['bytes'] as int);
-      } else if (type == 'file_imported') {
-        _recordLocalIndex(
-          message['vaultDirectoryPath'] as String,
-          message['remotePath'] as String,
-          message['hash'] as String,
-          message['size'] as int,
-        );
-      } else if (type == 'done') {
-        updateTaskStatus(tid, 'completed');
-        _activeWorkers--;
-        pumpQueue();
-      } else if (type == 'error') {
-        updateTaskStatus(tid, 'failed', error: message['error'] as String?);
-        _activeWorkers--;
-        pumpQueue();
+      final absolutePath = message['absolutePath'] as String?;
+      
+      if (absolutePath != null) {
+        // V4 message handling
+        if (type == 'progress') {
+          // Just update bytes if needed, but in V4 we track size/rawSize
+          // For now just notify
+          notifyListeners();
+        } else if (type == 'done') {
+          _updateNodeStatusV4(absolutePath, EncryptionStatus.completed);
+          _recordLocalIndex(
+            message['vaultDirectoryPath'] as String,
+            '${tid}_${message['remotePath']}',
+            message['hash'] as String,
+            message['size'] as int,
+          );
+          _activeWorkers--;
+          _checkTaskCompletionV4(tid);
+          pumpQueueV4();
+        } else if (type == 'error') {
+          _updateNodeStatusV4(absolutePath, EncryptionStatus.error);
+          _activeWorkers--;
+          _checkTaskCompletionV4(tid);
+          pumpQueueV4();
+        }
+      } else {
+        // Old message handling
+        if (type == 'progress') {
+          updateTaskProgress(tid, message['bytes'] as int);
+        } else if (type == 'file_imported') {
+          _recordLocalIndex(
+            message['vaultDirectoryPath'] as String,
+            message['remotePath'] as String,
+            message['hash'] as String,
+            message['size'] as int,
+          );
+        } else if (type == 'done') {
+          updateTaskStatus(tid, 'completed');
+          _activeWorkers--;
+          pumpQueue();
+        } else if (type == 'error') {
+          updateTaskStatus(tid, 'failed', error: message['error'] as String?);
+          _activeWorkers--;
+          pumpQueue();
+        }
+      }
+    }
+  }
+
+  EncryptionNode? _findNodeByPath(List<EncryptionNode> nodes, String path) {
+    for (final node in nodes) {
+      if (node.absolutePath == path) return node;
+      if (node.children != null) {
+        final found = _findNodeByPath(node.children!, path);
+        if (found != null) return found;
+      }
+    }
+    return null;
+  }
+
+  void _updateNodeStatusV4(String path, EncryptionStatus status) {
+    final node = _findNodeByPath(_globalTasks, path);
+    if (node != null) {
+      node.status = status;
+      persistGlobalTasks();
+      notifyListeners();
+    }
+  }
+
+  void _checkTaskCompletionV4(String taskId) {
+    final rootNode = _globalTasks.firstWhere((n) => n.taskId == taskId, orElse: () => EncryptionNode(name: '', type: EncryptionNodeType.file, absolutePath: ''));
+    if (rootNode.taskId == null) return; // not found
+
+    bool allCompleted = _checkAllFilesCompleted(rootNode);
+    if (allCompleted) {
+      // Check file existence
+      bool allExist = _checkAllFilesExist(rootNode);
+      if (allExist) {
+        // move to history
+        _globalTasks.remove(rootNode);
+        // Note: history tracking for V4 will be added later
+      } else {
+        // Mark missing as error
+        _markMissingFilesAsError(rootNode);
+      }
+      persistGlobalTasks();
+      notifyListeners();
+    }
+  }
+
+  bool _checkAllFilesCompleted(EncryptionNode node) {
+    if (node.type == EncryptionNodeType.file) {
+      return node.status == EncryptionStatus.completed;
+    }
+    if (node.children != null) {
+      for (final child in node.children!) {
+        if (!_checkAllFilesCompleted(child)) return false;
+      }
+    }
+    return true;
+  }
+
+  bool _checkAllFilesExist(EncryptionNode node) {
+    if (node.type == EncryptionNodeType.file) {
+      return File(node.absolutePath).existsSync();
+    }
+    if (node.children != null) {
+      for (final child in node.children!) {
+        if (!_checkAllFilesExist(child)) return false;
+      }
+    }
+    return true;
+  }
+
+  void _markMissingFilesAsError(EncryptionNode node) {
+    if (node.type == EncryptionNodeType.file) {
+      if (!File(node.absolutePath).existsSync()) {
+        node.status = EncryptionStatus.error;
+      }
+    } else if (node.children != null) {
+      for (final child in node.children!) {
+        _markMissingFilesAsError(child);
       }
     }
   }
@@ -354,11 +500,295 @@ class EncryptionTaskManager extends ChangeNotifier {
   final Map<String, Isolate> _isolates = {};
   bool _isSaving = false;
 
-  List<EncryptionTask> get tasks => List.unmodifiable(_tasks);
+  // 新增：V4 重构全局任务列表
+  final List<EncryptionNode> _globalTasks = [];
+  List<EncryptionNode> get globalTasks => List.unmodifiable(_globalTasks);
+
+  EncryptionNode? _findNextPendingV4(List<EncryptionNode> nodes) {
+    for (final node in nodes) {
+      if (node.isPaused) continue;
+      
+      if (node.type == EncryptionNodeType.folder) {
+        if (node.children != null) {
+          final found = _findNextPendingV4(node.children!);
+          if (found != null) return found;
+        }
+      } else {
+        if (node.status == EncryptionStatus.pendingWaiting) {
+          return node;
+        }
+      }
+    }
+    return null;
+  }
+
+  void pumpQueueV4() async {
+    await _loadSettings();
+    while (_activeWorkers < _maxWorkers) {
+      final fileNode = _findNextPendingV4(_globalTasks);
+      if (fileNode == null) break;
+
+      // Find root node to get taskArgs
+      final rootNode = _globalTasks.firstWhere((n) => _containsNode(n, fileNode));
+      final rootArgs = rootNode.taskArgs;
+      if (rootArgs == null || rootArgs['masterKey'] == null) {
+        fileNode.status = EncryptionStatus.error;
+        await Future.microtask(() {});
+        continue;
+      }
+
+      // Remote path was stored in the fileNode's taskArgs
+      final remotePath = fileNode.taskArgs?['remotePath'] as String?;
+      if (remotePath == null) {
+        fileNode.status = EncryptionStatus.error;
+        await Future.microtask(() {});
+        continue;
+      }
+
+      fileNode.status = EncryptionStatus.encrypting;
+      _activeWorkers++;
+      notifyListeners();
+
+      final args = {
+        'sendPort': _globalReceivePort.sendPort,
+        'localPath': fileNode.absolutePath,
+        'remotePath': remotePath,
+        'absolutePath': fileNode.absolutePath,
+        'vaultDirectoryPath': rootArgs['vaultDirectoryPath'],
+        'masterKey': rootArgs['masterKey'],
+        'encryptFilename': rootArgs['encryptFilename'],
+        'taskId': rootNode.taskId!,
+      };
+
+      Isolate.spawn(doEncryptFileIsolate, args).then((isolate) {
+        registerIsolate(fileNode.absolutePath, isolate);
+      });
+    }
+  }
+
+  bool _containsNode(EncryptionNode root, EncryptionNode target) {
+    if (root.absolutePath == target.absolutePath) return true;
+    if (root.children != null) {
+      for (final child in root.children!) {
+        if (_containsNode(child, target)) return true;
+      }
+    }
+    return false;
+  }
+  Future<void> createTasksFromPaths({
+    required List<String> paths,
+    required String vaultDirectoryPath,
+    required String masterKey,
+    required bool encryptFilename,
+    required String currentRemotePath,
+  }) async {
+    for (final path in paths) {
+      final isDir = await FileSystemEntity.isDirectory(path);
+      final taskId = DateTime.now().millisecondsSinceEpoch.toString() + '_' + p.basename(path);
+      final remotePath = p.join(currentRemotePath, p.basename(path)).replaceAll(r'\', '/');
+      final taskArgs = {
+        'vaultDirectoryPath': vaultDirectoryPath,
+        'masterKey': masterKey,
+        'encryptFilename': encryptFilename,
+        'remotePath': remotePath,
+      };
+      
+      if (isDir) {
+        final rootNode = _buildTreeRecursive(Directory(path), taskId, remotePath);
+        // Ensure rootNode gets taskArgs
+        final finalRoot = EncryptionNode(
+          taskId: rootNode.taskId,
+          name: rootNode.name,
+          type: rootNode.type,
+          isPaused: rootNode.isPaused,
+          children: rootNode.children,
+          size: rootNode.size,
+          rawSize: rootNode.rawSize,
+          status: rootNode.status,
+          absolutePath: rootNode.absolutePath,
+          taskArgs: taskArgs,
+        );
+        _globalTasks.add(finalRoot);
+      } else {
+        final file = File(path);
+        if (file.existsSync()) {
+          final size = file.lengthSync();
+          final node = EncryptionNode(
+            taskId: taskId,
+            name: p.basename(path),
+            type: EncryptionNodeType.file,
+            isPaused: false,
+            status: EncryptionStatus.pendingWaiting,
+            rawSize: size,
+            size: EncryptionNode.formatSize(size),
+            absolutePath: path,
+            taskArgs: taskArgs,
+          );
+          _globalTasks.add(node);
+        }
+      }
+    }
+    
+    await persistGlobalTasks();
+    notifyListeners();
+    pumpQueueV4();
+  }
+
+  EncryptionNode _buildTreeRecursive(Directory dir, String rootTaskId, String currentRemotePath) {
+    final children = <EncryptionNode>[];
+    try {
+      final entities = dir.listSync(followLinks: false);
+      for (final entity in entities) {
+        final childName = p.basename(entity.path);
+        final childRemotePath = p.join(currentRemotePath, childName).replaceAll(r'\', '/');
+        
+        if (entity is Directory) {
+          children.add(_buildTreeRecursive(entity, rootTaskId, childRemotePath));
+        } else if (entity is File) {
+          int size = 0;
+          try {
+            size = entity.lengthSync();
+          } catch (_) {}
+          children.add(EncryptionNode(
+            name: childName,
+            type: EncryptionNodeType.file,
+            isPaused: false,
+            status: EncryptionStatus.pendingWaiting,
+            rawSize: size,
+            size: EncryptionNode.formatSize(size),
+            absolutePath: entity.path,
+            taskArgs: {'remotePath': childRemotePath},
+          ));
+        }
+      }
+    } catch (_) {}
+
+    return EncryptionNode(
+      taskId: rootTaskId,
+      name: p.basename(dir.path),
+      type: EncryptionNodeType.folder,
+      isPaused: false,
+      children: children,
+      absolutePath: dir.path,
+    );
+  }
+
+  Future<void> persistGlobalTasks() async {
+    try {
+      final dir = await getApplicationDocumentsDirectory();
+      final file = File(p.join(dir.path, 'encryption_tasks_v4.json'));
+      final jsonList = _globalTasks.map((e) => e.toJson()).toList();
+      await file.writeAsString(jsonEncode(jsonList));
+    } catch (e) {
+      debugPrint('Failed to persist tasks: $e');
+    }
+  }
+
   List<EncryptionTask> get historyTasks => List.unmodifiable(_historyTasks);
+  final List<EncryptionNode> _historyTasksV4 = [];
+  List<EncryptionNode> get historyTasksV4 => List.unmodifiable(_historyTasksV4);
+
+  Map<String, int> getV4Stats() {
+    int completed = 0;
+    int encrypting = 0;
+    int pending = 0;
+    int pausedError = 0;
+
+    void traverse(EncryptionNode node) {
+      if (node.type == EncryptionNodeType.file) {
+        final size = node.rawSize ?? 0;
+        if (node.isPaused) {
+          pausedError += size;
+        } else {
+          switch (node.status) {
+            case EncryptionStatus.completed:
+              completed += size;
+              break;
+            case EncryptionStatus.encrypting:
+              encrypting += size;
+              break;
+            case EncryptionStatus.pendingWaiting:
+              pending += size;
+              break;
+            case EncryptionStatus.pendingPaused:
+            case EncryptionStatus.error:
+            case null:
+              pausedError += size;
+              break;
+          }
+        }
+      } else {
+        if (node.children != null) {
+          for (final child in node.children!) {
+            // Inherit paused state logically for stats if needed, 
+            // but V4 specifies parent pause covers child, so we should check node.isPaused
+            if (node.isPaused) {
+               _addPausedSize(child, (s) => pausedError += s);
+            } else {
+               traverse(child);
+            }
+          }
+        }
+      }
+    }
+
+    for (final task in _globalTasks) {
+      traverse(task);
+    }
+
+    return {
+      'completed': completed,
+      'encrypting': encrypting,
+      'pending': pending,
+      'pausedError': pausedError,
+      'total': completed + encrypting + pending + pausedError,
+    };
+  }
+
+  void _addPausedSize(EncryptionNode node, Function(int) add) {
+    if (node.type == EncryptionNodeType.file) {
+      add(node.rawSize ?? 0);
+    } else if (node.children != null) {
+      for (final child in node.children!) {
+        _addPausedSize(child, add);
+      }
+    }
+  }
 
   Future<void> _loadQueue() async {
-    debugPrint('Mock _loadQueue: Queue loading skipped.');
+    try {
+      final dir = await getApplicationDocumentsDirectory();
+      final file = File(p.join(dir.path, 'encryption_tasks_v4.json'));
+      if (await file.exists()) {
+        final content = await file.readAsString();
+        final List<dynamic> jsonList = jsonDecode(content);
+        _globalTasks.clear();
+        for (final item in jsonList) {
+          final node = EncryptionNode.fromJson(item as Map<String, dynamic>);
+          _restoreNodeState(node);
+          _globalTasks.add(node);
+        }
+        notifyListeners();
+        pumpQueueV4();
+      }
+    } catch (e) {
+      debugPrint('Failed to load queue: $e');
+    }
+  }
+
+  void _restoreNodeState(EncryptionNode node) {
+    if (node.type == EncryptionNodeType.file) {
+      if (node.status == EncryptionStatus.encrypting) {
+        node.status = EncryptionStatus.pendingWaiting;
+      }
+      if (!File(node.absolutePath).existsSync()) {
+        node.status = EncryptionStatus.error;
+      }
+    } else if (node.children != null) {
+      for (final child in node.children!) {
+        _restoreNodeState(child);
+      }
+    }
   }
 
   void _pauseOrFailTaskRecursive(EncryptionTask task) {

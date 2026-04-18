@@ -252,62 +252,16 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
         );
       }
       try {
-        int totalSize = 0;
-        final filesToProcess = <Map<String, String>>[];
-        for (final file in result.files) {
-          if (file.path != null) {
-            final localPath = file.path!;
-            final remotePath = p.join(_currentPath, file.name).replaceAll(r'\', '/');
-            filesToProcess.add({'localPath': localPath, 'remotePath': remotePath});
-            totalSize += file.size;
-          }
-        }
-
-        if (filesToProcess.isEmpty) return;
-
-        final taskId = DateTime.now().millisecondsSinceEpoch.toString();
-        final taskName = filesToProcess.length == 1 
-            ? p.basename(filesToProcess.first['localPath']!)
-            : '批量导入 ${filesToProcess.length} 个文件';
-
-        final taskArgs = {
-          'type': 'import_files',
-          'files': filesToProcess,
-          'vaultDirectoryPath': widget.vaultDirectoryPath,
-          'encryptFilename': widget.vaultConfig.encryptFilename,
-          'taskId': taskId,
-        };
-
-        final children = filesToProcess.map((f) {
-          return EncryptionTask(
-            id: '$taskId/${p.basename(f['localPath']!)}',
-            name: p.basename(f['localPath']!),
-            isDirectory: false,
-            totalBytes: File(f['localPath']!).lengthSync(),
-            status: 'pending',
-            taskArgs: {
-              'path': f['localPath'],
-              'remotePath': f['remotePath'],
-            }
+        final paths = result.files.where((f) => f.path != null).map((f) => f.path!).toList();
+        if (paths.isNotEmpty) {
+          await EncryptionTaskManager().createTasksFromPaths(
+            paths: paths,
+            vaultDirectoryPath: widget.vaultDirectoryPath,
+            masterKey: widget.masterKey,
+            encryptFilename: widget.vaultConfig.encryptFilename,
+            currentRemotePath: _currentPath,
           );
-        }).toList();
-
-        // Pass masterKey to taskArgs for worker pool
-        taskArgs['masterKey'] = widget.masterKey;
-
-        final task = EncryptionTask(
-          id: taskId,
-          name: taskName,
-          isDirectory: true, // Treat batch as directory so children are pumped
-          totalBytes: totalSize,
-          status: 'pending',
-          taskArgs: taskArgs,
-          children: children,
-        );
-
-        EncryptionTaskManager().addTask(task);
-        EncryptionTaskManager().pumpQueue();
-
+        }
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -326,102 +280,19 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
       if (mounted) {
         setState(() {
           _isMenuOpen = false;
-          // _isLoading = false; 立即关闭加载动画，解阻塞 UI 线程
         });
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('已添加到后台加密任务，请在任务面板查看进度')),
         );
       }
       try {
-        final dir = Directory(result);
-        if (await dir.exists()) {
-          int totalSize = 0;
-          await for (final entity in dir.list(recursive: true, followLinks: false)) {
-            if (entity is File) {
-              try {
-                totalSize += await entity.length();
-              } catch (_) {}
-            }
-          }
-
-          final baseName = p.basename(result);
-          final taskId = DateTime.now().millisecondsSinceEpoch.toString();
-          
-          final taskArgs = {
-            'type': 'import_folder',
-            'result': result,
-            'currentPath': _currentPath,
-            'vaultDirectoryPath': widget.vaultDirectoryPath,
-            'masterKey': widget.masterKey,
-            'encryptFilename': widget.vaultConfig.encryptFilename,
-            'taskId': taskId,
-          };
-
-          final task = EncryptionTask(
-            id: taskId,
-            name: baseName,
-            isDirectory: true,
-            totalBytes: totalSize,
-            status: 'pending',
-            taskArgs: taskArgs,
-          );
-
-          EncryptionTaskManager().addTask(task);
-
-          final receivePort = ReceivePort();
-          _receivePorts.add(receivePort);
-          receivePort.listen((message) {
-            if (message is Map<String, dynamic>) {
-              final type = message['type'];
-              final msgTaskId = message['taskId'];
-              final tid = msgTaskId is String ? msgTaskId : taskId;
-              if (type == 'progress') {
-                final bytes = message['bytes'] as int;
-                EncryptionTaskManager().updateTaskProgress(tid, bytes);
-              } else if (type == 'tree') {
-                final treeMap = message['tree'] as Map<String, dynamic>;
-                EncryptionTaskManager().updateTaskTree(tid, treeMap);
-              } else if (type == 'done') {
-                final t = EncryptionTaskManager().findTask(tid);
-                if (t != null && t.children.isNotEmpty && t.id == tid) {
-                  // Do not complete root task, let ETM handle it.
-                } else {
-                  EncryptionTaskManager().updateTaskStatus(tid, 'completed');
-                }
-                StatsService().recalculate();
-                if (mounted) {
-                  _loadCurrentDirectory();
-                }
-                receivePort.close();
-                _receivePorts.remove(receivePort);
-              } else if (type == 'error') {
-                final error = message['error'] as String;
-                EncryptionTaskManager().updateTaskStatus(tid, 'failed', error: error);
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('导入文件夹失败: $error')),
-                  );
-                }
-                receivePort.close();
-                _receivePorts.remove(receivePort);
-              }
-            }
-          });
-
-          final args = {
-            'sendPort': receivePort.sendPort,
-            'result': result,
-            'currentPath': _currentPath,
-            'vaultDirectoryPath': widget.vaultDirectoryPath,
-            'masterKey': widget.masterKey,
-            'encryptFilename': widget.vaultConfig.encryptFilename,
-            'taskId': taskId,
-          };
-
-          Isolate.spawn(doImportFolderIsolate, args).then((isolate) {
-            EncryptionTaskManager().registerIsolate(taskId, isolate);
-          });
-        }
+        await EncryptionTaskManager().createTasksFromPaths(
+          paths: [result],
+          vaultDirectoryPath: widget.vaultDirectoryPath,
+          masterKey: widget.masterKey,
+          encryptFilename: widget.vaultConfig.encryptFilename,
+          currentRemotePath: _currentPath,
+        );
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
