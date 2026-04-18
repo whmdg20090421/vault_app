@@ -199,7 +199,12 @@ class _SyncSettingsDialogState extends State<SyncSettingsDialog> {
               ? null
               : () {
                   // Actually start sync with these settings
-                  WebDAVStateManager.instance.startSync(widget.defaultCloudConfig);
+                  WebDAVStateManager.instance.startSync(
+                    context,
+                    _selectedCloudConfig!,
+                    _selectedLocalVaultPath!,
+                    _selectedCloudFolder ?? '/',
+                  );
                   Navigator.of(context).pop();
                 },
           child: const Text('开始同步'),

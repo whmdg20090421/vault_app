@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'services/stats_service.dart';
 import 'utils/format_utils.dart';
 
@@ -13,9 +14,13 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
-    // 页面初始化时触发重新计算
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      StatsService().recalculate();
+    // 根据设置决定是否在页面初始化时触发重新计算
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final prefs = await SharedPreferences.getInstance();
+      final autoRefresh = prefs.getBool('auto_refresh_on_startup') ?? false;
+      if (autoRefresh) {
+        StatsService().recalculate();
+      }
     });
   }
 
@@ -39,7 +44,10 @@ class _HomePageState extends State<HomePage> {
         physics: const AlwaysScrollableScrollPhysics(),
         child: Padding(
           padding: const EdgeInsets.all(16.0),
-          child: Card(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Card(
             child: Padding(
               padding: const EdgeInsets.all(24.0),
               child: Column(
@@ -140,10 +148,73 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
           ),
-        ),
+          const SizedBox(height: 16),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        '文件统计',
+                        style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.refresh),
+                        onPressed: () async {
+                          await statsService.recalculate();
+                        },
+                        tooltip: '手动刷新',
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  _buildStatRow('本地加密文件数量', statsService.localEncryptedCount.toString(), Icons.folder_special),
+                  const SizedBox(height: 12),
+                  _buildStatRow('云端加密文件数量', statsService.cloudEncryptedCount.toString(), Icons.cloud_done),
+                  const SizedBox(height: 12),
+                  _buildStatRow(
+                    '差异文件数量',
+                    statsService.diffCount.toString(),
+                    Icons.sync_problem,
+                    color: statsService.diffCount > 0 ? Colors.orange : Colors.green,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
-    );
+    ),
+  ),
+);
       },
+    );
+  }
+
+  Widget _buildStatRow(String label, String value, IconData icon, {Color? color}) {
+    return Row(
+      children: [
+        Icon(icon, size: 20, color: color ?? Colors.blue),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            label,
+            style: const TextStyle(fontSize: 15),
+          ),
+        ),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: color,
+          ),
+        ),
+      ],
     );
   }
 }

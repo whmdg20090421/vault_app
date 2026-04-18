@@ -1,5 +1,7 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:path/path.dart' as p;
+import 'package:crypto/crypto.dart';
 import 'webdav_service.dart';
 import 'webdav_file.dart';
 
@@ -17,14 +19,92 @@ class SyncEngine {
 
   /// 启动同步流程
   /// [remoteDir] 远端需要同步的基础目录
-  Future<void> sync(String remoteDir) async {
+  Future<void> sync(String remoteDir, {bool forceSync = false}) async {
     print('Starting sync from remote: $remoteDir to local: $localDirPath');
-    await _syncRecursive(remoteDir, localDirPath);
+    
+    // 1. 下载 remote_index.json 并保存为 remote_index_cache.json
+    String remoteIndexPath = remoteDir.endsWith('/') ? '${remoteDir}remote_index.json' : '$remoteDir/remote_index.json';
+    String localCachePath = p.join(localDirPath, 'remote_index_cache.json');
+    
+    Map<String, dynamic> remoteIndex = {};
+    String originalRemoteHash = '';
+    
+    try {
+      // 尝试下载远端的 remote_index.json
+      final tempCachePath = '$localCachePath.tmp';
+      await service.download(remoteIndexPath, tempCachePath);
+      final tempFile = File(tempCachePath);
+      if (await tempFile.exists()) {
+        final content = await tempFile.readAsString();
+        if (content.isNotEmpty) {
+          remoteIndex = jsonDecode(content) as Map<String, dynamic>;
+          // 计算下载的文件的哈希值用于后续一致性校验
+          originalRemoteHash = sha256.convert(utf8.encode(content)).toString();
+        }
+        await tempFile.rename(localCachePath);
+      }
+    } catch (e) {
+      print('Failed to download remote_index.json, might not exist: $e');
+    }
+
+    // 将远端索引缓存传递给递归同步
+    await _syncRecursive(remoteDir, localDirPath, remoteIndex);
+
+    // 2. 同步完成后，更新并上传 remote_index.json
+    try {
+      final newIndexContent = jsonEncode(remoteIndex);
+      final newHash = sha256.convert(utf8.encode(newIndexContent)).toString();
+      
+      // 在上传之前执行一致性校验（重新获取远端 remote_index.json hash 并比对）
+      bool isConsistent = true;
+      if (!forceSync) {
+        try {
+          final checkTempPath = '$localCachePath.check';
+          await service.download(remoteIndexPath, checkTempPath);
+          final checkFile = File(checkTempPath);
+          if (await checkFile.exists()) {
+            final checkContent = await checkFile.readAsString();
+            final currentRemoteHash = sha256.convert(utf8.encode(checkContent)).toString();
+            if (currentRemoteHash != originalRemoteHash) {
+              isConsistent = false;
+              print('Consistency check failed: remote_index.json has changed during sync.');
+            }
+            await checkFile.delete();
+          }
+        } catch (e) {
+          // 如果无法下载检查文件，可能是远端原本就没有，认为一致
+        }
+      }
+
+      if (isConsistent || forceSync) {
+        // 保存本地缓存
+        await File(localCachePath).writeAsString(newIndexContent);
+        // 上传覆盖远端 remote_index.json
+        await service.upload(localCachePath, remoteIndexPath);
+        print('remote_index.json uploaded successfully.');
+      } else {
+        print('Upload aborted due to consistency check failure.');
+        throw Exception('Sync Conflict: Remote index changed.');
+      }
+    } catch (e) {
+      print('Failed to update/upload remote_index.json: $e');
+      rethrow; // 重新抛出异常以便上层捕获
+    }
+    
     print('Sync completed.');
   }
 
+  /// 计算文件 SHA256 哈希
+  Future<String> _calculateFileHash(File file) async {
+    final hasher = sha256.newInstance();
+    await for (final chunk in file.openRead()) {
+      hasher.add(chunk);
+    }
+    return hasher.close().toString();
+  }
+
   /// 递归同步目录内容
-  Future<void> _syncRecursive(String remoteDir, String localDir) async {
+  Future<void> _syncRecursive(String remoteDir, String localDir, Map<String, dynamic> remoteIndex) async {
     // 1. 获取远端目录下的所有文件/文件夹
     List<WebDavFile> remoteFiles;
     try {
@@ -59,7 +139,7 @@ class SyncEngine {
 
       if (remoteFile.isDirectory) {
         // 如果是文件夹，则递归同步
-        await _syncRecursive(remoteFile.path, localEntityPath);
+        await _syncRecursive(remoteFile.path, localEntityPath, remoteIndex);
       } else {
         // 如果是文件，进行状态比对
         if (localEntity != null) {
@@ -86,6 +166,7 @@ class SyncEngine {
               syncTasks.add(() async {
                 print('Downloading updated file: ${remoteFile.name}');
                 await service.download(remoteFile.path, localEntityPath);
+                // 这里可以选择从下载后的文件计算 hash 更新到缓存，但目前只关心上传时修改的索引
               });
             } else {
               // 本地文件可能较新，需要上传（简单双向同步逻辑）
@@ -93,6 +174,16 @@ class SyncEngine {
                 syncTasks.add(() async {
                   print('Uploading updated file: ${remoteFile.name}');
                   await service.upload(localEntityPath, remoteFile.path);
+                  
+                  // 更新远端索引
+                  final hash = await _calculateFileHash(File(localEntityPath));
+                  remoteIndex[remoteFile.path] = {
+                    'filename': remoteFile.name,
+                    'structure': p.dirname(remoteFile.path),
+                    'hash': hash,
+                    'size': localStat.size,
+                    'updatedAt': DateTime.now().toIso8601String(),
+                  };
                 });
               }
             }
@@ -123,6 +214,16 @@ class SyncEngine {
             remotePath += name;
             
             await service.upload(localEntity.path, remotePath);
+            
+            // 更新远端索引
+            final hash = await _calculateFileHash(localEntity as File);
+            remoteIndex[remotePath] = {
+              'filename': name,
+              'structure': p.dirname(remotePath),
+              'hash': hash,
+              'size': localEntity.lengthSync(),
+              'updatedAt': DateTime.now().toIso8601String(),
+            };
           });
         } else if (localEntity is Directory) {
           // 如果本地有新文件夹，则在远端创建并递归上传
@@ -135,7 +236,7 @@ class SyncEngine {
           } catch (e) {
             print('Mkdir failed or already exists: $e');
           }
-          await _syncRecursive(remotePath, localEntity.path);
+          await _syncRecursive(remotePath, localEntity.path, remoteIndex);
         }
       }
     }

@@ -17,6 +17,7 @@ import 'home_page.dart';
 import 'theme/app_theme.dart';
 import 'theme/background_settings.dart';
 import 'settings/theme_settings_page.dart';
+import 'settings/security_settings_page.dart';
 import 'encryption/performance_settings_page.dart';
 import 'security/security_check.dart';
 
@@ -252,14 +253,50 @@ class _MainShellState extends State<MainShell> {
     );
   }
 }
-class SettingsPage extends StatelessWidget {
+class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
+
+  @override
+  State<SettingsPage> createState() => _SettingsPageState();
+}
+
+class _SettingsPageState extends State<SettingsPage> {
+  bool _autoRefreshOnStartup = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSettings();
+  }
+
+  Future<void> _loadSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _autoRefreshOnStartup = prefs.getBool('auto_refresh_on_startup') ?? false;
+    });
+  }
+
+  Future<void> _toggleAutoRefresh(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('auto_refresh_on_startup', value);
+    setState(() {
+      _autoRefreshOnStartup = value;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        SwitchListTile(
+          title: const Text('启动时自动刷新统计数据'),
+          subtitle: const Text('每次启动应用时自动计算文件统计信息'),
+          value: _autoRefreshOnStartup,
+          onChanged: _toggleAutoRefresh,
+          contentPadding: EdgeInsets.zero,
+        ),
+        const Divider(),
         ListTile(
           leading: const Icon(Icons.palette_outlined),
           title: const Text('主题与背景设置'),
@@ -282,6 +319,19 @@ class SettingsPage extends StatelessWidget {
             Navigator.push(
               context,
               MaterialPageRoute(builder: (context) => const PerformanceSettingsPage()),
+            );
+          },
+        ),
+        const Divider(),
+        ListTile(
+          leading: const Icon(Icons.security_rounded),
+          title: const Text('安全设置'),
+          trailing: const Icon(Icons.chevron_right_rounded),
+          contentPadding: EdgeInsets.zero,
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const SecuritySettingsPage()),
             );
           },
         ),

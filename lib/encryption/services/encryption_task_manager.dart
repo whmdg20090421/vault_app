@@ -6,6 +6,7 @@ import 'dart:isolate';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'local_index_service.dart';
 
 class EncryptionTask {
   final String id;
@@ -226,6 +227,13 @@ class EncryptionTaskManager extends ChangeNotifier {
       final tid = message['taskId'] as String;
       if (type == 'progress') {
         updateTaskProgress(tid, message['bytes'] as int);
+      } else if (type == 'file_imported') {
+        _recordLocalIndex(
+          message['vaultDirectoryPath'] as String,
+          message['remotePath'] as String,
+          message['hash'] as String,
+          message['size'] as int,
+        );
       } else if (type == 'done') {
         updateTaskStatus(tid, 'completed');
         _activeWorkers--;
@@ -236,6 +244,15 @@ class EncryptionTaskManager extends ChangeNotifier {
         pumpQueue();
       }
     }
+  }
+
+  void _recordLocalIndex(String vaultPath, String remotePath, String hash, int size) {
+    LocalIndexService().updateFileIndex(
+      vaultDirectoryPath: vaultPath,
+      remotePath: remotePath,
+      hash: hash,
+      size: size,
+    );
   }
 
   EncryptionTask? _findRootOf(String targetId) {

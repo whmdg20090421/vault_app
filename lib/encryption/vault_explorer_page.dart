@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
+import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import '../main.dart';
 import 'package:file_picker/file_picker.dart';
@@ -56,7 +57,10 @@ Future<void> doImportFileIsolate(Map<String, dynamic> args) async {
         int lastReportedBytes = 0;
         int lastReportTime = DateTime.now().millisecondsSinceEpoch;
         
+        final hasher = sha256.newInstance();
+        
         final stream = file.openRead().map((chunk) {
+          hasher.add(chunk);
           bytesProcessed += chunk.length;
           final now = DateTime.now().millisecondsSinceEpoch;
           // Throttle progress updates to every 500ms or 1MB
@@ -68,8 +72,21 @@ Future<void> doImportFileIsolate(Map<String, dynamic> args) async {
           return chunk;
         });
         await vfs.uploadStream(stream, size, remotePath);
+        final digest = hasher.close();
+        
         // Ensure final progress is reported
         sendPort.send({'type': 'progress', 'taskId': childId, 'bytes': bytesProcessed});
+        
+        // Report file imported
+        sendPort.send({
+          'type': 'file_imported',
+          'taskId': taskId,
+          'localPath': localPath,
+          'remotePath': remotePath,
+          'hash': digest.toString(),
+          'size': size,
+          'vaultDirectoryPath': vaultDirectoryPath,
+        });
       }
     }
     sendPort.send({'type': 'done', 'taskId': taskId});
