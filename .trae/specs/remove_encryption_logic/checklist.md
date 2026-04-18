@@ -1,0 +1,7 @@
+- [ ] 确认加密算法文件（如 `chunk_crypto.dart` 等）未被删除。
+- [ ] 确认 `encryption_page.dart` 和 `vault_explorer_page.dart` 等 UI 结构正常保留。
+- [ ] 确认 `encryption_task_manager.dart` 中的具体调度逻辑、队列管理、多线程处理等已经被清空，仅保留可编译的空方法/单例。
+- [ ] 确认 `encrypted_vfs.dart` 中的加密读写逻辑（如 `uploadStream`）已经被清空，仅保留可编译的空方法或抛出未实现异常。
+- [ ] 确认 UI 页面中的具体加密触发逻辑（如 `doImportFileIsolate`）被移除或清空。
+- [ ] 运行 `flutter analyze`，确保项目依然可以编译且没有语法错误。
+- [ ] 提交修改，标记为重构准备阶段。
