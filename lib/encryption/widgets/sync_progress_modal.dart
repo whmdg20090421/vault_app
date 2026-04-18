@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import '../services/encryption_task_manager.dart';
 import '../models/encryption_node.dart';
 import 'four_color_progress_bar.dart';

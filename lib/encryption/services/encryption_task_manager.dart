@@ -1,4 +1,5 @@
 import 'package:crypto/crypto.dart';
+import 'dart:typed_data';
 import '../../encryption/vault_explorer_page.dart';
 import 'dart:async';
 import 'dart:convert';
@@ -251,6 +252,9 @@ class EncryptionTaskManager extends ChangeNotifier {
 
   EncryptionTaskManager._internal() {
     _loadHistory();
+    _loadQueue();
+    _globalReceivePort.listen(_handleMessage);
+    _loadSettings();
   }
 
   factory EncryptionTaskManager() => _instance;
@@ -331,11 +335,7 @@ class EncryptionTaskManager extends ChangeNotifier {
     return false;
   }
 
-  EncryptionTaskManager._internal() {
-    _loadQueue();
-    _globalReceivePort.listen(_handleMessage);
-    _loadSettings();
-  }
+
 
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
@@ -574,7 +574,9 @@ class EncryptionTaskManager extends ChangeNotifier {
   }
 
   final List<EncryptionTask> _tasks = [];
+  List<EncryptionTask> get tasks => _tasks;
   final List<EncryptionTask> _historyTasks = [];
+  List<EncryptionTask> get historyTasks => _historyTasks;
   final Map<String, Isolate> _isolates = {};
   bool _isSaving = false;
 
@@ -763,7 +765,7 @@ class EncryptionTaskManager extends ChangeNotifier {
   Future<void> createTasksFromPaths({
     required List<String> paths,
     required String vaultDirectoryPath,
-    required String masterKey,
+    required Uint8List masterKey,
     required bool encryptFilename,
     required String currentRemotePath,
   }) async {
