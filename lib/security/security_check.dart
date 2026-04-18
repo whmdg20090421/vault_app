@@ -22,17 +22,12 @@ class SecurityCheck {
       print('Current APK Hash: $apkHash');
       print('Current Signature Hash: $signatureHash');
 
-      // If expected hashes are empty, we might skip or fail. For security, we should fail if mismatch.
-      // But since they are empty initially, we should only check if they are explicitly set, 
-      // or we can hardcode them later. 
-      // Wait, the requirement says "if these two have any mismatch, terminate all processes...".
-      // Let's assume we need to fail if they don't match the expected ones.
-      // Since we don't know the exact hashes before building the release APK, 
-      // we will use the logic: if expected is not empty and doesn't match, or if it's empty (strict mode).
-      // Let's just compare them to expectedApkHash and expectedSignatureHash.
-      // If the expected hashes are empty in development, we'll trigger the alert so the user sees it works,
-      // and they can use the security password to bypass it.
-      
+      // Check if hashes are configured. If both are empty, we skip the strict check 
+      // because the app is likely in development or unconfigured release state.
+      if (expectedApkHash.isEmpty && expectedSignatureHash.isEmpty) {
+        return; // No expected hashes configured, skip validation
+      }
+
       bool isMatch = true;
       if (expectedApkHash.isNotEmpty && apkHash != expectedApkHash) {
         isMatch = false;
@@ -41,11 +36,10 @@ class SecurityCheck {
         isMatch = false;
       }
       
-      // If both expected are empty, we assume it's a mismatch to enforce the check in dev, 
-      // OR we can bypass. The prompt says "如果这两个有任意不匹配".
-      if (expectedApkHash.isEmpty || expectedSignatureHash.isEmpty || !isMatch) {
+      // If there is any mismatch against configured hashes, we fail.
+      if (!isMatch) {
         // Mismatch!
-        _showErrorScreen(context, "环境校验失败或哈希未配置");
+        _showErrorScreen(context, "环境校验失败或哈希不匹配");
       }
     } catch (e) {
       _showErrorScreen(context, "环境检测异常: $e");
