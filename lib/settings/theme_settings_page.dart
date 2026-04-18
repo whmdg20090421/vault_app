@@ -12,9 +12,9 @@ class ThemeSettingsPage extends StatelessWidget {
     final picker = ImagePicker();
     final pickedFile = await picker.pickImage(source: ImageSource.gallery);
     if (pickedFile != null) {
-      final appDir = await getApplicationDocumentsDirectory();
-      final bgDir = Directory('${appDir.path}/backgrounds');
-      await bgDir.create(recursive: true);
+        final appDir = await getApplicationDocumentsDirectory();
+        final bgDir = Directory('${appDir.path}/主题背景');
+        await bgDir.create(recursive: true);
 
       final previousPath = BackgroundSettings.instance.imagePath;
       if (previousPath != null) {

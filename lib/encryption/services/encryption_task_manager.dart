@@ -342,7 +342,7 @@ class EncryptionTaskManager extends ChangeNotifier {
   Future<void> _loadQueue() async {
     try {
       final directory = await getApplicationDocumentsDirectory();
-      final file = File('${directory.path}/encryption_queue.json');
+      final file = File('${directory.path}/加密任务记录/encryption_queue.json');
       if (await file.exists()) {
         final content = await file.readAsString();
         if (content.isNotEmpty) {
@@ -355,7 +355,7 @@ class EncryptionTaskManager extends ChangeNotifier {
         }
       }
       
-      final historyFile = File('${directory.path}/encryption_history.json');
+      final historyFile = File('${directory.path}/加密任务记录/encryption_history.json');
       if (await historyFile.exists()) {
         final content = await historyFile.readAsString();
         if (content.isNotEmpty) {
@@ -398,7 +398,10 @@ class EncryptionTaskManager extends ChangeNotifier {
     _isSaving = true;
     try {
       final directory = await getApplicationDocumentsDirectory();
-      final file = File('${directory.path}/encryption_queue.json');
+      final file = File('${directory.path}/加密任务记录/encryption_queue.json');
+      if (!await file.parent.exists()) {
+        await file.parent.create(recursive: true);
+      }
       final jsonString = jsonEncode(_tasks.map((t) => t.toJson()).toList());
       await file.writeAsString(jsonString);
     } catch (e) {
@@ -418,7 +421,10 @@ class EncryptionTaskManager extends ChangeNotifier {
   Future<void> _saveHistory() async {
     try {
       final directory = await getApplicationDocumentsDirectory();
-      final file = File('${directory.path}/encryption_history.json');
+      final file = File('${directory.path}/加密任务记录/encryption_history.json');
+      if (!await file.parent.exists()) {
+        await file.parent.create(recursive: true);
+      }
       final jsonString = jsonEncode(_historyTasks.map((t) => t.toJson()).toList());
       await file.writeAsString(jsonString);
     } catch (e) {

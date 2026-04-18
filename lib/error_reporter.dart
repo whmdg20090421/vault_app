@@ -11,17 +11,13 @@ class ErrorReporter {
   File? _logFile;
 
   Future<void> initialize() async {
-    try {
-      final dir = await getExternalStorageDirectory();
-      if (dir == null) {
-        return;
-      }
-
-      final debugDir = Directory('${dir.path}/运行日志');
-      await debugDir.create(recursive: true);
-      _logFile = File('${debugDir.path}/错误日志.txt');
-    } catch (_) {}
-  }
+      try {
+        final dir = await getApplicationDocumentsDirectory();
+        final debugDir = Directory('${dir.path}/运行日志');
+        await debugDir.create(recursive: true);
+        _logFile = File('${debugDir.path}/错误日志.txt');
+      } catch (_) {}
+    }
 
   Future<void> writeFlutterError(FlutterErrorDetails details) async {
     await writeError(details.exception, details.stack ?? StackTrace.current);
