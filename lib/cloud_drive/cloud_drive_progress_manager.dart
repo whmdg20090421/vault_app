@@ -21,13 +21,26 @@ class CloudDriveProgressManager extends ChangeNotifier {
     _tasks = await _storageService.loadTasks();
     notifyListeners();
 
-    syncEngine.taskUpdates.listen((updatedTask) {
+    syncEngine.taskUpdates.listen((updatedTask) async {
       final index = _tasks.indexWhere((t) => t.id == updatedTask.id);
       if (index >= 0) {
         _tasks[index] = updatedTask;
       } else {
         _tasks.add(updatedTask);
       }
+      
+      if (updatedTask.status == SyncStatus.completed) {
+        // Move to history
+        _tasks.removeWhere((t) => t.id == updatedTask.id);
+        
+        final historyTasks = await _storageService.loadHistory();
+        historyTasks.add(updatedTask);
+        await _storageService.saveHistory(historyTasks);
+        
+        // Remove from active tasks
+        await _storageService.saveTasks(_tasks);
+      }
+      
       notifyListeners();
     });
   }
@@ -84,5 +97,9 @@ class CloudDriveProgressManager extends ChangeNotifier {
       }
     }
     notifyListeners();
+  }
+
+  Future<List<SyncTask>> getHistory() async {
+    return await _storageService.loadHistory();
   }
 }

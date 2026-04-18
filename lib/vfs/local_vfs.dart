@@ -64,6 +64,9 @@ class LocalVfs implements VirtualFileSystem {
   Future<void> uploadStream(Stream<List<int>> stream, int length, String remotePath) async {
     final realPath = _getRealPath(remotePath);
     final file = File(realPath);
+    if (!await file.parent.exists()) {
+      await file.parent.create(recursive: true);
+    }
     final sink = file.openWrite();
     await stream.pipe(sink);
   }

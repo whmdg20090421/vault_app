@@ -298,6 +298,7 @@ class EncryptionTaskManager extends ChangeNotifier {
       if (root == null || root.taskArgs == null || root.taskArgs!['masterKey'] == null) {
         task.status = 'failed';
         task.error = 'Missing credentials or root task';
+        await Future.microtask(() {});
         continue;
       }
 
@@ -307,6 +308,7 @@ class EncryptionTaskManager extends ChangeNotifier {
       if (localPath == null || remotePath == null) {
         task.status = 'failed';
         task.error = 'Path not found';
+        await Future.microtask(() {});
         continue;
       }
 
@@ -330,10 +332,12 @@ class EncryptionTaskManager extends ChangeNotifier {
   }
 
   final List<EncryptionTask> _tasks = [];
+  final List<EncryptionTask> _historyTasks = [];
   final Map<String, Isolate> _isolates = {};
   bool _isSaving = false;
 
   List<EncryptionTask> get tasks => List.unmodifiable(_tasks);
+  List<EncryptionTask> get historyTasks => List.unmodifiable(_historyTasks);
 
   Future<void> _loadQueue() async {
     try {
@@ -341,19 +345,29 @@ class EncryptionTaskManager extends ChangeNotifier {
       final file = File('${directory.path}/encryption_queue.json');
       if (await file.exists()) {
         final content = await file.readAsString();
-        if (content.isEmpty) return;
-        final List<dynamic> jsonList = jsonDecode(content);
-        final loadedTasks = jsonList.map((e) => EncryptionTask.fromJson(e as Map<String, dynamic>)).toList();
-
-        for (var task in loadedTasks) {
-          _pauseOrFailTaskRecursive(task);
+        if (content.isNotEmpty) {
+          final List<dynamic> jsonList = jsonDecode(content);
+          final loadedTasks = jsonList.map((e) => EncryptionTask.fromJson(e as Map<String, dynamic>)).toList();
+          for (var task in loadedTasks) {
+            _pauseOrFailTaskRecursive(task);
+          }
+          _tasks.addAll(loadedTasks);
         }
-
-        _tasks.addAll(loadedTasks);
-        notifyListeners();
       }
+      
+      final historyFile = File('${directory.path}/encryption_history.json');
+      if (await historyFile.exists()) {
+        final content = await historyFile.readAsString();
+        if (content.isNotEmpty) {
+          final List<dynamic> jsonList = jsonDecode(content);
+          final loadedHistory = jsonList.map((e) => EncryptionTask.fromJson(e as Map<String, dynamic>)).toList();
+          _historyTasks.addAll(loadedHistory);
+        }
+      }
+      
+      notifyListeners();
     } catch (e) {
-      debugPrint('Failed to load encryption queue: $e');
+      debugPrint('Failed to load encryption queue/history: $e');
     }
   }
 
@@ -401,6 +415,17 @@ class EncryptionTaskManager extends ChangeNotifier {
     });
   }
 
+  Future<void> _saveHistory() async {
+    try {
+      final directory = await getApplicationDocumentsDirectory();
+      final file = File('${directory.path}/encryption_history.json');
+      final jsonString = jsonEncode(_historyTasks.map((t) => t.toJson()).toList());
+      await file.writeAsString(jsonString);
+    } catch (e) {
+      debugPrint('Failed to save encryption history: $e');
+    }
+  }
+
   void addTask(EncryptionTask task) {
     _tasks.add(task);
     _saveQueue();
@@ -438,11 +463,16 @@ class EncryptionTaskManager extends ChangeNotifier {
   List<EncryptionTask> _parseTree(List<dynamic> childrenList) {
     return childrenList.map((c) {
       final map = c as Map<String, dynamic>;
+      final Map<String, dynamic> args = {};
+      if (map.containsKey('path')) args['path'] = map['path'];
+      if (map.containsKey('remotePath')) args['remotePath'] = map['remotePath'];
+      
       return EncryptionTask(
         id: map['id'] as String,
         name: map['name'] as String,
         isDirectory: map['isDirectory'] as bool,
         totalBytes: map['totalBytes'] as int,
+        taskArgs: args.isNotEmpty ? args : null,
         children: map.containsKey('children')
             ? _parseTree(map['children'] as List<dynamic>)
             : null,
@@ -468,6 +498,25 @@ class EncryptionTaskManager extends ChangeNotifier {
       }
       _saveQueue();
       notifyListeners();
+      
+      if (status == 'completed' || status == 'failed') {
+        final root = _findRootOf(task.id);
+        if (root != null) {
+          _checkRootCompletion(root);
+        }
+      }
+    }
+  }
+
+  void _checkRootCompletion(EncryptionTask root) {
+    if (root.status == 'completed') {
+      if (_tasks.contains(root)) {
+        _tasks.remove(root);
+        _historyTasks.add(root);
+        _saveQueue();
+        _saveHistory();
+        notifyListeners();
+      }
     }
   }
 

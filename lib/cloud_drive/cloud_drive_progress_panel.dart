@@ -13,8 +13,38 @@ void showCloudDriveProgressPanel(BuildContext context) {
   );
 }
 
-class CloudDriveProgressPanel extends StatelessWidget {
+class CloudDriveProgressPanel extends StatefulWidget {
   const CloudDriveProgressPanel({super.key});
+
+  @override
+  State<CloudDriveProgressPanel> createState() => _CloudDriveProgressPanelState();
+}
+
+class _CloudDriveProgressPanelState extends State<CloudDriveProgressPanel> with SingleTickerProviderStateMixin {
+  late final TabController _tabController;
+  List<SyncTask> _historyTasks = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+    _loadHistory();
+  }
+
+  Future<void> _loadHistory() async {
+    final history = await CloudDriveProgressManager.instance.getHistory();
+    if (mounted) {
+      setState(() {
+        _historyTasks = history;
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -24,13 +54,8 @@ class CloudDriveProgressPanel extends StatelessWidget {
         final manager = CloudDriveProgressManager.instance;
         final tasks = manager.tasks;
         final theme = Theme.of(context);
-        final surfaceColor = theme.dialogTheme.backgroundColor ??
-            theme.cardTheme.color ??
-            theme.colorScheme.surface;
-        final surfaceShape = theme.dialogTheme.shape ??
-            const RoundedRectangleBorder(
-              borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-            );
+        final isCyberpunk = theme.brightness == Brightness.dark && theme.colorScheme.primary.value == 0xFF00E5FF;
+        final surfaceColor = theme.dialogTheme.backgroundColor ?? theme.cardTheme.color ?? theme.colorScheme.surface;
 
         return DraggableScrollableSheet(
           expand: false,
@@ -38,24 +63,53 @@ class CloudDriveProgressPanel extends StatelessWidget {
           minChildSize: 0.4,
           maxChildSize: 0.9,
           builder: (context, scrollController) {
-            return Material(
-              color: surfaceColor,
-              shape: surfaceShape,
-              clipBehavior: Clip.antiAlias,
+            return Container(
+              decoration: BoxDecoration(
+                color: surfaceColor,
+                borderRadius: isCyberpunk ? BorderRadius.zero : const BorderRadius.vertical(top: Radius.circular(20)),
+                border: isCyberpunk ? Border(top: BorderSide(color: theme.colorScheme.primary, width: 2)) : null,
+              ),
               child: Column(
                 children: [
-                  _buildHeader(context, manager),
-                  const Divider(height: 1),
-                  Expanded(
-                    child: tasks.isEmpty
-                        ? const Center(child: Text('暂无传输任务'))
-                        : ListView.builder(
-                            controller: scrollController,
-                            itemCount: tasks.length,
-                            itemBuilder: (context, index) {
-                              return _TaskItemNode(task: tasks[index], level: 0);
-                            },
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            '云盘同步进度',
+                            style: theme.textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: isCyberpunk ? theme.colorScheme.secondary : null,
+                            ),
                           ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close),
+                          onPressed: () => Navigator.of(context).pop(),
+                        ),
+                      ],
+                    ),
+                  ),
+                  TabBar(
+                    controller: _tabController,
+                    labelColor: isCyberpunk ? theme.colorScheme.secondary : theme.colorScheme.primary,
+                    unselectedLabelColor: theme.colorScheme.onSurface.withOpacity(0.5),
+                    indicatorColor: isCyberpunk ? theme.colorScheme.secondary : theme.colorScheme.primary,
+                    tabs: const [
+                      Tab(text: '进行中'),
+                      Tab(text: '历史记录'),
+                    ],
+                  ),
+                  if (isCyberpunk) Divider(height: 1, color: theme.colorScheme.primary.withOpacity(0.5)),
+                  Expanded(
+                    child: TabBarView(
+                      controller: _tabController,
+                      children: [
+                        _buildTaskList(tasks, theme, scrollController, isCyberpunk),
+                        _buildTaskList(_historyTasks, theme, scrollController, isCyberpunk),
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -66,191 +120,91 @@ class CloudDriveProgressPanel extends StatelessWidget {
     );
   }
 
-  Widget _buildHeader(BuildContext context, CloudDriveProgressManager manager) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Row(
+  Widget _buildTaskList(List<SyncTask> tasks, ThemeData theme, ScrollController scrollController, bool isCyberpunk) {
+    if (tasks.isEmpty) {
+      return Center(
+        child: Text(
+          '当前没有任务',
+          style: TextStyle(color: theme.colorScheme.onSurface.withOpacity(0.5)),
+        ),
+      );
+    }
+    return ListView.builder(
+      controller: scrollController,
+      padding: const EdgeInsets.all(16),
+      itemCount: tasks.length,
+      itemBuilder: (context, index) {
+        final task = tasks[index];
+        return TweenAnimationBuilder<double>(
+          tween: Tween(begin: 0.8, end: 1.0),
+          duration: const Duration(milliseconds: 500),
+          curve: Curves.elasticOut,
+          builder: (context, value, child) {
+            return Transform.scale(
+              scale: value,
+              child: Opacity(
+                opacity: value.clamp(0.0, 1.0),
+                child: _buildSyncTaskCard(task, theme, isCyberpunk),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildSyncTaskCard(SyncTask task, ThemeData theme, bool isCyberpunk) {
+    final progress = task.status == SyncStatus.completed ? 1.0 : (task.items.isEmpty ? 0.0 : task.items.where((i) => i.status == SyncStatus.completed).length / task.items.length);
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.elasticOut,
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isCyberpunk ? Colors.transparent : theme.colorScheme.surface,
+        borderRadius: isCyberpunk ? BorderRadius.zero : BorderRadius.circular(16),
+        border: isCyberpunk ? Border.all(color: theme.colorScheme.primary.withOpacity(0.3)) : Border.all(color: Colors.transparent),
+        boxShadow: isCyberpunk ? null : [
+          BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.cloud_sync_rounded),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              '传输进度',
-              style: Theme.of(context).textTheme.titleLarge,
-              overflow: TextOverflow.ellipsis,
+          Row(
+            children: [
+              Icon(task.direction == SyncDirection.cloudToLocal ? Icons.cloud_download : Icons.cloud_upload, color: theme.colorScheme.primary),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  task.id,
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              Text(
+                task.status == SyncStatus.completed ? '完成' : (task.status == SyncStatus.syncing ? '同步中' : '失败'),
+                style: TextStyle(color: task.status == SyncStatus.completed ? Colors.green : (task.status == SyncStatus.failed ? Colors.red : theme.colorScheme.primary)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: progress,
+              backgroundColor: theme.colorScheme.primary.withOpacity(0.1),
+              valueColor: AlwaysStoppedAnimation<Color>(task.status == SyncStatus.completed ? Colors.green : theme.colorScheme.primary),
             ),
           ),
-          IconButton(
-            onPressed: manager.pauseAll,
-            icon: const Icon(Icons.pause_circle_outline_rounded),
-            tooltip: '全部暂停',
-          ),
-          IconButton(
-            onPressed: manager.startAll,
-            icon: const Icon(Icons.play_circle_outline_rounded),
-            tooltip: '一键全部开启',
+          const SizedBox(height: 8),
+          Text(
+            '${(progress * 100).toStringAsFixed(1)}%',
+            style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurface.withOpacity(0.7)),
           ),
         ],
       ),
     );
-  }
-}
-
-class _TaskItemNode extends StatefulWidget {
-  const _TaskItemNode({
-    required this.task,
-    required this.level,
-  });
-
-  final SyncTask task;
-  final int level;
-
-  @override
-  State<_TaskItemNode> createState() => _TaskItemNodeState();
-}
-
-class _TaskItemNodeState extends State<_TaskItemNode> {
-  bool _expanded = true;
-
-  @override
-  Widget build(BuildContext context) {
-    final task = widget.task;
-    final hasChildren = task.items.isNotEmpty;
-
-    String taskTitle = task.direction == SyncDirection.cloudToLocal 
-        ? '下载: ${task.cloudFolderPath}' 
-        : '上传: ${task.localFolderPath}';
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        ListTile(
-          contentPadding: EdgeInsets.only(
-            left: 16.0 + widget.level * 24.0,
-            right: 16.0,
-          ),
-          leading: const Icon(
-            Icons.sync_rounded,
-            color: Colors.amber,
-          ),
-          title: Text(
-            taskTitle,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          subtitle: _buildSubtitle(task),
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _buildActionIcon(task),
-              if (hasChildren)
-                IconButton(
-                  icon: Icon(
-                    _expanded ? Icons.expand_less_rounded : Icons.expand_more_rounded,
-                  ),
-                  onPressed: () {
-                    setState(() {
-                      _expanded = !_expanded;
-                    });
-                  },
-                ),
-            ],
-          ),
-        ),
-        if (_expanded && hasChildren)
-          ...task.items.map((item) => _FileItemNode(
-                item: item,
-                level: widget.level + 1,
-              )),
-      ],
-    );
-  }
-
-  Widget _buildSubtitle(SyncTask task) {
-    final total = task.items.length;
-    final completed = task.items.where((e) => e.status == SyncStatus.completed).length;
-    return Text('文件数量: $completed / $total');
-  }
-
-  Widget _buildActionIcon(SyncTask task) {
-    final manager = CloudDriveProgressManager.instance;
-    switch (task.status) {
-      case SyncStatus.syncing:
-      case SyncStatus.pending:
-        return IconButton(
-          icon: const Icon(Icons.pause_circle_filled_rounded, color: Colors.orange),
-          onPressed: () => manager.pauseTask(task.id),
-          tooltip: '暂停',
-        );
-      case SyncStatus.paused:
-      case SyncStatus.failed:
-        return IconButton(
-          icon: const Icon(Icons.play_circle_filled_rounded, color: Colors.green),
-          onPressed: () => manager.resumeTask(task.id),
-          tooltip: '开始/恢复',
-        );
-      case SyncStatus.completed:
-        return const Icon(Icons.check_circle_rounded, color: Colors.green);
-    }
-  }
-}
-
-class _FileItemNode extends StatelessWidget {
-  const _FileItemNode({
-    required this.item,
-    required this.level,
-  });
-
-  final SyncFileItem item;
-  final int level;
-
-  @override
-  Widget build(BuildContext context) {
-    return ListTile(
-      contentPadding: EdgeInsets.only(
-        left: 16.0 + level * 24.0,
-        right: 16.0,
-      ),
-      leading: const Icon(
-        Icons.insert_drive_file_rounded,
-        color: Colors.blueAccent,
-      ),
-      title: Text(
-        item.name,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-      ),
-      subtitle: _buildSubtitle(item),
-      trailing: _buildActionIcon(item),
-    );
-  }
-
-  Widget _buildSubtitle(SyncFileItem item) {
-    final sizeStr = '${(item.size / 1024).toStringAsFixed(1)}KB';
-    
-    if (item.status == SyncStatus.failed && item.errorMessage != null) {
-      return Text('$sizeStr - 失败: ${item.errorMessage}', style: const TextStyle(color: Colors.red));
-    }
-    
-    return Text(sizeStr);
-  }
-
-  Widget _buildActionIcon(SyncFileItem item) {
-    switch (item.status) {
-      case SyncStatus.syncing:
-        return const SizedBox(
-          width: 24,
-          height: 24,
-          child: CircularProgressIndicator(strokeWidth: 2),
-        );
-      case SyncStatus.pending:
-        return const Icon(Icons.schedule_rounded, color: Colors.grey);
-      case SyncStatus.paused:
-        return const Icon(Icons.pause_circle_outline_rounded, color: Colors.orange);
-      case SyncStatus.failed:
-        return const Icon(Icons.error_outline_rounded, color: Colors.red);
-      case SyncStatus.completed:
-        return const Icon(Icons.check_circle_rounded, color: Colors.green);
-    }
   }
 }

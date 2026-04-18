@@ -89,8 +89,17 @@ class _SyncSettingsDialogState extends State<SyncSettingsDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isCyberpunk = theme.brightness == Brightness.dark &&
+                        theme.colorScheme.primary.value == 0xFF00E5FF;
+                        
     return AlertDialog(
-      title: const Text('同步设置'),
+      title: const Text('同步设置', style: TextStyle(fontWeight: FontWeight.bold)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: isCyberpunk ? BorderSide(color: theme.colorScheme.primary, width: 2) : BorderSide.none,
+      ),
+      backgroundColor: isCyberpunk ? Colors.black87 : theme.colorScheme.surface,
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -98,56 +107,79 @@ class _SyncSettingsDialogState extends State<SyncSettingsDialog> {
           children: [
             // Row 1: Select encrypted folder
             const Text('1. 选择本地加密文件夹', style: TextStyle(fontWeight: FontWeight.bold)),
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              title: Text(_selectedLocalVaultName ?? '未选择'),
-              subtitle: Text(_selectedLocalSubfolder ?? '点击选择'),
-              trailing: const Icon(Icons.folder),
+            const SizedBox(height: 8),
+            _buildSelectionCard(
+              title: _selectedLocalVaultName ?? '未选择',
+              subtitle: _selectedLocalSubfolder ?? '点击选择',
+              icon: Icons.folder,
               onTap: _pickLocalFolder,
+              theme: theme,
+              isCyberpunk: isCyberpunk,
             ),
-            const Divider(),
+            const SizedBox(height: 16),
 
             // Row 2: Select cloud disk folder
             const Text('2. 选择云盘同步文件夹', style: TextStyle(fontWeight: FontWeight.bold)),
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              title: Text(_selectedCloudConfig?.name ?? '未选择'),
-              subtitle: Text(_selectedCloudFolder ?? '点击选择'),
-              trailing: const Icon(Icons.cloud),
+            const SizedBox(height: 8),
+            _buildSelectionCard(
+              title: _selectedCloudConfig?.name ?? '未选择',
+              subtitle: _selectedCloudFolder ?? '点击选择',
+              icon: Icons.cloud,
               onTap: _pickCloudFolder,
+              theme: theme,
+              isCyberpunk: isCyberpunk,
             ),
-            const Divider(),
+            const SizedBox(height: 16),
 
             // Row 3: Sync direction
             const Text('3. 同步方式', style: TextStyle(fontWeight: FontWeight.bold)),
-            DropdownButton<SyncDirection>(
-              isExpanded: true,
-              value: _syncDirection,
-              items: const [
-                DropdownMenuItem(value: SyncDirection.cloudToLocal, child: Text('云端到本地 (下载)')),
-                DropdownMenuItem(value: SyncDirection.localToCloud, child: Text('本地到云端 (上传)')),
-                DropdownMenuItem(value: SyncDirection.twoWay, child: Text('双向同步')),
-              ],
-              onChanged: (v) {
-                if (v != null) setState(() => _syncDirection = v);
-              },
-            ),
             const SizedBox(height: 8),
-            const Divider(),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: theme.colorScheme.primary.withOpacity(0.5)),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<SyncDirection>(
+                  isExpanded: true,
+                  value: _syncDirection,
+                  items: const [
+                    DropdownMenuItem(value: SyncDirection.cloudToLocal, child: Text('云端到本地 (下载)')),
+                    DropdownMenuItem(value: SyncDirection.localToCloud, child: Text('本地到云端 (上传)')),
+                    DropdownMenuItem(value: SyncDirection.twoWay, child: Text('双向同步')),
+                  ],
+                  onChanged: (v) {
+                    if (v != null) setState(() => _syncDirection = v);
+                  },
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
 
             // Row 4: Override method
             const Text('4. 覆盖方式 (同名文件)', style: TextStyle(fontWeight: FontWeight.bold)),
-            DropdownButton<SyncOverrideMethod>(
-              isExpanded: true,
-              value: _overrideMethod,
-              items: const [
-                DropdownMenuItem(value: SyncOverrideMethod.overwrite, child: Text('覆盖替换')),
-                DropdownMenuItem(value: SyncOverrideMethod.skip, child: Text('跳过')),
-                DropdownMenuItem(value: SyncOverrideMethod.timePriority, child: Text('时间优先 (保留最新)')),
-              ],
-              onChanged: (v) {
-                if (v != null) setState(() => _overrideMethod = v);
-              },
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: theme.colorScheme.primary.withOpacity(0.5)),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<SyncOverrideMethod>(
+                  isExpanded: true,
+                  value: _overrideMethod,
+                  items: const [
+                    DropdownMenuItem(value: SyncOverrideMethod.overwrite, child: Text('覆盖替换')),
+                    DropdownMenuItem(value: SyncOverrideMethod.skip, child: Text('跳过')),
+                    DropdownMenuItem(value: SyncOverrideMethod.timePriority, child: Text('时间优先 (保留最新)')),
+                  ],
+                  onChanged: (v) {
+                    if (v != null) setState(() => _overrideMethod = v);
+                  },
+                ),
+              ),
             ),
           ],
         ),
@@ -158,6 +190,11 @@ class _SyncSettingsDialogState extends State<SyncSettingsDialog> {
           child: const Text('取消'),
         ),
         ElevatedButton(
+          style: ElevatedButton.styleFrom(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            backgroundColor: theme.colorScheme.primary,
+            foregroundColor: Colors.white,
+          ),
           onPressed: _selectedLocalVaultPath == null || _selectedCloudConfig == null
               ? null
               : () {
@@ -168,6 +205,52 @@ class _SyncSettingsDialogState extends State<SyncSettingsDialog> {
           child: const Text('开始同步'),
         ),
       ],
+    );
+  }
+
+  Widget _buildSelectionCard({
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required VoidCallback onTap,
+    required ThemeData theme,
+    required bool isCyberpunk,
+  }) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.easeOutQuad,
+      decoration: BoxDecoration(
+        color: isCyberpunk ? Colors.transparent : theme.colorScheme.surfaceVariant,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: theme.colorScheme.primary.withOpacity(0.3)),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(12.0),
+            child: Row(
+              children: [
+                Icon(icon, color: theme.colorScheme.primary),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 4),
+                      Text(subtitle, style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurface.withOpacity(0.6))),
+                    ],
+                  ),
+                ),
+                const Icon(Icons.chevron_right),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

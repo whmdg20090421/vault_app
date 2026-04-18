@@ -392,6 +392,7 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
             'result': result,
             'currentPath': _currentPath,
             'vaultDirectoryPath': widget.vaultDirectoryPath,
+            'masterKey': widget.masterKey,
             'encryptFilename': widget.vaultConfig.encryptFilename,
             'taskId': taskId,
           };

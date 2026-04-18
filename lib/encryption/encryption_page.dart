@@ -391,8 +391,21 @@ class EncryptionProgressPanel extends StatefulWidget {
   State<EncryptionProgressPanel> createState() => _EncryptionProgressPanelState();
 }
 
-class _EncryptionProgressPanelState extends State<EncryptionProgressPanel> {
+class _EncryptionProgressPanelState extends State<EncryptionProgressPanel> with SingleTickerProviderStateMixin {
   final List<String> _navigationStack = [];
+  late final TabController _tabController;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
 
   void _navigateBack() {
     if (_navigationStack.isNotEmpty) {
@@ -451,7 +464,7 @@ class _EncryptionProgressPanelState extends State<EncryptionProgressPanel> {
           return Column(
             children: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
                 child: Row(
                   children: [
                     if (_navigationStack.isNotEmpty)
@@ -477,9 +490,20 @@ class _EncryptionProgressPanelState extends State<EncryptionProgressPanel> {
                   ],
                 ),
               ),
+              if (_navigationStack.isEmpty)
+                TabBar(
+                  controller: _tabController,
+                  labelColor: isCyberpunk ? theme.colorScheme.secondary : theme.colorScheme.primary,
+                  unselectedLabelColor: theme.colorScheme.onSurface.withOpacity(0.5),
+                  indicatorColor: isCyberpunk ? theme.colorScheme.secondary : theme.colorScheme.primary,
+                  tabs: const [
+                    Tab(text: '进行中'),
+                    Tab(text: '历史记录'),
+                  ],
+                ),
               if (isCyberpunk)
                 Divider(height: 1, color: theme.colorScheme.primary.withOpacity(0.5)),
-              if (manager.tasks.isNotEmpty)
+              if (manager.tasks.isNotEmpty && _navigationStack.isEmpty)
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
                   child: SizedBox(
@@ -489,6 +513,7 @@ class _EncryptionProgressPanelState extends State<EncryptionProgressPanel> {
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         backgroundColor: manager.hasActiveTasks ? Colors.orange.withOpacity(0.8) : theme.colorScheme.primary,
                         foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                       ),
                       icon: Icon(manager.hasActiveTasks ? Icons.pause_circle_filled : Icons.play_circle_filled),
                       label: Text(
@@ -506,29 +531,56 @@ class _EncryptionProgressPanelState extends State<EncryptionProgressPanel> {
                   ),
                 ),
               Expanded(
-                child: currentTasks.isEmpty
-                    ? Center(
-                        child: Text(
-                          '当前没有任务',
-                          style: TextStyle(color: theme.colorScheme.onSurface.withOpacity(0.5)),
-                        ),
+                child: _navigationStack.isEmpty
+                    ? TabBarView(
+                        controller: _tabController,
+                        children: [
+                          _buildTaskList(context, currentTasks, theme, false),
+                          _buildTaskList(context, manager.historyTasks, theme, true),
+                        ],
                       )
-                    : ListView.builder(
-                        controller: widget.scrollController,
-                        padding: const EdgeInsets.all(16),
-                        itemCount: currentTasks.length,
-                        itemBuilder: (context, index) {
-                          return _TaskCard(
-                            task: currentTasks[index],
-                            onFolderTap: _navigateTo,
-                          );
-                        },
-                      ),
+                    : _buildTaskList(context, currentTasks, theme, false),
               ),
             ],
           );
         },
       ),
+    );
+  }
+
+  Widget _buildTaskList(BuildContext context, List<EncryptionTask> tasks, ThemeData theme, bool isHistory) {
+    if (tasks.isEmpty) {
+      return Center(
+        child: Text(
+          '当前没有任务',
+          style: TextStyle(color: theme.colorScheme.onSurface.withOpacity(0.5)),
+        ),
+      );
+    }
+    return ListView.builder(
+      controller: widget.scrollController,
+      padding: const EdgeInsets.all(16),
+      itemCount: tasks.length,
+      itemBuilder: (context, index) {
+        final task = tasks[index];
+        return TweenAnimationBuilder<double>(
+          tween: Tween(begin: 0.8, end: 1.0),
+          duration: const Duration(milliseconds: 500),
+          curve: Curves.elasticOut,
+          builder: (context, value, child) {
+            return Transform.scale(
+              scale: value,
+              child: Opacity(
+                opacity: value.clamp(0.0, 1.0),
+                child: _TaskCard(
+                  task: task,
+                  onFolderTap: isHistory ? (_) {} : _navigateTo,
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 }
@@ -567,21 +619,37 @@ class _TaskCard extends StatelessWidget {
     final statusText = _getStatusText(task.status);
     final progress = task.progress;
 
-    return Card(
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.elasticOut,
       margin: const EdgeInsets.only(bottom: 12),
-      shape: isCyberpunk
-          ? RoundedRectangleBorder(
-              side: BorderSide(color: theme.colorScheme.primary.withOpacity(0.3)),
-              borderRadius: BorderRadius.zero,
-            )
-          : null,
-      child: InkWell(
-        onTap: task.isDirectory && task.children.isNotEmpty
-            ? () => onFolderTap(task.id)
-            : null,
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
+      decoration: BoxDecoration(
+        color: isCyberpunk ? Colors.transparent : theme.colorScheme.surface,
+        borderRadius: isCyberpunk ? BorderRadius.zero : BorderRadius.circular(16),
+        border: isCyberpunk
+            ? Border.all(color: theme.colorScheme.primary.withOpacity(0.3))
+            : Border.all(color: Colors.transparent),
+        boxShadow: isCyberpunk
+            ? null
+            : [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                )
+              ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: isCyberpunk ? BorderRadius.zero : BorderRadius.circular(16),
+        child: InkWell(
+          borderRadius: isCyberpunk ? BorderRadius.zero : BorderRadius.circular(16),
+          onTap: task.isDirectory && task.children.isNotEmpty
+              ? () => onFolderTap(task.id)
+              : null,
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
@@ -676,8 +744,9 @@ class _TaskCard extends StatelessWidget {
                       tooltip: '取消',
                     ),
                 ],
-              ),
-            ],
+                ),
+              ],
+            ),
           ),
         ),
       ),
