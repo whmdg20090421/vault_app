@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'services/stats_service.dart';
 import 'cloud_drive/cloud_drive_page.dart';
+import 'encryption/encryption_page.dart';
 import 'cloud_drive/cloud_drive_progress_manager.dart';
 import 'cloud_drive/cloud_drive_progress_panel.dart';
 import 'cloud_drive/webdav_state_manager.dart';
@@ -17,6 +18,7 @@ import 'theme/app_theme.dart';
 import 'theme/background_settings.dart';
 import 'settings/theme_settings_page.dart';
 import 'settings/security_settings_page.dart';
+import 'encryption/performance_settings_page.dart';
 import 'security/security_check.dart';
 
 Future<void> main() async {
@@ -192,10 +194,11 @@ class _MainShellState extends State<MainShell> {
     final pages = const [
       HomePage(),
       CloudDrivePage(),
+      EncryptionPage(),
       SettingsPage(),
     ];
 
-    final titles = const ['主页', '云盘', '设置'];
+    final titles = const ['主页', '云盘', '加密', '设置'];
 
     return Scaffold(
       appBar: AppBar(
@@ -236,6 +239,10 @@ class _MainShellState extends State<MainShell> {
               },
             ),
             label: '云盘',
+          ),
+          const NavigationDestination(
+            icon: Icon(Icons.lock_rounded),
+            label: '加密',
           ),
           const NavigationDestination(
             icon: Icon(Icons.settings_rounded),
@@ -299,6 +306,19 @@ class _SettingsPageState extends State<SettingsPage> {
             Navigator.push(
               context,
               MaterialPageRoute(builder: (context) => const ThemeSettingsPage()),
+            );
+          },
+        ),
+        const Divider(),
+        ListTile(
+          leading: const Icon(Icons.speed_rounded),
+          title: const Text('性能设置'),
+          trailing: const Icon(Icons.chevron_right_rounded),
+          contentPadding: EdgeInsets.zero,
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const PerformanceSettingsPage()),
             );
           },
         ),
