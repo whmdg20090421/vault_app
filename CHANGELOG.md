@@ -1,3 +1,11 @@
+# 版本 1.4.1 (2026-04-18)
+
+### ✨ Features
+- **Security Settings**: 在设置页新增"安全"模块，支持配置临时状态与未保存退出提示，并支持 Root 权限模式的选择（普通、Root-默认、Root-始终）。
+- **File Statistics**: 首页新增文件统计面板，展示本地加密文件数、云端加密文件数以及差异文件数，并支持手动或启动时自动刷新差异计算。
+- **Index Architecture**: 引入全新的索引文件规范（`local_index.json`, `remote_index.json`, `remote_index_cache.json`），规范本地更新、云端上传、差异计算及上传前的一致性校验流程。
+- **Consistency Check**: 每次准备上传前进行一致性校验，哈希不一致时弹出同步提示框防覆盖。
+
 # 版本 1.4.0 (2026-04-18)
 
 ### ✨ Features
