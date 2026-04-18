@@ -288,10 +288,9 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
       if (mounted) {
         setState(() {
           _isMenuOpen = false;
-          // _isLoading = false; 立即关闭加载动画，解阻塞 UI 线程
         });
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('已将 ${result.files.length} 个文件添加到后台加密任务')),
+          SnackBar(content: Text('已将 ${result.files.length} 个文件添加到后台加密任务，请在任务面板查看进度')),
         );
       }
       try {
@@ -351,68 +350,6 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
         EncryptionTaskManager().addTask(task);
         EncryptionTaskManager().pumpQueue();
 
-        // We still need a listener for the progress, but now EncryptionTaskManager handles it via its global receive port!
-        // We can just skip spawning the isolate here, ETM will do it!
-        // BUT wait, doImportFileIsolate is used by ETM.
-        // So we just skip all the receivePort logic here!
-        /*
-        final receivePort = ReceivePort();
-        _receivePorts.add(receivePort);
-        receivePort.listen((message) {
-          if (message is Map<String, dynamic>) {
-            final type = message['type'];
-            final tid = message['taskId'] as String;
-            if (type == 'progress') {
-              final bytes = message['bytes'] as int;
-              EncryptionTaskManager().updateTaskProgress(tid, bytes);
-            } else if (type == 'add_child') {
-              final childMap = message['child'] as Map<String, dynamic>;
-              final child = EncryptionTask(
-                id: childMap['id'] as String,
-                name: childMap['name'] as String,
-                isDirectory: childMap['isDirectory'] as bool,
-                totalBytes: childMap['totalBytes'] as int,
-              );
-              EncryptionTaskManager().addChild(tid, child);
-            } else if (type == 'done') {
-              final t = EncryptionTaskManager().findTask(tid);
-                if (t != null && t.children.isNotEmpty && t.id == tid) {
-                  // Do not complete root task, let ETM handle it.
-                } else {
-                  EncryptionTaskManager().updateTaskStatus(tid, 'completed');
-                }
-              StatsService().recalculate();
-              if (mounted) {
-                _loadCurrentDirectory();
-              }
-              receivePort.close();
-              _receivePorts.remove(receivePort);
-            } else if (type == 'error') {
-              final error = message['error'] as String;
-              EncryptionTaskManager().updateTaskStatus(tid, 'failed', error: error);
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('导入文件失败: $error')),
-                );
-              }
-              receivePort.close();
-              _receivePorts.remove(receivePort);
-            }
-          }
-        });
-
-        final args = {
-          'sendPort': receivePort.sendPort,
-          'files': filesToProcess,
-          'vaultDirectoryPath': widget.vaultDirectoryPath,
-          'masterKey': widget.masterKey,
-          'encryptFilename': widget.vaultConfig.encryptFilename,
-          'taskId': taskId,
-        };
-
-        Isolate.spawn(doImportFileIsolate, args).then((isolate) {
-          EncryptionTaskManager().registerIsolate(taskId, isolate);
-        });
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
