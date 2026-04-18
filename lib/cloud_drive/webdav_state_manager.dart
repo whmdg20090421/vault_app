@@ -53,10 +53,13 @@ class WebDAVStateManager extends ChangeNotifier {
     bool shouldRetry = false;
 
     try {
+      final repository = WebDavConfigRepository();
+      final password = await repository.readPassword(config.id) ?? '';
+
       final client = WebDavClient(
         baseUrl: config.url,
         username: config.username,
-        password: config.password ?? '',
+        password: password,
       );
       final service = WebDavService(client);
       final syncEngine = SyncEngine(

@@ -88,18 +88,13 @@ class WebDavClient {
     required String username,
     required String password,
   }) {
+    final credentials = base64Encode(utf8.encode('$username:$password'));
     dio = Dio(BaseOptions(
       baseUrl: baseUrl,
       connectTimeout: const Duration(seconds: 15),
       receiveTimeout: const Duration(seconds: 15),
-    ));
-
-    // Basic Auth Interceptor
-    dio.interceptors.add(InterceptorsWrapper(
-      onRequest: (options, handler) {
-        final credentials = base64Encode(utf8.encode('$username:$password'));
-        options.headers['Authorization'] = 'Basic $credentials';
-        return handler.next(options);
+      headers: {
+        'Authorization': 'Basic $credentials',
       },
     ));
 
