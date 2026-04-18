@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:crypto/crypto.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class SecurityCheck {
   static const MethodChannel _channel = MethodChannel('vault/security');
@@ -22,12 +23,12 @@ class SecurityCheck {
       print('Current APK Hash: $apkHash');
       print('Current Signature Hash: $signatureHash');
 
-      // Check if hashes are configured. If both are empty, we skip the strict check 
-      // because the app is likely in development or unconfigured release state.
-      if (expectedApkHash.isEmpty && expectedSignatureHash.isEmpty) {
-        return; // No expected hashes configured, skip validation
-      }
-
+      // 现在的校验逻辑要求必须提供签名或APK的哈希（二者选一或都填），
+      // 否则代表应用未经正确配置就发布，视为不安全。
+      // 但如果你是在自己开发时运行，可以将这两个预期哈希暂时置空。
+      // 为满足“未修改时不触发”的需求，我们需要检查计算出的当前哈希。
+      
+      // 如果预期哈希不为空，则进行严格比对
       bool isMatch = true;
       if (expectedApkHash.isNotEmpty && apkHash != expectedApkHash) {
         isMatch = false;
@@ -36,9 +37,28 @@ class SecurityCheck {
         isMatch = false;
       }
       
-      // If there is any mismatch against configured hashes, we fail.
+      // 注意：如果预期哈希都为空，我们需要获取系统自身当前的签名哈希
+      // 并保存到本地，下次启动时与第一次记录的哈希对比（Trust On First Use 机制）。
+      if (signatureHash.isEmpty) {
+        _showErrorScreen(context, "无法读取应用签名信息，安装包可能损坏");
+        return;
+      }
+
+      final prefs = await SharedPreferences.getInstance();
+      final storedSignatureHash = prefs.getString('stored_signature_hash');
+
+      if (expectedSignatureHash.isEmpty && storedSignatureHash == null) {
+        // 第一次运行，将当前有效签名哈希存起来
+        await prefs.setString('stored_signature_hash', signatureHash);
+      } else if (expectedSignatureHash.isEmpty && storedSignatureHash != null) {
+        // 已经运行过，检查当前签名是否和首次记录的签名哈希一致
+        if (signatureHash != storedSignatureHash) {
+          _showErrorScreen(context, "应用签名已被篡改");
+          return;
+        }
+      }
+
       if (!isMatch) {
-        // Mismatch!
         _showErrorScreen(context, "环境校验失败或哈希不匹配");
       }
     } catch (e) {
