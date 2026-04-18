@@ -1,7 +1,11 @@
+import 'dart:convert';
 import 'dart:io';
+
 import 'package:flutter/foundation.dart';
+import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
-import '../encryption/services/local_index_service.dart';
+
+import '../encryption/models/vault_config.dart';
 
 class StatsService extends ChangeNotifier {
   static final StatsService _instance = StatsService._internal();
@@ -51,7 +55,8 @@ class StatsService extends ChangeNotifier {
     for (String path in vaultPaths) {
       encBytes += await _getFolderSize(Directory(path));
       
-      final stats = await LocalIndexService().getFileStatistics(path);
+      // Dummy stats since encryption logic is removed
+      final stats = {'localEncryptedCount': 0, 'cloudEncryptedCount': 0, 'diffCount': 0};
       locEncCount += stats['localEncryptedCount'] as int;
       cldEncCount += stats['cloudEncryptedCount'] as int;
       dfCount += stats['diffCount'] as int;
