@@ -19,8 +19,52 @@ class MainActivity : FlutterActivity() {
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "vault/security").setMethodCallHandler { call, result ->
             when (call.method) {
                 "detectSecurityLevel" -> result.success(detectSecurityLevel())
+                "getApkHash" -> result.success(getApkHash())
+                "getSignatureHash" -> result.success(getSignatureHash())
                 else -> result.notImplemented()
             }
+        }
+    }
+
+    private fun getApkHash(): String {
+        try {
+            val pm = context.packageManager
+            val appInfo = pm.getApplicationInfo(context.packageName, 0)
+            val apkPath = appInfo.sourceDir
+            val file = java.io.File(apkPath)
+            val md = java.security.MessageDigest.getInstance("SHA-256")
+            file.inputStream().use { fis ->
+                val buffer = ByteArray(8192)
+                var read: Int
+                while (fis.read(buffer).also { read = it } != -1) {
+                    md.update(buffer, 0, read)
+                }
+            }
+            return md.digest().joinToString("") { "%02x".format(it) }
+        } catch (e: Exception) {
+            return ""
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun getSignatureHash(): String {
+        try {
+            val pm = context.packageManager
+            val packageName = context.packageName
+            val signatures = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                val packageInfo = pm.getPackageInfo(packageName, android.content.pm.PackageManager.GET_SIGNING_CERTIFICATES)
+                packageInfo.signingInfo?.apkContentsSigners
+            } else {
+                val packageInfo = pm.getPackageInfo(packageName, android.content.pm.PackageManager.GET_SIGNATURES)
+                packageInfo.signatures
+            }
+            if (signatures.isNullOrEmpty()) return ""
+            val cert = signatures[0].toByteArray()
+            val md = java.security.MessageDigest.getInstance("SHA-256")
+            md.update(cert)
+            return md.digest().joinToString("") { "%02x".format(it) }
+        } catch (e: Exception) {
+            return ""
         }
     }
 

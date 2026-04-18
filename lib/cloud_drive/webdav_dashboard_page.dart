@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'webdav_config.dart';
 import 'webdav_state_manager.dart';
 import 'webdav_browser_page.dart'; // We'll modify it slightly to not have a Scaffold if used in a Tab
+import 'sync_settings_dialog.dart';
 
 class WebDAVDashboardPage extends StatefulWidget {
   final WebDavConfig config;
@@ -86,7 +87,7 @@ class _OverviewTab extends StatelessWidget {
                 child: ElevatedButton.icon(
                   onPressed: state.isSyncing
                       ? null
-                      : () => state.startSync(config),
+                      : () => SyncSettingsDialog.show(context, config),
                   icon: state.isSyncing
                       ? const SizedBox(
                           width: 24,

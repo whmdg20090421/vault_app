@@ -18,6 +18,7 @@ import 'theme/app_theme.dart';
 import 'theme/background_settings.dart';
 import 'settings/theme_settings_page.dart';
 import 'encryption/performance_settings_page.dart';
+import 'security/security_check.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -178,6 +179,14 @@ class MainShell extends StatefulWidget {
 
 class _MainShellState extends State<MainShell> {
   int _index = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      SecurityCheck.performCheck(context);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
