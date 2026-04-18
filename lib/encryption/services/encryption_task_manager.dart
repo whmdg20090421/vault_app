@@ -576,7 +576,6 @@ class EncryptionTaskManager extends ChangeNotifier {
   final List<EncryptionTask> _tasks = [];
   List<EncryptionTask> get tasks => _tasks;
   final List<EncryptionTask> _historyTasks = [];
-  List<EncryptionTask> get historyTasks => _historyTasks;
   final Map<String, Isolate> _isolates = {};
   bool _isSaving = false;
 
