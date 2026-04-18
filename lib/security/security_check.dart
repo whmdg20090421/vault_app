@@ -96,7 +96,7 @@ class _SecurityPasswordWidgetState extends State<_SecurityPasswordWidget> {
     final bytes = utf8.encode(input);
     final digest = sha256.convert(bytes);
     
-    // Obfuscated password hash for Whm20090421
+    // Obfuscated password hash validation
     if (digest.toString() == '3d959cdcef27a62da201457b3f872b874e5b950e14f8b189f7625934327629db') {
       Navigator.of(context).pop(); // Dismiss the full screen error
     } else {
