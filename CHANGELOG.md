@@ -1,3 +1,8 @@
+# 版本 1.4.6 (2026-04-19)
+
+### 🐛 Bug Fixes
+- **V4 Refactor Syntax Fix**: 移除旧版 `VaultExplorerPage` 中过时的 Isolate 和任务状态调用代码，修复编译阶段 `EncryptionTaskManager` 相关的方法未定义报错，使得打包流水线能够正常通过。
+
 # 版本 1.4.5 (2026-04-19)
 
 ### ✨ Features & Refactor
