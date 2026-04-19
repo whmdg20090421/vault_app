@@ -1,3 +1,8 @@
+# 版本 1.4.8 (2026-04-19)
+
+### 🐛 Bug Fixes
+- **V4 Refactor Compilation**: 清理 `encryption_page.dart` 中残留的旧版 `EncryptionProgressPanel` 导致的多重定义与过时状态类型引用错误。
+
 # 版本 1.4.7 (2026-04-19)
 
 ### 🐛 Bug Fixes
