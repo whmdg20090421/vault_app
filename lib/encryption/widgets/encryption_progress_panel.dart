@@ -23,6 +23,8 @@ class EncryptionProgressPanel extends StatefulWidget {
 
 class _EncryptionProgressPanelState extends State<EncryptionProgressPanel> with SingleTickerProviderStateMixin {
   late final TabController _tabController;
+  final List<FolderNode> _folderStack = [];
+  bool _isStackHistory = false;
 
   @override
   void initState() {
@@ -34,6 +36,23 @@ class _EncryptionProgressPanelState extends State<EncryptionProgressPanel> with 
   void dispose() {
     _tabController.dispose();
     super.dispose();
+  }
+
+  void _pushFolder(FolderNode folder, bool isHistory) {
+    setState(() {
+      if (_folderStack.isEmpty) {
+        _isStackHistory = isHistory;
+      }
+      _folderStack.add(folder);
+    });
+  }
+
+  void _popFolder() {
+    setState(() {
+      if (_folderStack.isNotEmpty) {
+        _folderStack.removeLast();
+      }
+    });
   }
 
   @override
@@ -54,6 +73,9 @@ class _EncryptionProgressPanelState extends State<EncryptionProgressPanel> with 
           minChildSize: 0.4,
           maxChildSize: 0.9,
           builder: (context, scrollController) {
+            final isRoot = _folderStack.isEmpty;
+            final title = isRoot ? '加密任务进度' : _folderStack.last.name;
+
             return Container(
               decoration: BoxDecoration(
                 color: surfaceColor,
@@ -66,9 +88,14 @@ class _EncryptionProgressPanelState extends State<EncryptionProgressPanel> with 
                     padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
                     child: Row(
                       children: [
+                        if (!isRoot)
+                          IconButton(
+                            icon: const Icon(Icons.arrow_back),
+                            onPressed: _popFolder,
+                          ),
                         Expanded(
                           child: Text(
-                            '加密任务进度',
+                            title,
                             style: theme.textTheme.titleLarge?.copyWith(
                               fontWeight: FontWeight.bold,
                               color: isCyberpunk ? theme.colorScheme.secondary : null,
@@ -82,26 +109,33 @@ class _EncryptionProgressPanelState extends State<EncryptionProgressPanel> with 
                       ],
                     ),
                   ),
-                  TabBar(
-                    controller: _tabController,
-                    labelColor: isCyberpunk ? theme.colorScheme.secondary : theme.colorScheme.primary,
-                    unselectedLabelColor: theme.colorScheme.onSurface.withOpacity(0.5),
-                    indicatorColor: isCyberpunk ? theme.colorScheme.secondary : theme.colorScheme.primary,
-                    tabs: const [
-                      Tab(text: '进行中'),
-                      Tab(text: '历史记录'),
-                    ],
-                  ),
-                  if (isCyberpunk) Divider(height: 1, color: theme.colorScheme.primary.withOpacity(0.5)),
-                  Expanded(
-                    child: TabBarView(
+                  if (isRoot) ...[
+                    TabBar(
                       controller: _tabController,
-                      children: [
-                        _buildTaskList(tasks, scrollController, isCyberpunk, theme, false),
-                        _buildTaskList(historyTasks, scrollController, isCyberpunk, theme, true),
+                      labelColor: isCyberpunk ? theme.colorScheme.secondary : theme.colorScheme.primary,
+                      unselectedLabelColor: theme.colorScheme.onSurface.withOpacity(0.5),
+                      indicatorColor: isCyberpunk ? theme.colorScheme.secondary : theme.colorScheme.primary,
+                      tabs: const [
+                        Tab(text: '进行中'),
+                        Tab(text: '历史记录'),
                       ],
                     ),
-                  ),
+                    if (isCyberpunk) Divider(height: 1, color: theme.colorScheme.primary.withOpacity(0.5)),
+                    Expanded(
+                      child: TabBarView(
+                        controller: _tabController,
+                        children: [
+                          _buildTaskList(tasks, scrollController, isCyberpunk, theme, false),
+                          _buildTaskList(historyTasks, scrollController, isCyberpunk, theme, true),
+                        ],
+                      ),
+                    ),
+                  ] else ...[
+                    if (isCyberpunk) Divider(height: 1, color: theme.colorScheme.primary.withOpacity(0.5)),
+                    Expanded(
+                      child: _buildTaskList(_folderStack.last.children, scrollController, isCyberpunk, theme, _isStackHistory),
+                    ),
+                  ],
                 ],
               ),
             );
@@ -125,11 +159,13 @@ class _EncryptionProgressPanelState extends State<EncryptionProgressPanel> with 
       padding: const EdgeInsets.all(16),
       itemCount: tasks.length,
       itemBuilder: (context, index) {
+        final task = tasks[index];
         return _EncryptionTaskCard(
-          task: tasks[index],
+          task: task,
           isCyberpunk: isCyberpunk,
           theme: theme,
           isHistory: isHistory,
+          onTap: task is FolderNode ? () => _pushFolder(task, isHistory) : null,
         );
       },
     );
@@ -141,12 +177,14 @@ class _EncryptionTaskCard extends StatelessWidget {
   final bool isCyberpunk;
   final ThemeData theme;
   final bool isHistory;
+  final VoidCallback? onTap;
 
   const _EncryptionTaskCard({
     required this.task,
     required this.isCyberpunk,
     required this.theme,
     this.isHistory = false,
+    this.onTap,
   });
 
   void _showActionMenu(BuildContext context) {
@@ -242,6 +280,7 @@ class _EncryptionTaskCard extends StatelessWidget {
 
     return GestureDetector(
       onLongPress: () => _showActionMenu(context),
+      onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 300),
         curve: Curves.elasticOut,
@@ -317,6 +356,11 @@ class _EncryptionTaskCard extends StatelessWidget {
                     ],
                   ),
                 ),
+                if (task is FolderNode)
+                  Icon(
+                    Icons.chevron_right,
+                    color: theme.colorScheme.onSurface.withOpacity(0.5),
+                  ),
               ],
             ),
             const SizedBox(height: 12),

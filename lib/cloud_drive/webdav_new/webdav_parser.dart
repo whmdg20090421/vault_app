@@ -66,29 +66,24 @@ class WebDavParser {
       }
 
       // 查找包含具体属性的 prop 节点
-      final prop = response.descendants
-          .whereType<XmlElement>()
-          .where((e) => e.name.local == 'prop')
-          .firstOrNull;
-          
-      if (prop == null) continue;
-
-      final contentLengthElement = prop.descendants
+      // 一个 response 可能有多个 propstat，因此可能包含多个 prop
+      // 直接在 response 的后代中查找相关属性节点更稳妥
+      final contentLengthElement = response.descendants
           .whereType<XmlElement>()
           .where((e) => e.name.local == 'getcontentlength')
           .firstOrNull;
           
-      final lastModifiedElement = prop.descendants
+      final lastModifiedElement = response.descendants
           .whereType<XmlElement>()
           .where((e) => e.name.local == 'getlastmodified')
           .firstOrNull;
           
-      final resourceTypeElement = prop.descendants
+      final resourceTypeElement = response.descendants
           .whereType<XmlElement>()
           .where((e) => e.name.local == 'resourcetype')
           .firstOrNull;
           
-      final eTagElement = prop.descendants
+      final eTagElement = response.descendants
           .whereType<XmlElement>()
           .where((e) => e.name.local == 'getetag')
           .firstOrNull;
@@ -120,7 +115,7 @@ class WebDavParser {
 
       // 从 relativePath 提取名称
       String name = '';
-      final pathSegments = Uri.parse(relativePath).pathSegments.where((s) => s.isNotEmpty).toList();
+      final pathSegments = relativePath.split('/').where((s) => s.isNotEmpty).toList();
       if (pathSegments.isNotEmpty) {
         name = pathSegments.last;
       }

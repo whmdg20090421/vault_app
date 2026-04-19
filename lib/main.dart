@@ -268,42 +268,11 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
-  bool _autoRefreshOnStartup = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadSettings();
-  }
-
-  Future<void> _loadSettings() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _autoRefreshOnStartup = prefs.getBool('auto_refresh_on_startup') ?? false;
-    });
-  }
-
-  Future<void> _toggleAutoRefresh(bool value) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('auto_refresh_on_startup', value);
-    setState(() {
-      _autoRefreshOnStartup = value;
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        SwitchListTile(
-          title: const Text('启动时自动刷新统计数据'),
-          subtitle: const Text('每次启动应用时自动计算文件统计信息'),
-          value: _autoRefreshOnStartup,
-          onChanged: _toggleAutoRefresh,
-          contentPadding: EdgeInsets.zero,
-        ),
-        const Divider(),
         ListTile(
           leading: const Icon(Icons.palette_outlined),
           title: const Text('主题与背景设置'),

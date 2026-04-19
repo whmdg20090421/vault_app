@@ -18,6 +18,7 @@ class _PerformanceSettingsPageState extends State<PerformanceSettingsPage> {
   int _totalCores = 1;
   int _maxUsableCores = 1;
   int _selectedCores = 1;
+  bool _autoRefreshOnStartup = false;
 
   @override
   void initState() {
@@ -41,7 +42,17 @@ class _PerformanceSettingsPageState extends State<PerformanceSettingsPage> {
     _selectedCores = (saved ?? (_totalCores ~/ 2)).clamp(1, _maxUsableCores);
     _coresController.text = _selectedCores.toString();
 
+    _autoRefreshOnStartup = prefs.getBool('auto_refresh_on_startup') ?? false;
+
     if (mounted) setState(() {});
+  }
+
+  Future<void> _toggleAutoRefresh(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('auto_refresh_on_startup', value);
+    setState(() {
+      _autoRefreshOnStartup = value;
+    });
   }
 
   Future<void> _persist(int value) async {
@@ -96,6 +107,17 @@ class _PerformanceSettingsPageState extends State<PerformanceSettingsPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                SwitchListTile(
+                  title: const Text('启动时自动刷新统计数据'),
+                  subtitle: const Text('每次启动应用时自动计算文件统计信息'),
+                  value: _autoRefreshOnStartup,
+                  onChanged: _toggleAutoRefresh,
+                  contentPadding: EdgeInsets.zero,
+                  activeColor: theme.colorScheme.primary,
+                ),
+                const SizedBox(height: 16),
+                const Divider(),
+                const SizedBox(height: 16),
                 Text(
                   '加密CPU数量 (${_selectedCores}/${_totalCores})',
                   style: Theme.of(context).textTheme.titleMedium,

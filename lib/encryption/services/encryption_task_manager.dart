@@ -370,6 +370,9 @@ class EncryptionTaskManager extends ChangeNotifier {
     // 如果是根节点，更新根节点状态
     if (_tasks.contains(node)) {
       _updateRootStatus(node);
+    } else {
+      final root = _findRootOfNode(node);
+      if (root != null) _updateRootStatus(root);
     }
     
     _saveQueue();
@@ -395,6 +398,9 @@ class EncryptionTaskManager extends ChangeNotifier {
     // 如果是根节点，更新根节点状态
     if (_tasks.contains(node)) {
       _updateRootStatus(node);
+    } else {
+      final root = _findRootOfNode(node);
+      if (root != null) _updateRootStatus(root);
     }
     
     _saveQueue();
@@ -411,6 +417,30 @@ class EncryptionTaskManager extends ChangeNotifier {
       _saveQueue();
       notifyListeners();
       pumpQueue();
+    } else {
+      final root = _findRootOfNode(node);
+      if (root != null) {
+        final parent = _findParentOfNode(root, node);
+        if (parent is FolderNode) {
+          parent.children.remove(node);
+          parent.recalculateRawSize();
+          
+          // 更新祖先的 size
+          var p = _findParentOfNode(root, parent);
+          while (p is FolderNode) {
+            p.recalculateRawSize();
+            p = _findParentOfNode(root, p);
+          }
+          if (root is FolderNode) {
+            root.recalculateRawSize();
+          }
+
+          _updateRootStatus(root);
+          _saveQueue();
+          notifyListeners();
+          pumpQueue();
+        }
+      }
     }
   }
 
@@ -420,6 +450,30 @@ class EncryptionTaskManager extends ChangeNotifier {
       _historyTasks.remove(node);
       _saveHistory();
       notifyListeners();
+    } else {
+      // 在历史记录中查找父节点并移除
+      for (final root in _historyTasks) {
+        if (_containsNode(root, node)) {
+          final parent = _findParentOfNode(root, node);
+          if (parent is FolderNode) {
+            parent.children.remove(node);
+            parent.recalculateRawSize();
+            
+            var p = _findParentOfNode(root, parent);
+            while (p is FolderNode) {
+              p.recalculateRawSize();
+              p = _findParentOfNode(root, p);
+            }
+            if (root is FolderNode) {
+              root.recalculateRawSize();
+            }
+            
+            _saveHistory();
+            notifyListeners();
+          }
+          break;
+        }
+      }
     }
   }
 
@@ -442,6 +496,9 @@ class EncryptionTaskManager extends ChangeNotifier {
     
     if (_tasks.contains(node)) {
       _updateRootStatus(node);
+    } else {
+      final root = _findRootOfNode(node);
+      if (root != null) _updateRootStatus(root);
     }
     
     _saveQueue();
@@ -464,14 +521,25 @@ class EncryptionTaskManager extends ChangeNotifier {
     return null;
   }
 
-  EncryptionNode? _findRootOf(FileNode targetNode) {
+  EncryptionNode? _findRootOfNode(EncryptionNode targetNode) {
     for (final root in _tasks) {
       if (_containsNode(root, targetNode)) return root;
     }
     return null;
   }
 
-  bool _containsNode(EncryptionNode root, FileNode targetNode) {
+  EncryptionNode? _findParentOfNode(EncryptionNode root, EncryptionNode targetNode) {
+    if (root is FolderNode) {
+      for (final child in root.children) {
+        if (child == targetNode) return root;
+        final found = _findParentOfNode(child, targetNode);
+        if (found != null) return found;
+      }
+    }
+    return null;
+  }
+
+  bool _containsNode(EncryptionNode root, EncryptionNode targetNode) {
     if (root == targetNode) return true;
     if (root is FolderNode) {
       for (final child in root.children) {
@@ -544,8 +612,13 @@ class EncryptionTaskManager extends ChangeNotifier {
   }
 
   String _buildRemotePath(EncryptionNode root, FileNode targetNode) {
+    String basePath = root.taskArgs?['currentPath'] as String? ?? '/';
+    if (basePath.endsWith('/')) {
+      basePath = basePath.substring(0, basePath.length - 1);
+    }
+
     if (root == targetNode) {
-      return '/${root.name}';
+      return '$basePath/${root.name}';
     }
     
     String? searchPath(EncryptionNode current, String currentPath) {
@@ -559,7 +632,7 @@ class EncryptionTaskManager extends ChangeNotifier {
       return null;
     }
     
-    return searchPath(root, '/${root.name}') ?? '/${targetNode.name}';
+    return searchPath(root, '$basePath/${root.name}') ?? '$basePath/${targetNode.name}';
   }
 }
 

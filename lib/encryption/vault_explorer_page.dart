@@ -238,6 +238,9 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
   final Set<VfsNode> _selectedNodes = {};
   final List<ReceivePort> _receivePorts = [];
   final List<Directory> _tempDirs = [];
+  
+  VfsNode? _clipboardNode;
+  bool _isCut = false;
 
   @override
   void dispose() {
@@ -321,6 +324,7 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
               'vaultDirectoryPath': widget.vaultDirectoryPath,
               'masterKey': widget.masterKey.toList(),
               'encryptFilename': widget.vaultConfig.encryptFilename,
+              'currentPath': _currentPath,
             };
             EncryptionTaskManager().createEncryptionTask(file.path!, taskArgs: taskArgs);
           }
@@ -353,6 +357,7 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
           'vaultDirectoryPath': widget.vaultDirectoryPath,
           'masterKey': widget.masterKey.toList(),
           'encryptFilename': widget.vaultConfig.encryptFilename,
+          'currentPath': _currentPath,
         };
         EncryptionTaskManager().createEncryptionTask(result, taskArgs: taskArgs);
       } catch (e) {
@@ -470,6 +475,65 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
         );
       },
     ).whenComplete(() => controller.dispose());
+  }
+
+  Future<void> _paste() async {
+    if (_clipboardNode == null) return;
+    
+    final node = _clipboardNode!;
+    final isCut = _isCut;
+    
+    // reset clipboard
+    setState(() {
+      _clipboardNode = null;
+      _isCut = false;
+    });
+
+    if (mounted) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    try {
+      final newPath = p.join(_currentPath, node.name).replaceAll(r'\', '/');
+      
+      if (isCut) {
+        await _vfs.rename(node.path, newPath);
+      } else {
+        await _copyRecursive(node, newPath);
+      }
+      
+      if (mounted) {
+        Navigator.of(context).pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('操作成功')),
+        );
+        _loadFiles();
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.of(context).pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('操作失败: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _copyRecursive(VfsNode node, String destPath) async {
+    if (node.isDirectory) {
+      await _vfs.mkdir(destPath);
+      final children = await _vfs.list(node.path);
+      for (final child in children) {
+        await _copyRecursive(child, p.join(destPath, child.name).replaceAll(r'\', '/'));
+      }
+    } else {
+      final stream = await _vfs.open(node.path);
+      await _vfs.uploadStream(stream, node.size, destPath);
+    }
   }
 
   Future<void> _deleteSelected() async {
@@ -786,6 +850,12 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
                   ),
                 ]
               : [
+                  if (_clipboardNode != null)
+                    IconButton(
+                      icon: const Icon(Icons.paste),
+                      tooltip: '粘贴',
+                      onPressed: _paste,
+                    ),
                   IconButton(
                     icon: const Icon(Icons.sync),
                     tooltip: '加密进度',
@@ -848,10 +918,51 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
                       subtitle: file.isDirectory ? null : Text(FormatUtils.formatBytes(file.size)),
                       onLongPress: () {
                         if (!_isMultiSelectMode) {
-                          setState(() {
-                            _isMultiSelectMode = true;
-                            _selectedNodes.add(file);
-                          });
+                          showModalBottomSheet(
+                            context: context,
+                            builder: (context) {
+                              return SafeArea(
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    ListTile(
+                                      leading: const Icon(Icons.check_box_outlined),
+                                      title: const Text('多选'),
+                                      onTap: () {
+                                        Navigator.pop(context);
+                                        setState(() {
+                                          _isMultiSelectMode = true;
+                                          _selectedNodes.add(file);
+                                        });
+                                      },
+                                    ),
+                                    ListTile(
+                                      leading: const Icon(Icons.drive_file_move_outline),
+                                      title: const Text('移动'),
+                                      onTap: () {
+                                        Navigator.pop(context);
+                                        setState(() {
+                                          _clipboardNode = file;
+                                          _isCut = true;
+                                        });
+                                      },
+                                    ),
+                                    ListTile(
+                                      leading: const Icon(Icons.copy),
+                                      title: const Text('复制'),
+                                      onTap: () {
+                                        Navigator.pop(context);
+                                        setState(() {
+                                          _clipboardNode = file;
+                                          _isCut = false;
+                                        });
+                                      },
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          );
                         }
                       },
                       onTap: () {
