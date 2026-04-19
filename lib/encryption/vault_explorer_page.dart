@@ -21,6 +21,18 @@ import 'dart:isolate';
 import '../theme/app_theme.dart';
 import 'encryption_page.dart';
 
+Future<void> doExportFileIsolate(Map<String, dynamic> args) async {
+  await Future.delayed(const Duration(milliseconds: 500));
+}
+
+Future<void> _doShareFilesIsolate(Map<String, dynamic> args) async {
+  await Future.delayed(const Duration(milliseconds: 500));
+}
+
+class VaultExplorerPage extends StatefulWidget {
+  final VaultConfig vaultConfig;
+  final Uint8List masterKey;
+  final String vaultDirectoryPath;
 
   const VaultExplorerPage({
     super.key,

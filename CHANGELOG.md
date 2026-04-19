@@ -1,3 +1,8 @@
+# 版本 1.4.7 (2026-04-19)
+
+### 🐛 Bug Fixes
+- **V4 Refactor Compilation**: 完全修复 `VaultExplorerPage` 编译时报错，补全缺少的旧版骨架函数引用。
+
 # 版本 1.4.6 (2026-04-19)
 
 ### 🐛 Bug Fixes
