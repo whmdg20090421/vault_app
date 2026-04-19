@@ -1,18 +1,3 @@
-# 版本 1.4.8 (2026-04-19)
-
-### 🐛 Bug Fixes
-- **V4 Refactor Compilation**: 清理 `encryption_page.dart` 中残留的旧版 `EncryptionProgressPanel` 导致的多重定义与过时状态类型引用错误。
-
-# 版本 1.4.7 (2026-04-19)
-
-### 🐛 Bug Fixes
-- **V4 Refactor Compilation**: 完全修复 `VaultExplorerPage` 编译时报错，补全缺少的旧版骨架函数引用。
-
-# 版本 1.4.6 (2026-04-19)
-
-### 🐛 Bug Fixes
-- **V4 Refactor Syntax Fix**: 移除旧版 `VaultExplorerPage` 中过时的 Isolate 和任务状态调用代码，修复编译阶段 `EncryptionTaskManager` 相关的方法未定义报错，使得打包流水线能够正常通过。
-
 # 版本 1.4.5 (2026-04-19)
 
 ### ✨ Features & Refactor
