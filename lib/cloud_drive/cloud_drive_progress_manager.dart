@@ -1,9 +1,10 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../models/sync_task.dart';
 import '../services/sync_storage_service.dart';
 import '../services/sync_engine.dart';
 
-class CloudDriveProgressManager extends ChangeNotifier {
+class CloudDriveProgressManager extends ChangeNotifier with WidgetsBindingObserver {
   CloudDriveProgressManager._() {
     _init();
   }
@@ -17,38 +18,142 @@ class CloudDriveProgressManager extends ChangeNotifier {
 
   bool get hasActiveTasks => _tasks.any((t) => t.status == SyncStatus.syncing);
 
+  // Pending updates queue for the independent listening thread (Timer)
+  final Map<String, SyncTask> _pendingUpdates = {};
+  
+  Timer? _refreshTimer;
+  int _tickCount = 0;
+  bool _isForeground = true;
+
   Future<void> _init() async {
+    WidgetsBinding.instance.addObserver(this);
     _tasks = await _storageService.loadTasks();
     notifyListeners();
 
-    syncEngine.taskUpdates.listen((updatedTask) async {
-      final index = _tasks.indexWhere((t) => t.id == updatedTask.id);
-      if (index >= 0) {
-        _tasks[index] = updatedTask;
-      } else {
-        _tasks.add(updatedTask);
-      }
-      
-      if (updatedTask.status == SyncStatus.completed) {
-        // Move to history
-        _tasks.removeWhere((t) => t.id == updatedTask.id);
-        
-        final historyTasks = await _storageService.loadHistory();
-        historyTasks.add(updatedTask);
-        await _storageService.saveHistory(historyTasks);
-        
-        // Remove from active tasks
-        await _storageService.saveTasks(_tasks);
-      }
-      
-      notifyListeners();
+    syncEngine.taskUpdates.listen((updatedTask) {
+      _pendingUpdates[updatedTask.id] = updatedTask;
+      _startTimerIfNeeded();
     });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _isForeground = state == AppLifecycleState.resumed;
+    // When returning to foreground, force a UI refresh immediately
+    if (_isForeground && _refreshTimer != null) {
+      _processUpdates(forceUI: true);
+    }
+  }
+
+  void _startTimerIfNeeded() {
+    if (_refreshTimer != null && _refreshTimer!.isActive) return;
+    _tickCount = 0;
+    // SubTask 3.1: 独立监听线程进行全局进度计算与更新
+    // Use a periodic timer running every 500ms
+    _refreshTimer = Timer.periodic(const Duration(milliseconds: 500), _onTick);
+  }
+
+  void _onTick(Timer timer) {
+    _tickCount++;
+    
+    bool hasPending = _pendingUpdates.isNotEmpty;
+    bool hasActive = _tasks.any((t) => t.status == SyncStatus.syncing) || 
+                     _pendingUpdates.values.any((t) => t.status == SyncStatus.syncing);
+
+    // SubTask 3.4: 无活跃任务时触发最终全量刷新并永久缓存，停止定时器
+    if (!hasActive && !hasPending) {
+      _finalRefresh();
+      return;
+    }
+
+    if (_isForeground) {
+      // SubTask 3.2: 前台高频刷新(0.5~1秒，更新UI和内存)
+      // Process updates every tick (0.5s)
+      _processUpdates(forceUI: true);
+      
+      // Persist active tasks occasionally even in foreground (every 5s)
+      if (_tickCount % 10 == 0) {
+        _persistActiveTasks();
+      }
+    } else {
+      // SubTask 3.3: 后台静默刷新(5~10秒，仅更新内存与持久化不重绘UI)
+      // Process updates every 10 ticks (5s)
+      if (_tickCount % 10 == 0) {
+        _processUpdates(forceUI: false);
+        _persistActiveTasks(); // persist in background
+      }
+    }
+  }
+
+  Future<void> _processUpdates({required bool forceUI}) async {
+    if (_pendingUpdates.isEmpty && !forceUI) return;
+
+    List<SyncTask> completedTasks = [];
+
+    // Apply pending updates to memory
+    if (_pendingUpdates.isNotEmpty) {
+      for (var task in _pendingUpdates.values) {
+        final index = _tasks.indexWhere((t) => t.id == task.id);
+        if (index >= 0) {
+          _tasks[index] = task;
+        } else {
+          _tasks.add(task);
+        }
+
+        if (task.status == SyncStatus.completed) {
+          completedTasks.add(task);
+        }
+      }
+      _pendingUpdates.clear();
+    }
+
+    // Process completed tasks
+    if (completedTasks.isNotEmpty) {
+      for (var task in completedTasks) {
+        _tasks.removeWhere((t) => t.id == task.id);
+      }
+      
+      final historyTasks = await _storageService.loadHistory();
+      historyTasks.addAll(completedTasks);
+      await _storageService.saveHistory(historyTasks);
+      
+      // Update active tasks storage since we removed completed tasks
+      await _persistActiveTasks();
+    }
+
+    // Update UI if required and in foreground
+    if (forceUI && _isForeground) {
+      notifyListeners();
+    }
+  }
+
+  Future<void> _persistActiveTasks() async {
+    await _storageService.saveTasks(_tasks);
+  }
+
+  Future<void> _finalRefresh() async {
+    _refreshTimer?.cancel();
+    _refreshTimer = null;
+    
+    // Final full refresh
+    await _processUpdates(forceUI: true);
+    
+    // Permanent cache
+    await _persistActiveTasks();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _refreshTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> addTask(SyncTask task) async {
     _tasks.add(task);
     await _storageService.saveTask(task);
     notifyListeners();
+    _startTimerIfNeeded();
   }
 
   void pauseAll() {
@@ -72,6 +177,7 @@ class CloudDriveProgressManager extends ChangeNotifier {
       }
     }
     notifyListeners();
+    _startTimerIfNeeded();
   }
 
   void pauseTask(String id) {
@@ -82,6 +188,7 @@ class CloudDriveProgressManager extends ChangeNotifier {
   void resumeTask(String id) {
     // Requires credentials to start via SyncEngine. Marking as pending for now.
     _setTaskStatus(id, SyncStatus.pending);
+    _startTimerIfNeeded();
   }
   
   void cancelTask(String id) {

@@ -13,6 +13,8 @@ import 'cloud_drive/webdav_state_manager.dart';
 import 'error_reporter.dart';
 import 'about_page.dart';
 import 'home_page.dart';
+import 'encryption/widgets/encryption_progress_icon.dart';
+import 'encryption/widgets/encryption_progress_panel.dart';
 
 import 'theme/app_theme.dart';
 import 'theme/background_settings.dart';
@@ -204,6 +206,9 @@ class _MainShellState extends State<MainShell> {
       appBar: AppBar(
         title: Text(titles[_index].toUpperCase()),
         centerTitle: true,
+        actions: [
+          if (_index == 0) const EncryptionProgressIcon(),
+        ],
       ),
       body: IndexedStack(index: _index, children: pages),
       bottomNavigationBar: NavigationBar(
@@ -211,6 +216,8 @@ class _MainShellState extends State<MainShell> {
         onDestinationSelected: (value) {
           if (value == 1 && _index == 1) {
             showCloudDriveProgressPanel(context);
+          } else if (value == 2 && _index == 2) {
+            showEncryptionProgressPanel(context);
           } else {
             setState(() => _index = value);
           }
