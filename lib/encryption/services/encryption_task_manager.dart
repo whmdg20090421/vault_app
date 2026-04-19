@@ -330,6 +330,7 @@ class EncryptionTaskManager extends ChangeNotifier {
           remotePath: message['remotePath'],
           hash: message['hash'],
           size: message['size'],
+          updatedAt: DateTime.parse(message['updatedAt']),
         );
 
         _updateRootStatus(root);
@@ -605,6 +606,7 @@ Future<void> _encryptionWorker(Map<String, dynamic> args) async {
       'remotePath': remotePath,
       'hash': hashStr,
       'size': await encryptedFile.length(),
+      'updatedAt': (await encryptedFile.lastModified()).toIso8601String(),
     });
   } catch (e) {
     sendPort.send({

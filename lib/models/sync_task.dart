@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-enum SyncDirection { cloudToLocal, localToCloud }
+enum SyncDirection { cloudToLocal, localToCloud, twoWay }
 
 enum SyncStrategy { overwrite, merge, skip }
 

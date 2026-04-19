@@ -503,6 +503,12 @@ class _SyncConfigPageState extends State<SyncConfigPage> {
           groupValue: _direction,
           onChanged: (v) => setState(() => _direction = v!),
         ),
+        RadioListTile<SyncDirection>(
+          title: const Text('双向同步 (Two-Way Sync)'),
+          value: SyncDirection.twoWay,
+          groupValue: _direction,
+          onChanged: (v) => setState(() => _direction = v!),
+        ),
         const Divider(),
         const Text('冲突策略:', style: TextStyle(fontWeight: FontWeight.bold)),
         RadioListTile<SyncStrategy>(

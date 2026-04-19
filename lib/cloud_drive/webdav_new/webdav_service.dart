@@ -114,10 +114,12 @@ class WebDavService {
   /// [oldPath] 原路径
   /// [newPath] 新路径
   Future<void> move(String oldPath, String newPath) async {
-    // 根据 WebDAV 规范，Destination 应该是一个绝对 URI 或者绝对路径。
-    // 为了简单起见，这里假设 baseUrl 中已经包含正确的协议和域名，
-    // 如果 newPath 是绝对路径，我们对其进行 URI 编码即可。
-    final encodedNewPath = Uri.encodeFull(newPath);
+    String baseUrl = client.dio.options.baseUrl;
+    if (baseUrl.endsWith('/')) {
+      baseUrl = baseUrl.substring(0, baseUrl.length - 1);
+    }
+    String destPath = newPath.startsWith('/') ? newPath : '/$newPath';
+    final encodedNewPath = Uri.encodeFull(baseUrl + destPath);
 
     final response = await client.request(
       oldPath,
@@ -131,6 +133,31 @@ class WebDavService {
     // 201 Created (如果目标不存在并被创建) 或 204 No Content (如果目标被覆盖)
     if (response.statusCode != 201 && response.statusCode != 204) {
       throw Exception('Failed to move path: ${response.statusCode}');
+    }
+  }
+
+  /// 复制远端文件/目录 (COPY)
+  /// [sourcePath] 源路径
+  /// [destinationPath] 目标路径
+  Future<void> copy(String sourcePath, String destinationPath) async {
+    String baseUrl = client.dio.options.baseUrl;
+    if (baseUrl.endsWith('/')) {
+      baseUrl = baseUrl.substring(0, baseUrl.length - 1);
+    }
+    String destPath = destinationPath.startsWith('/') ? destinationPath : '/$destinationPath';
+    final encodedDestPath = Uri.encodeFull(baseUrl + destPath);
+
+    final response = await client.request(
+      sourcePath,
+      method: 'COPY',
+      headers: {
+        'Destination': encodedDestPath,
+        'Overwrite': 'T',
+      },
+    );
+
+    if (response.statusCode != 201 && response.statusCode != 204) {
+      throw Exception('Failed to copy path: ${response.statusCode}');
     }
   }
 }

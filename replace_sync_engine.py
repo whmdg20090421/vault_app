@@ -1,4 +1,7 @@
-import 'dart:convert';
+import re
+import os
+
+code = """import 'dart:convert';
 import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:crypto/crypto.dart';
@@ -32,7 +35,7 @@ class SyncEngine {
     if (!await dir.exists()) return;
     await for (final entity in dir.list(recursive: true, followLinks: false)) {
       if (entity is File) {
-        String relativePath = p.relative(entity.path, from: localDirPath).replaceAll(r'\', '/');
+        String relativePath = p.relative(entity.path, from: localDirPath).replaceAll(r'\\', '/');
         if (!relativePath.startsWith('/')) relativePath = '/' + relativePath;
         files[relativePath] = entity;
       }
@@ -199,7 +202,7 @@ class SyncEngine {
       if (remoteFile.name.isEmpty) continue;
 
       final localEntityPath = p.join(localDir, remoteFile.name);
-      String relativePath = p.relative(localEntityPath, from: localDirPath).replaceAll(r'\', '/');
+      String relativePath = p.relative(localEntityPath, from: localDirPath).replaceAll(r'\\', '/');
       if (!relativePath.startsWith('/')) relativePath = '/' + relativePath;
 
       if (remoteFile.isDirectory) {
@@ -266,7 +269,7 @@ class SyncEngine {
         final name = p.basename(localEntity.path);
         if (!remoteFileMap.containsKey(name)) {
           final localEntityPath = localEntity.path;
-          String relativePath = p.relative(localEntityPath, from: localDirPath).replaceAll(r'\', '/');
+          String relativePath = p.relative(localEntityPath, from: localDirPath).replaceAll(r'\\', '/');
           if (!relativePath.startsWith('/')) relativePath = '/' + relativePath;
 
           if (localEntity is File && localAdded.contains(relativePath)) {
@@ -295,21 +298,20 @@ class SyncEngine {
     Map<String, File> finalFiles = {};
     await _scanLocalFiles(Directory(localDirPath), finalFiles);
     
-    Map<String, dynamic> newIndexData = {};
     for (var entry in finalFiles.entries) {
       final path = entry.key;
       final file = entry.value;
       final stat = await file.stat();
       final hash = await _calculateFileHash(file);
       
-      newIndexData[path] = {
-        'size': stat.size,
-        'updatedAt': stat.modified.toIso8601String(),
-        'hash': hash,
-      };
+      await localIndexService.updateFileIndex(
+        vaultDirectoryPath: localDirPath,
+        remotePath: path,
+        hash: hash,
+        size: stat.size,
+        updatedAt: stat.modified,
+      );
     }
-
-    await localIndexService.saveLocalIndex(localDirPath, newIndexData);
   }
 
   Future<void> _executeConcurrently(List<Future<void> Function()> tasks, int concurrency) async {
@@ -329,3 +331,7 @@ class SyncEngine {
     await Future.wait(workers);
   }
 }
+"""
+
+with open('/workspace/lib/cloud_drive/webdav_new/sync_engine.dart', 'w') as f:
+    f.write(code)
