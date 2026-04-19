@@ -265,19 +265,48 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
 
         if (filesToProcess.isEmpty) return;
 
-        
-          for (final f in filesToProcess) {
-            await EncryptionTaskManager().createEncryptionTask(
-              f['localPath']!,
-              taskArgs: {
-                'remotePath': f['remotePath'],
-                'vaultDirectoryPath': widget.vaultDirectoryPath,
-                'masterKey': widget.masterKey,
-                'encryptFilename': widget.vaultConfig.encryptFilename,
-              }
-            );
-          }
+        final taskId = DateTime.now().millisecondsSinceEpoch.toString();
+        final taskName = filesToProcess.length == 1 
+            ? p.basename(filesToProcess.first['localPath']!)
+            : '批量导入 ${filesToProcess.length} 个文件';
 
+        final taskArgs = {
+          'type': 'import_files',
+          'files': filesToProcess,
+          'vaultDirectoryPath': widget.vaultDirectoryPath,
+          'encryptFilename': widget.vaultConfig.encryptFilename,
+          'taskId': taskId,
+        };
+
+        final children = filesToProcess.map((f) {
+          return EncryptionTask(
+            id: '$taskId/${p.basename(f['localPath']!)}',
+            name: p.basename(f['localPath']!),
+            isDirectory: false,
+            totalBytes: File(f['localPath']!).lengthSync(),
+            status: 'pending',
+            taskArgs: {
+              'path': f['localPath'],
+              'remotePath': f['remotePath'],
+            }
+          );
+        }).toList();
+
+        // Pass masterKey to taskArgs for worker pool
+        taskArgs['masterKey'] = widget.masterKey;
+
+        final task = EncryptionTask(
+          id: taskId,
+          name: taskName,
+          isDirectory: true, // Treat batch as directory so children are pumped
+          totalBytes: totalSize,
+          status: 'pending',
+          taskArgs: taskArgs,
+          children: children,
+        );
+
+        EncryptionTaskManager().addTask(task);
+        EncryptionTaskManager().pumpQueue();
 
       } catch (e) {
         if (mounted) {
@@ -390,7 +419,8 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
           };
 
           Isolate.spawn(doImportFolderIsolate, args).then((isolate) {
-                      });
+            EncryptionTaskManager().registerIsolate(taskId, isolate);
+          });
         }
       } catch (e) {
         if (mounted) {
