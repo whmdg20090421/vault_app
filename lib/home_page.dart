@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'services/stats_service.dart';
 import 'utils/format_utils.dart';
-import 'encryption/services/encryption_task_manager.dart';
-import 'encryption/models/encryption_node.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
