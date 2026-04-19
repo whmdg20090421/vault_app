@@ -146,11 +146,69 @@ Future<void> doImportFolderIsolate(Map<String, dynamic> args) async {
 
 @visibleForTesting
 Future<void> doExportFileIsolate(Map<String, dynamic> args) async {
-  await Future.delayed(const Duration(milliseconds: 500));
+  final sendPort = args['sendPort'] as SendPort;
+  try {
+    final nodePath = args['nodePath'] as String;
+    final outFilePath = args['outFilePath'] as String;
+    final vaultDirectoryPath = args['vaultDirectoryPath'] as String;
+    final masterKey = args['masterKey'] as Uint8List;
+    final encryptFilename = args['encryptFilename'] as bool;
+
+    final localVfs = LocalVfs(rootPath: vaultDirectoryPath);
+    final encryptedVfs = EncryptedVfs(
+      baseVfs: localVfs,
+      masterKey: masterKey,
+      encryptFilename: encryptFilename,
+    );
+    await encryptedVfs.initEncryptedDomain('/');
+
+    final outFile = File(outFilePath);
+    final sink = outFile.openWrite();
+    final stream = await encryptedVfs.open(nodePath);
+    await for (final chunk in stream) {
+      sink.add(chunk);
+    }
+    await sink.flush();
+    await sink.close();
+    sendPort.send({'type': 'done'});
+  } catch (e) {
+    sendPort.send({'type': 'error', 'error': e.toString()});
+  }
 }
 
 Future<void> _doShareFilesIsolate(Map<String, dynamic> args) async {
-  await Future.delayed(const Duration(milliseconds: 500));
+  final sendPort = args['sendPort'] as SendPort;
+  try {
+    final nodes = args['nodes'] as List<Map<String, String>>;
+    final shareDirPath = args['shareDirPath'] as String;
+    final vaultDirectoryPath = args['vaultDirectoryPath'] as String;
+    final masterKey = args['masterKey'] as Uint8List;
+    final encryptFilename = args['encryptFilename'] as bool;
+
+    final localVfs = LocalVfs(rootPath: vaultDirectoryPath);
+    final encryptedVfs = EncryptedVfs(
+      baseVfs: localVfs,
+      masterKey: masterKey,
+      encryptFilename: encryptFilename,
+    );
+    await encryptedVfs.initEncryptedDomain('/');
+
+    for (final node in nodes) {
+      final nodePath = node['path']!;
+      final name = node['name']!;
+      final outFile = File(p.join(shareDirPath, name));
+      final sink = outFile.openWrite();
+      final stream = await encryptedVfs.open(nodePath);
+      await for (final chunk in stream) {
+        sink.add(chunk);
+      }
+      await sink.flush();
+      await sink.close();
+    }
+    sendPort.send({'type': 'done'});
+  } catch (e) {
+    sendPort.send({'type': 'error', 'error': e.toString()});
+  }
 }
 
 class VaultExplorerPage
@@ -325,7 +383,10 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
       }
 
       final outFile = File(p.join(selectedDir, node.name));
+      final receivePort = ReceivePort();
+      
       await Isolate.spawn(doExportFileIsolate, {
+        'sendPort': receivePort.sendPort,
         'nodePath': node.path,
         'outFilePath': outFile.path,
         'vaultDirectoryPath': widget.vaultDirectoryPath,
@@ -333,11 +394,29 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
         'encryptFilename': widget.vaultConfig.encryptFilename,
       });
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('导出成功: ${outFile.path}')),
-        );
-      }
+      final completer = Completer<void>();
+      receivePort.listen((message) {
+        if (message['type'] == 'done') {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('导出成功: ${outFile.path}')),
+            );
+          }
+          completer.complete();
+          receivePort.close();
+        } else if (message['type'] == 'error') {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('导出失败: ${message['error']}')),
+            );
+          }
+          completer.completeError(message['error']);
+          receivePort.close();
+        }
+      });
+
+      await completer.future;
+
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -473,7 +552,9 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
       }
 
       if (nodesToShare.isNotEmpty) {
+        final receivePort = ReceivePort();
         final args = {
+          'sendPort': receivePort.sendPort,
           'nodes': nodesToShare,
           'shareDirPath': shareDir.path,
           'vaultDirectoryPath': widget.vaultDirectoryPath,
@@ -481,6 +562,18 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
           'encryptFilename': widget.vaultConfig.encryptFilename,
         };
         await Isolate.spawn(_doShareFilesIsolate, args);
+
+        final completer = Completer<void>();
+        receivePort.listen((message) {
+          if (message['type'] == 'done') {
+            completer.complete();
+            receivePort.close();
+          } else if (message['type'] == 'error') {
+            completer.completeError(message['error']);
+            receivePort.close();
+          }
+        });
+        await completer.future;
       }
 
       if (mounted) {
@@ -528,13 +621,29 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
       _tempDirs.add(previewDir);
 
       final tempFile = File(p.join(previewDir.path, file.name));
+      final receivePort = ReceivePort();
+      
       await Isolate.spawn(doExportFileIsolate, {
+        'sendPort': receivePort.sendPort,
         'nodePath': file.path,
         'outFilePath': tempFile.path,
         'vaultDirectoryPath': widget.vaultDirectoryPath,
         'masterKey': widget.masterKey,
         'encryptFilename': widget.vaultConfig.encryptFilename,
       });
+
+      final completer = Completer<void>();
+      receivePort.listen((message) {
+        if (message['type'] == 'done') {
+          completer.complete();
+          receivePort.close();
+        } else if (message['type'] == 'error') {
+          completer.completeError(message['error']);
+          receivePort.close();
+        }
+      });
+
+      await completer.future;
 
       if (mounted) {
         Navigator.of(context).pop(); // Close loading

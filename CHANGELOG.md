@@ -1,3 +1,10 @@
+# 版本 1.4.6 (2026-04-19)
+
+### ✨ Bug Fixes & Security
+- **Encryption Export/Share Fix**: 全面落实了保险箱内部文件的导出（解密）、分享与预览功能。之前版本中相关方法存在未实现的占位符（仅模拟延迟），现在已基于 `EncryptedVfs` 完整实现了安全流式解密并输出至本地文件系统。
+- **VFS Boundary Check**: 修正了 `EncryptedVfs.open` 方法中因 Dart `File.openRead` 参数独占（exclusive）特性引起的偏移量计算误差，确保分块解密的流式读取范围精确无误。
+- **Security Best Practices**: 进行了全局加密逻辑审计，确保每一处文件读写强制走 `ChunkCrypto` 引擎，未落实的 `TODO` 和 `UnimplementedError` 均已被修复并重构。
+
 # 版本 1.4.5 (2026-04-19)
 
 ### ✨ Features & Refactor
