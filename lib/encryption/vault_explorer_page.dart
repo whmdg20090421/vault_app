@@ -142,10 +142,7 @@ Future<void> doImportFolderIsolate(Map<String, dynamic> args) async {
 
 
 
-@visibleForTesting
-Future<void> doImportFolderIsolate(Map<String, dynamic> args) async {
-  await Future.delayed(const Duration(milliseconds: 500));
-}
+
 
 @visibleForTesting
 Future<void> doExportFileIsolate(Map<String, dynamic> args) async {
