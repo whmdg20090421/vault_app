@@ -227,10 +227,14 @@ class EncryptionTaskManager extends ChangeNotifier {
       bool hasPending = false;
       bool hasEncrypting = false;
       bool hasPaused = false;
+      String? firstError;
       
       for (var child in node.children) {
         updateNode(child); // bottom up
-        if (child.status == NodeStatus.error) hasError = true;
+        if (child.status == NodeStatus.error) {
+          hasError = true;
+          firstError ??= child.errorMessage;
+        }
         if (child.status == NodeStatus.pending_waiting) hasPending = true;
         if (child.status == NodeStatus.encrypting) hasEncrypting = true;
         if (child.status == NodeStatus.pending_paused) hasPaused = true;
@@ -238,14 +242,19 @@ class EncryptionTaskManager extends ChangeNotifier {
       
       if (hasError) {
         node.status = NodeStatus.error;
+        node.errorMessage = firstError;
       } else if (hasEncrypting) {
         node.status = NodeStatus.encrypting;
+        node.errorMessage = null;
       } else if (hasPending) {
         node.status = NodeStatus.pending_waiting;
+        node.errorMessage = null;
       } else if (hasPaused) {
         node.status = NodeStatus.pending_paused;
+        node.errorMessage = null;
       } else {
         node.status = NodeStatus.completed;
+        node.errorMessage = null;
       }
     }
     
@@ -329,6 +338,7 @@ class EncryptionTaskManager extends ChangeNotifier {
         pumpQueue();
       } else if (type == 'error') {
         node.status = NodeStatus.error;
+        node.errorMessage = message['error'] as String?;
         _activeWorkers--;
         _isolates.remove(nodeId);
         
@@ -417,6 +427,7 @@ class EncryptionTaskManager extends ChangeNotifier {
     void fixRecursively(EncryptionNode n) {
       if (n.status == NodeStatus.error) {
         n.status = NodeStatus.pending_waiting;
+        n.errorMessage = null;
         n.isPaused = false;
       }
       if (n is FolderNode) {
@@ -483,6 +494,7 @@ class EncryptionTaskManager extends ChangeNotifier {
       final root = _findRootOf(node);
       if (root == null || root.taskArgs == null || root.taskArgs!['masterKey'] == null || root.taskArgs!['vaultDirectoryPath'] == null) {
         node.status = NodeStatus.error;
+        node.errorMessage = 'Missing task arguments or root node';
         _activeWorkers--;
         await _saveQueue();
         notifyListeners();
@@ -492,6 +504,7 @@ class EncryptionTaskManager extends ChangeNotifier {
       final file = File(node.absolutePath);
       if (!await file.exists()) {
         node.status = NodeStatus.error;
+        node.errorMessage = 'File not found';
         _activeWorkers--;
         await _saveQueue();
         notifyListeners();

@@ -63,6 +63,9 @@ abstract class EncryptionNode {
   /// 自动换算的显示大小
   String get size => _formatBytes(rawSize);
 
+  /// 错误信息
+  String? errorMessage;
+
   /// 全局任务参数，仅根节点需要
   Map<String, dynamic>? taskArgs;
 
@@ -73,6 +76,7 @@ abstract class EncryptionNode {
     this.isPaused = false,
     this.rawSize = 0,
     this.status = NodeStatus.pending_waiting,
+    this.errorMessage,
     this.taskArgs,
   });
 
@@ -89,6 +93,7 @@ abstract class EncryptionNode {
       'isPaused': isPaused,
       'rawSize': rawSize,
       'status': statusToString(status),
+      if (errorMessage != null) 'errorMessage': errorMessage,
       if (safeArgs != null) 'taskArgs': safeArgs,
     };
   }
@@ -116,6 +121,7 @@ class FileNode extends EncryptionNode {
     bool isPaused = false,
     int rawSize = 0,
     NodeStatus status = NodeStatus.pending_waiting,
+    String? errorMessage,
     Map<String, dynamic>? taskArgs,
   }) : super(
           taskId: taskId,
@@ -124,6 +130,7 @@ class FileNode extends EncryptionNode {
           isPaused: isPaused,
           rawSize: rawSize,
           status: status,
+          errorMessage: errorMessage,
           taskArgs: taskArgs,
         );
 
@@ -142,6 +149,7 @@ class FileNode extends EncryptionNode {
       isPaused: json['isPaused'] as bool? ?? false,
       rawSize: json['rawSize'] as int? ?? 0,
       status: stringToStatus(json['status'] as String? ?? 'pending_waiting'),
+      errorMessage: json['errorMessage'] as String?,
       taskArgs: json['taskArgs'] as Map<String, dynamic>?,
     );
   }
@@ -162,6 +170,7 @@ class FolderNode extends EncryptionNode {
     bool isPaused = false,
     int rawSize = 0,
     NodeStatus status = NodeStatus.pending_waiting,
+    String? errorMessage,
     Map<String, dynamic>? taskArgs,
     List<EncryptionNode>? children,
   })  : children = children ?? [],
@@ -172,6 +181,7 @@ class FolderNode extends EncryptionNode {
           isPaused: isPaused,
           rawSize: rawSize,
           status: status,
+          errorMessage: errorMessage,
           taskArgs: taskArgs,
         );
 
@@ -191,6 +201,7 @@ class FolderNode extends EncryptionNode {
       isPaused: json['isPaused'] as bool? ?? false,
       rawSize: json['rawSize'] as int? ?? 0,
       status: stringToStatus(json['status'] as String? ?? 'pending_waiting'),
+      errorMessage: json['errorMessage'] as String?,
       taskArgs: json['taskArgs'] as Map<String, dynamic>?,
     );
     if (json['children'] != null) {
