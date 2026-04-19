@@ -1,3 +1,9 @@
+# 版本 1.4.9 (2026-04-19)
+
+### 🐛 Bug Fixes
+- **Build**: 修复 `VaultExplorerPage` 及 `EncryptionProgressPanel` 引入 V4 重构模型引发的编译报错问题。
+- **Build**: 强化并遵循最新的发版监测规则，通过浏览器持续监控流水线状态。
+
 # 版本 1.4.5 (2026-04-19)
 
 ### ✨ Features & Refactor
