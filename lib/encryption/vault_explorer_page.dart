@@ -684,25 +684,7 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
                     icon: const Icon(Icons.sync),
                     tooltip: '加密进度',
                     onPressed: () {
-                      showModalBottomSheet(
-                        context: context,
-                        isScrollControlled: true,
-                        backgroundColor: Colors.transparent,
-                        barrierColor: theme.colorScheme.scrim.withValues(alpha: 0.6),
-                        shape: theme.isCyberpunk 
-                            ? const RoundedRectangleBorder(borderRadius: BorderRadius.zero)
-                            : const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
-                        clipBehavior: Clip.antiAlias,
-                        builder: (context) => DraggableScrollableSheet(
-                          initialChildSize: 0.6,
-                          minChildSize: 0.4,
-                          maxChildSize: 0.9,
-                          expand: false,
-                          builder: (context, scrollController) => EncryptionProgressPanel(
-                            scrollController: scrollController,
-                          ),
-                        ),
-                      );
+                      showEncryptionProgressPanel(context);
                     },
                   ),
                 ],
