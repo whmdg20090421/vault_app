@@ -1,0 +1,320 @@
+--- lib/encryption/vault_explorer_page.dart
++++ lib/encryption/vault_explorer_page.dart
+@@ -21,138 +21,6 @@ import 'dart:isolate';
+ import '../theme/app_theme.dart';
+ import 'encryption_page.dart';
+ 
+-Future<void> doImportFileIsolate(Map<String, dynamic> args) async {
+-  final sendPort = args['sendPort'] as SendPort;
+-  final files = args['files'] as List<Map<String, String>>;
+-  final taskId = args['taskId'] as String;
+-
+-  try {
+-    for (final fileInfo in files) {
+-      final localPath = fileInfo['localPath']!;
+-      final remotePath = fileInfo['remotePath']!;
+-      final file = File(localPath);
+-      if (await file.exists()) {
+-        final size = await file.length();
+-        final childId = '$taskId/${p.basename(localPath)}';
+-        
+-        sendPort.send({
+-          'type': 'add_child',
+-          'taskId': taskId,
+-          'child': {
+-            'id': childId,
+-            'name': p.basename(localPath),
+-            'isDirectory': false,
+-            'totalBytes': size,
+-          }
+-        });
+-
+-        // 模拟文件处理进度
+-        await Future.delayed(const Duration(milliseconds: 500));
+-        sendPort.send({'type': 'progress', 'taskId': childId, 'bytes': size});
+-        
+-        // Report file imported
+-        sendPort.send({
+-          'type': 'file_imported',
+-          'taskId': taskId,
+-          'localPath': localPath,
+-          'remotePath': remotePath,
+-          'hash': 'dummy_hash',
+-          'size': size,
+-          'vaultDirectoryPath': args['vaultDirectoryPath'],
+-        });
+-      }
+-    }
+-    sendPort.send({'type': 'done', 'taskId': taskId});
+-  } catch (e) {
+-    sendPort.send({'type': 'error', 'taskId': taskId, 'error': e.toString()});
+-  }
+-}
+-
+-Future<void> doImportFolderIsolate(Map<String, dynamic> args) async {
+-  final sendPort = args['sendPort'] as SendPort;
+-  final result = args['result'] as String;
+-  final currentPath = args['currentPath'] as String;
+-  final taskId = args['taskId'] as String;
+-
+-  try {
+-    final dir = Directory(result);
+-    if (await dir.exists()) {
+-      final baseName = p.basename(result);
+-      final remoteDirPath = p.join(currentPath, baseName).replaceAll(r'\', '/');
+-
+-      // Build task tree recursively
+-      Map<String, dynamic> buildTree(Directory d, String parentId, String currentRemotePath) {
+-        int totalSize = 0;
+-        List<Map<String, dynamic>> children = [];
+-        List<FileSystemEntity> entities = [];
+-        try {
+-          entities = d.listSync(followLinks: false);
+-        } catch (_) {
+-          entities = [];
+-        }
+-
+-        for (final entity in entities) {
+-          final name = p.basename(entity.path);
+-          final id = '$parentId/$name';
+-          if (entity is File) {
+-            int size = 0;
+-            try {
+-              size = entity.lengthSync();
+-            } catch (_) {
+-              continue;
+-            }
+-            totalSize += size;
+-            children.add({
+-              'id': id,
+-              'name': name,
+-              'isDirectory': false,
+-              'totalBytes': size,
+-              'path': entity.path,
+-              'remotePath': p.join(currentRemotePath, name).replaceAll(r'\', '/'),
+-            });
+-          } else if (entity is Directory) {
+-            final childRemotePath = p.join(currentRemotePath, name).replaceAll(r'\', '/');
+-            final childMap = buildTree(entity, id, childRemotePath);
+-            totalSize += childMap['totalBytes'] as int;
+-            children.add(childMap);
+-          }
+-        }
+-        return {
+-          'id': parentId,
+-          'name': p.basename(d.path),
+-          'isDirectory': true,
+-          'totalBytes': totalSize,
+-          'children': children,
+-          'remotePath': currentRemotePath,
+-        };
+-      }
+-
+-      final treeMap = buildTree(dir, taskId, remoteDirPath);
+-      sendPort.send({'type': 'tree', 'taskId': taskId, 'tree': treeMap});
+-
+-      // Skip processing here, let ETM (EncryptionTaskManager) pumpQueue handle the actual multi-threaded file import
+-      sendPort.send({'type': 'done', 'taskId': taskId});
+-    }
+-  } catch (e) {
+-    sendPort.send({'type': 'error', 'taskId': taskId, 'error': e.toString()});
+-  }
+-}
+-
+-@visibleForTesting
+-Future<void> doExportFileIsolate(Map<String, dynamic> args) async {
+-  // Skeleton task, removed actual file operations and decryption logic
+-  await Future.delayed(const Duration(milliseconds: 500));
+-}
+-
+-Future<void> _doShareFilesIsolate(Map<String, dynamic> args) async {
+-  // Skeleton task, removed actual file stream reading and decryption logic
+-  await Future.delayed(const Duration(milliseconds: 500));
+-}
+-
+-class VaultExplorerPage extends StatefulWidget {
+-  final VaultConfig vaultConfig;
+-  final Uint8List masterKey;
+-  final String vaultDirectoryPath;
+ 
+   const VaultExplorerPage({
+     super.key,
+@@ -252,62 +120,18 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
+         );
+       }
+       try {
+-        int totalSize = 0;
+-        final filesToProcess = <Map<String, String>>[];
+         for (final file in result.files) {
+           if (file.path != null) {
+-            final localPath = file.path!;
+-            final remotePath = p.join(_currentPath, file.name).replaceAll(r'\', '/');
+-            filesToProcess.add({'localPath': localPath, 'remotePath': remotePath});
+-            totalSize += file.size;
++            await EncryptionTaskManager().createEncryptionTask(
++              file.path!,
++              taskArgs: {
++                'masterKey': widget.masterKey,
++                'vaultDirectoryPath': widget.vaultDirectoryPath,
++                'encryptFilename': widget.vaultConfig.encryptFilename,
++              }
++            );
+           }
+         }
+-
+-        if (filesToProcess.isEmpty) return;
+-
+-        final taskId = DateTime.now().millisecondsSinceEpoch.toString();
+-        final taskName = filesToProcess.length == 1 
+-            ? p.basename(filesToProcess.first['localPath']!)
+-            : '批量导入 ${filesToProcess.length} 个文件';
+-
+-        final taskArgs = {
+-          'type': 'import_files',
+-          'files': filesToProcess,
+-          'vaultDirectoryPath': widget.vaultDirectoryPath,
+-          'encryptFilename': widget.vaultConfig.encryptFilename,
+-          'taskId': taskId,
+-        };
+-
+-        final children = filesToProcess.map((f) {
+-          return EncryptionTask(
+-            id: '$taskId/${p.basename(f['localPath']!)}',
+-            name: p.basename(f['localPath']!),
+-            isDirectory: false,
+-            totalBytes: File(f['localPath']!).lengthSync(),
+-            status: 'pending',
+-            taskArgs: {
+-              'path': f['localPath'],
+-              'remotePath': f['remotePath'],
+-            }
+-          );
+-        }).toList();
+-
+-        // Pass masterKey to taskArgs for worker pool
+-        taskArgs['masterKey'] = widget.masterKey;
+-
+-        final task = EncryptionTask(
+-          id: taskId,
+-          name: taskName,
+-          isDirectory: true, // Treat batch as directory so children are pumped
+-          totalBytes: totalSize,
+-          status: 'pending',
+-          taskArgs: taskArgs,
+-          children: children,
+-        );
+-
+-        EncryptionTaskManager().addTask(task);
+-        EncryptionTaskManager().pumpQueue();
+-
+       } catch (e) {
+         if (mounted) {
+           ScaffoldMessenger.of(context).showSnackBar(
+@@ -326,102 +150,20 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
+       if (mounted) {
+         setState(() {
+           _isMenuOpen = false;
+-          // _isLoading = false; 立即关闭加载动画，解阻塞 UI 线程
+         });
+         ScaffoldMessenger.of(context).showSnackBar(
+           const SnackBar(content: Text('已添加到后台加密任务，请在任务面板查看进度')),
+         );
+       }
+       try {
+-        final dir = Directory(result);
+-        if (await dir.exists()) {
+-          int totalSize = 0;
+-          await for (final entity in dir.list(recursive: true, followLinks: false)) {
+-            if (entity is File) {
+-              try {
+-                totalSize += await entity.length();
+-              } catch (_) {}
+-            }
+-          }
+-
+-          final baseName = p.basename(result);
+-          final taskId = DateTime.now().millisecondsSinceEpoch.toString();
+-          
+-          final taskArgs = {
+-            'type': 'import_folder',
+-            'result': result,
+-            'currentPath': _currentPath,
+-            'vaultDirectoryPath': widget.vaultDirectoryPath,
++        await EncryptionTaskManager().createEncryptionTask(
++          result,
++          taskArgs: {
+             'masterKey': widget.masterKey,
+-            'encryptFilename': widget.vaultConfig.encryptFilename,
+-            'taskId': taskId,
+-          };
+-
+-          final task = EncryptionTask(
+-            id: taskId,
+-            name: baseName,
+-            isDirectory: true,
+-            totalBytes: totalSize,
+-            status: 'pending',
+-            taskArgs: taskArgs,
+-          );
+-
+-          EncryptionTaskManager().addTask(task);
+-
+-          final receivePort = ReceivePort();
+-          _receivePorts.add(receivePort);
+-          receivePort.listen((message) {
+-            if (message is Map<String, dynamic>) {
+-              final type = message['type'];
+-              final msgTaskId = message['taskId'];
+-              final tid = msgTaskId is String ? msgTaskId : taskId;
+-              if (type == 'progress') {
+-                final bytes = message['bytes'] as int;
+-                EncryptionTaskManager().updateTaskProgress(tid, bytes);
+-              } else if (type == 'tree') {
+-                final treeMap = message['tree'] as Map<String, dynamic>;
+-                EncryptionTaskManager().updateTaskTree(tid, treeMap);
+-              } else if (type == 'done') {
+-                final t = EncryptionTaskManager().findTask(tid);
+-                if (t != null && t.children.isNotEmpty && t.id == tid) {
+-                  // Do not complete root task, let ETM handle it.
+-                } else {
+-                  EncryptionTaskManager().updateTaskStatus(tid, 'completed');
+-                }
+-                StatsService().recalculate();
+-                if (mounted) {
+-                  _loadCurrentDirectory();
+-                }
+-                receivePort.close();
+-                _receivePorts.remove(receivePort);
+-              } else if (type == 'error') {
+-                final error = message['error'] as String;
+-                EncryptionTaskManager().updateTaskStatus(tid, 'failed', error: error);
+-                if (mounted) {
+-                  ScaffoldMessenger.of(context).showSnackBar(
+-                    SnackBar(content: Text('导入文件夹失败: $error')),
+-                  );
+-                }
+-                receivePort.close();
+-                _receivePorts.remove(receivePort);
+-              }
+-            }
+-          });
+-
+-          final args = {
+-            'sendPort': receivePort.sendPort,
+-            'result': result,
+-            'currentPath': _currentPath,
+             'vaultDirectoryPath': widget.vaultDirectoryPath,
+-            'masterKey': widget.masterKey,
+             'encryptFilename': widget.vaultConfig.encryptFilename,
+-            'taskId': taskId,
+-          };
+-
+-          Isolate.spawn(doImportFolderIsolate, args).then((isolate) {
+-            EncryptionTaskManager().registerIsolate(taskId, isolate);
+-          });
+-        }
++          }
++        );
+       } catch (e) {
+         if (mounted) {
+           ScaffoldMessenger.of(context).showSnackBar(
