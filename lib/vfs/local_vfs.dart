@@ -7,7 +7,7 @@ class LocalVfs implements VirtualFileSystem {
 
   LocalVfs({required this.rootPath});
 
-  String _getRealPath(String path) {
+  String getRealPath(String path) {
     if (path.startsWith('/')) {
       path = path.substring(1);
     }
@@ -27,7 +27,7 @@ class LocalVfs implements VirtualFileSystem {
 
   @override
   Future<List<VfsNode>> list(String path) async {
-    final realPath = _getRealPath(path);
+    final realPath = getRealPath(path);
     final dir = Directory(realPath);
     if (!await dir.exists()) return [];
 
@@ -37,14 +37,14 @@ class LocalVfs implements VirtualFileSystem {
 
   @override
   Future<Stream<List<int>>> open(String path, {int? start, int? end}) async {
-    final realPath = _getRealPath(path);
+    final realPath = getRealPath(path);
     final file = File(realPath);
     return file.openRead(start, end);
   }
 
   @override
   Future<VfsNode> stat(String path) async {
-    final realPath = _getRealPath(path);
+    final realPath = getRealPath(path);
     final type = await FileSystemEntity.type(realPath);
     if (type == FileSystemEntityType.directory) {
       return _mapEntity(Directory(realPath));
@@ -55,14 +55,14 @@ class LocalVfs implements VirtualFileSystem {
 
   @override
   Future<void> upload(String localFilePath, String remotePath) async {
-    final realPath = _getRealPath(remotePath);
+    final realPath = getRealPath(remotePath);
     final file = File(localFilePath);
     await file.copy(realPath);
   }
 
   @override
   Future<void> uploadStream(Stream<List<int>> stream, int length, String remotePath) async {
-    final realPath = _getRealPath(remotePath);
+    final realPath = getRealPath(remotePath);
     final file = File(realPath);
     if (!await file.parent.exists()) {
       await file.parent.create(recursive: true);
@@ -73,7 +73,7 @@ class LocalVfs implements VirtualFileSystem {
 
   @override
   Future<void> delete(String path) async {
-    final realPath = _getRealPath(path);
+    final realPath = getRealPath(path);
     final type = await FileSystemEntity.type(realPath);
     if (type == FileSystemEntityType.directory) {
       await Directory(realPath).delete(recursive: true);
@@ -84,8 +84,8 @@ class LocalVfs implements VirtualFileSystem {
 
   @override
   Future<void> rename(String oldPath, String newPath) async {
-    final realOldPath = _getRealPath(oldPath);
-    final realNewPath = _getRealPath(newPath);
+    final realOldPath = getRealPath(oldPath);
+    final realNewPath = getRealPath(newPath);
     final type = await FileSystemEntity.type(realOldPath);
     if (type == FileSystemEntityType.directory) {
       await Directory(realOldPath).rename(realNewPath);
@@ -96,7 +96,7 @@ class LocalVfs implements VirtualFileSystem {
 
   @override
   Future<void> mkdir(String path) async {
-    final realPath = _getRealPath(path);
+    final realPath = getRealPath(path);
     await Directory(realPath).create(recursive: true);
   }
 }

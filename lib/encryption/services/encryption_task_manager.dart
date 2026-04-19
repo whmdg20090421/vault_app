@@ -578,8 +578,11 @@ Future<void> _encryptionWorker(Map<String, dynamic> args) async {
 
     await encryptedVfs.uploadStream(stream, size, remotePath);
 
-    // 计算 Hash (MD5)
-    final hash = await md5.bind(file.openRead()).first;
+    // 计算 Hash (MD5) - 此时计算加密后文件的哈希
+    final encryptedRemotePath = encryptedVfs.getRealPath(remotePath);
+    final encryptedLocalPath = localVfs.getRealPath(encryptedRemotePath);
+    final encryptedFile = File(encryptedLocalPath);
+    final hash = await md5.bind(encryptedFile.openRead()).first;
     final hashStr = hash.toString();
 
     sendPort.send({
@@ -588,7 +591,7 @@ Future<void> _encryptionWorker(Map<String, dynamic> args) async {
       'vaultDirectoryPath': vaultDirectoryPath,
       'remotePath': remotePath,
       'hash': hashStr,
-      'size': size,
+      'size': await encryptedFile.length(),
     });
   } catch (e) {
     sendPort.send({

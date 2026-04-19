@@ -1,3 +1,14 @@
+# 版本 1.4.5 (2026-04-19)
+
+### ✨ Features & Refactor
+- **Encryption Module V4 Refactor**: 全面重构加密任务调度架构，引入细粒度层级状态树。
+  - **Task Tree & Persistence**: 建立文件树模型，支持 JSON 序列化持久化。
+  - **Multi-threading Engine**: 接入全新并发调度核心，优化断点恢复和错误捕获。
+  - **Dynamic Progress**: 引入智能前后台动态刷新机制，减少 UI 卡顿。
+  - **Progress UI**: 主页顶部新增 1% 强制可视化的四色进度指示器。
+  - **Progress Modal**: 实现多级任务树半屏模态框，支持局部暂停/恢复与安全长按移除。
+  - **Auto Archiving**: 任务 100% 成功后执行存在性校验，自动归档至历史记录。
+
 # 版本 1.4.2 (2026-04-18)
 
 ### ✨ Bug Fixes & Improvements

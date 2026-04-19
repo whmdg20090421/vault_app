@@ -79,7 +79,7 @@ class EncryptedVfs implements VirtualFileSystem {
   }
 
   /// 将虚拟（解密后）的路径转换为真实（加密的）路径
-  String _getRealPath(String virtualPath) {
+  String getRealPath(String virtualPath) {
     virtualPath = _normalizePath(virtualPath);
     
     // 如果已经缓存，直接返回
@@ -190,7 +190,7 @@ class EncryptedVfs implements VirtualFileSystem {
   @override
   Future<List<VfsNode>> list(String path) async {
     String virtualPath = _normalizePath(path);
-    String realPath = _getRealPath(virtualPath);
+    String realPath = getRealPath(virtualPath);
     
     if (path.endsWith('/') && realPath != '/') {
       realPath += '/';
@@ -289,7 +289,7 @@ class EncryptedVfs implements VirtualFileSystem {
   @override
   Future<VfsNode> stat(String path) async {
     String virtualPath = _normalizePath(path);
-    String realPath = _getRealPath(virtualPath);
+    String realPath = getRealPath(virtualPath);
     if (path.endsWith('/') && realPath != '/') {
       realPath += '/';
     }
@@ -321,7 +321,7 @@ class EncryptedVfs implements VirtualFileSystem {
   @override
   Future<void> upload(String localFilePath, String remotePath) async {
     String virtualPath = _normalizePath(remotePath);
-    String realPath = _getRealPath(virtualPath);
+    String realPath = getRealPath(virtualPath);
     if (remotePath.endsWith('/') && realPath != '/') {
       realPath += '/';
     }
@@ -352,7 +352,7 @@ class EncryptedVfs implements VirtualFileSystem {
   @override
   Future<void> delete(String path) async {
     String virtualPath = _normalizePath(path);
-    String realPath = _getRealPath(virtualPath);
+    String realPath = getRealPath(virtualPath);
     if (path.endsWith('/') && realPath != '/') {
       realPath += '/';
     }
@@ -367,14 +367,14 @@ class EncryptedVfs implements VirtualFileSystem {
   @override
   Future<void> rename(String oldPath, String newPath) async {
     String virtualOldPath = _normalizePath(oldPath);
-    String realOldPath = _getRealPath(virtualOldPath);
+    String realOldPath = getRealPath(virtualOldPath);
     if (oldPath.endsWith('/') && realOldPath != '/') {
       realOldPath += '/';
     }
     
     // 生成新的真实路径（可能会触发名字的加密并缓存）
     String virtualNewPath = _normalizePath(newPath);
-    String realNewPath = _getRealPath(virtualNewPath);
+    String realNewPath = getRealPath(virtualNewPath);
     if (newPath.endsWith('/') && realNewPath != '/') {
       realNewPath += '/';
     }
@@ -385,7 +385,7 @@ class EncryptedVfs implements VirtualFileSystem {
     _virtualToReal.remove(virtualOldPath);
     _realToVirtual.remove(_normalizePath(realOldPath));
     
-    // _getRealPath 内部可能已经添加了新映射，但这里再确认一下
+    // getRealPath 内部可能已经添加了新映射，但这里再确认一下
     _virtualToReal[virtualNewPath] = _normalizePath(realNewPath);
     _realToVirtual[_normalizePath(realNewPath)] = virtualNewPath;
 
@@ -398,7 +398,7 @@ class EncryptedVfs implements VirtualFileSystem {
   @override
   Future<void> mkdir(String path) async {
     String virtualPath = _normalizePath(path);
-    String realPath = _getRealPath(virtualPath);
+    String realPath = getRealPath(virtualPath);
     if (path.endsWith('/') && realPath != '/') {
       realPath += '/';
     }
@@ -408,7 +408,7 @@ class EncryptedVfs implements VirtualFileSystem {
   /// 初始化一个加密目录：即在目录下创建一个空标记文件
   Future<void> initEncryptedDomain(String path) async {
     String virtualPath = _normalizePath(path);
-    String realPath = _getRealPath(virtualPath);
+    String realPath = getRealPath(virtualPath);
     String markerPath = realPath == '/' ? '/$_markerFileName' : '$realPath/$_markerFileName';
     
     // Create an empty temporary file and upload it
