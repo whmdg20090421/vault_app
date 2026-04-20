@@ -51,3 +51,5 @@ dart.zip
 
 wait_for_*.sh
 .env.local
+.github_token
+.trae/
