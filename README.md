@@ -5,13 +5,13 @@
 ## 最新版本概览
 
 <!-- RELEASE_SUMMARY_START -->
-- 当前版本：1.4.0
-- **UI Upgrade**: 全新“QQ弹弹”圆角弹性动画设计，适配纯黑、亮色、赛博朋克三大主题。
-- **Sync Settings**: 新增云盘同步设置功能，支持自定义加密文件夹、同步文件夹、双向同步/单向同步以及时间优先/覆盖替换策略。
-- **Security Validation**: 引入启动安全哈希校验（包哈希、签名校验），通过 `Whm20090421` 混淆密码机制防止被篡改。
-- **History Separation**: 将加密任务历史记录与云盘同步历史记录从活动队列中分离，使用双页签 UI 便于查看。
-- **Multi-threading Fix**: 修复由于加密进程缺乏 `masterKey` 与文件路径参数导致的“瞬间完成却未加密”的问题。
-- 完整更新：https://github.com/whmdg20090421/vault_app/releases/tag/v1.4.0
+- 当前版本：1.4.7
+- **WebDAV Folder Display**: 修复了云端同步文件夹配置时，因解析 PROPFIND 响应（Multi-Status）不完整导致的远程子文件夹无法显示的问题。
+- **Encrypted Import Path**: 修正了在加密文件系统中某个子文件夹内导入明文文件时，文件被错误放置在根目录的 Bug，现在文件将正确保存在当前浏览的层级中。
+- **Folder Context Menu**: 在加密文件夹的长按菜单中新增了“移动”和“复制”功能，并提供了相应的跨目录操作支持。
+- **Progress UI Drill-down**: 重构了加密任务进度条面板，现在支持点击包含子项的文件夹，平滑进入并查看其内部具体文件的加密/解密进度，并可针对子项进行独立控制（暂停/继续/移除）。
+- **Settings Migration**: 优化了设置界面的组织结构，将“每次启动自动刷新信息”选项从主设置导航栏迁移至“性能设置”页面中，使设置分类更加合理。
+- 完整更新：https://github.com/whmdg20090421/vault_app/releases/tag/v1.4.7
 <!-- RELEASE_SUMMARY_END -->
 
 ## 更新历史 (Changelog)
