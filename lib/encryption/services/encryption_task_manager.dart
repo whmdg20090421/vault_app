@@ -560,7 +560,7 @@ class EncryptionTaskManager extends ChangeNotifier {
       _activeWorkers++;
       notifyListeners();
 
-      final root = _findRootOf(node);
+      final root = _findRootOfNode(node);
       if (root == null || root.taskArgs == null || root.taskArgs!['masterKey'] == null || root.taskArgs!['vaultDirectoryPath'] == null) {
         node.status = NodeStatus.error;
         node.errorMessage = 'Missing task arguments or root node';
@@ -689,4 +689,3 @@ Future<void> _encryptionWorker(Map<String, dynamic> args) async {
     });
   }
 }
-
