@@ -11,9 +11,13 @@ class LocalIndexService {
   Future<void> updateFileIndex({
     required String vaultDirectoryPath,
     required String remotePath, // The path inside the vault, e.g., '/folder/file.txt'
-    required String hash,
-    required int size,
-    required DateTime updatedAt,
+    required String cipherHashSha256,
+    required int cipherSize,
+    required DateTime cipherUpdatedAt,
+    required String plainHashSha256,
+    required int plainSize,
+    required DateTime plainUpdatedAt,
+    required Map<String, String> sourceAbsolutePathEnc,
   }) async {
     try {
       final indexFile = File(p.join(vaultDirectoryPath, 'local_index.json'));
@@ -29,9 +33,13 @@ class LocalIndexService {
       final normalizedPath = remotePath.startsWith('/') ? remotePath : '/$remotePath';
       
       indexData[normalizedPath] = {
-        'size': size,
-        'updatedAt': updatedAt.toIso8601String(),
-        'hash': hash,
+        'cipherSize': cipherSize,
+        'cipherUpdatedAt': cipherUpdatedAt.toIso8601String(),
+        'cipherHashSha256': cipherHashSha256,
+        'plainSize': plainSize,
+        'plainUpdatedAt': plainUpdatedAt.toIso8601String(),
+        'plainHashSha256': plainHashSha256,
+        'sourceAbsolutePathEnc': sourceAbsolutePathEnc,
       };
 
       await indexFile.writeAsString(jsonEncode(indexData));

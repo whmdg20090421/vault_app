@@ -369,36 +369,55 @@ class _LocalVaultPickerPageState extends State<_LocalVaultPickerPage> {
                             hasError = false;
                           });
                           try {
-                            final derivedKey = await CryptoUtils.deriveKeyAsync(
+                            String padBase64Url(String input) {
+                              final pad = (4 - input.length % 4) % 4;
+                              return input + List.filled(pad, '=').join();
+                            }
+
+                            final kek = await CryptoUtils.deriveKeyAsync(
                               password: password,
                               saltBase64: config.salt,
                               kdfType: config.kdf,
                               kdfParams: config.kdfParams,
                             );
-                            
-                            // 验证密码 (verify password)
-                            String nonceBase64 = config.nonce;
-                            // Fix base64 padding if needed
-                            while (nonceBase64.length % 4 != 0) {
-                              nonceBase64 += '=';
-                            }
-                            final nonceBytes = base64Url.decode(nonceBase64);
-                            final ciphertextBytes = base64Decode(config.validationCiphertext);
-                            final decryptedBytes = CryptoUtils.decrypt(
-                              key: derivedKey,
-                              nonce: nonceBytes,
-                              ciphertext: ciphertextBytes,
-                              algorithm: config.algorithm,
-                            );
-                            
-                            if (utf8.decode(decryptedBytes) == 'vault_magic_encrypted') {
-                              Navigator.of(dialogContext).pop({
-                                'derivedKey': derivedKey,
-                                'password': password,
-                              });
+
+                            Uint8List masterKey;
+                            final isV2 = config.version >= 2 &&
+                                config.wrappedDekNonce != null &&
+                                config.wrappedDekCiphertext != null;
+
+                            if (isV2) {
+                              final wrappedDekNonceBytes = base64Url.decode(padBase64Url(config.wrappedDekNonce!));
+                              final wrappedDekCipherBytes = base64Decode(config.wrappedDekCiphertext!);
+                              masterKey = CryptoUtils.decrypt(
+                                key: kek,
+                                nonce: wrappedDekNonceBytes,
+                                ciphertext: wrappedDekCipherBytes,
+                                algorithm: config.algorithm,
+                              );
+                              if (masterKey.length != 32) {
+                                throw Exception('Invalid DEK length');
+                              }
                             } else {
-                              throw Exception('Invalid magic');
+                              final nonceBytes = base64Url.decode(padBase64Url(config.nonce));
+                              final ciphertextBytes = base64Decode(config.validationCiphertext);
+                              final decryptedBytes = CryptoUtils.decrypt(
+                                key: kek,
+                                nonce: nonceBytes,
+                                ciphertext: ciphertextBytes,
+                                algorithm: config.algorithm,
+                              );
+
+                              if (utf8.decode(decryptedBytes) != 'vault_magic_encrypted') {
+                                throw Exception('Invalid magic');
+                              }
+                              masterKey = kek;
                             }
+
+                            Navigator.of(dialogContext).pop({
+                              'masterKey': masterKey,
+                              'password': password,
+                            });
                           } catch (e) {
                             setState(() {
                               isUnlocking = false;
@@ -416,10 +435,10 @@ class _LocalVaultPickerPageState extends State<_LocalVaultPickerPage> {
     );
 
     if (result != null && mounted) {
-      final derivedKey = result['derivedKey'] as Uint8List;
+      final masterKey = result['masterKey'] as Uint8List;
       
       final localVfs = LocalVfs(rootPath: path);
-      final encryptedVfs = EncryptedVfs(baseVfs: localVfs, masterKey: derivedKey, encryptFilename: config.encryptFilename);
+      final encryptedVfs = EncryptedVfs(baseVfs: localVfs, masterKey: masterKey, encryptFilename: config.encryptFilename);
       await encryptedVfs.initEncryptedDomain('/');
       
       if (!mounted) return;

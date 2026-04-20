@@ -1,4 +1,5 @@
 class VaultConfig {
+  final int version;
   final String name;
   final String algorithm;
   final String kdf;
@@ -7,8 +8,11 @@ class VaultConfig {
   final String salt;
   final String nonce;
   final String validationCiphertext;
+  final String? wrappedDekNonce;
+  final String? wrappedDekCiphertext;
 
   VaultConfig({
+    this.version = 1,
     required this.name,
     required this.algorithm,
     required this.kdf,
@@ -17,10 +21,13 @@ class VaultConfig {
     required this.salt,
     required this.nonce,
     required this.validationCiphertext,
+    this.wrappedDekNonce,
+    this.wrappedDekCiphertext,
   });
 
   factory VaultConfig.fromJson(Map<String, dynamic> json) {
     return VaultConfig(
+      version: json['version'] as int? ?? 1,
       name: json['name'] as String,
       algorithm: json['algorithm'] as String,
       kdf: json['kdf'] as String,
@@ -29,11 +36,14 @@ class VaultConfig {
       salt: json['salt'] as String,
       nonce: json['nonce'] as String? ?? '',
       validationCiphertext: json['validationCiphertext'] as String,
+      wrappedDekNonce: json['wrappedDekNonce'] as String?,
+      wrappedDekCiphertext: json['wrappedDekCiphertext'] as String?,
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
+      'version': version,
       'name': name,
       'algorithm': algorithm,
       'kdf': kdf,
@@ -42,6 +52,8 @@ class VaultConfig {
       'salt': salt,
       'nonce': nonce,
       'validationCiphertext': validationCiphertext,
+      if (wrappedDekNonce != null) 'wrappedDekNonce': wrappedDekNonce,
+      if (wrappedDekCiphertext != null) 'wrappedDekCiphertext': wrappedDekCiphertext,
     };
   }
 }

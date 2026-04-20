@@ -80,6 +80,7 @@ class _VaultConfigPageState extends State<VaultConfigPage> {
       final password = _passwordController.text;
       final salt = _generateRandomString(16);
       final nonce = _generateRandomString(12);
+      final wrappedDekNonce = _generateRandomString(12);
       
       Map<String, dynamic> kdfParams = {};
       if (_selectedKDF == 'PBKDF2') {
@@ -107,7 +108,25 @@ class _VaultConfigPageState extends State<VaultConfigPage> {
         algorithm: _selectedAlgorithm,
       );
 
+      final kek = await CryptoUtils.deriveKeyAsync(
+        password: password,
+        saltBase64: salt,
+        kdfType: _selectedKDF,
+        kdfParams: kdfParams,
+      );
+
+      final random = Random.secure();
+      final dek = Uint8List.fromList(List<int>.generate(32, (_) => random.nextInt(256)));
+
+      final wrappedDekCipher = CryptoUtils.encrypt(
+        key: kek,
+        nonce: base64Url.decode(wrappedDekNonce),
+        plaintext: dek,
+        algorithm: _selectedAlgorithm,
+      );
+
       final config = VaultConfig(
+        version: 2,
         name: name,
         algorithm: _selectedAlgorithm,
         kdf: _selectedKDF,
@@ -116,6 +135,8 @@ class _VaultConfigPageState extends State<VaultConfigPage> {
         salt: salt,
         nonce: nonce,
         validationCiphertext: validationCiphertext,
+        wrappedDekNonce: wrappedDekNonce,
+        wrappedDekCiphertext: base64Encode(wrappedDekCipher),
       );
 
       final configFile = File('${widget.vaultDirectoryPath}/vault_config.json');

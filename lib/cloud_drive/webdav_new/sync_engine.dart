@@ -61,14 +61,18 @@ class SyncEngine {
       if (!localIndex.containsKey(path)) {
         localAdded.add(path);
       } else {
-        final indexInfo = localIndex[path]!;
+        final indexInfo = localIndex[path] as Map<String, dynamic>;
         final file = currentLocalFiles[path]!;
         final stat = await file.stat();
-        
-        if (stat.size != indexInfo['size'] || stat.modified.toIso8601String() != indexInfo['updatedAt']) {
-          if (stat.size == indexInfo['size']) {
+
+        final indexSize = indexInfo['cipherSize'] ?? indexInfo['size'];
+        final indexUpdatedAt = indexInfo['cipherUpdatedAt'] ?? indexInfo['updatedAt'];
+        final indexHash = indexInfo['cipherHashSha256'] ?? indexInfo['hash'];
+
+        if (stat.size != indexSize || stat.modified.toIso8601String() != indexUpdatedAt) {
+          if (stat.size == indexSize) {
             final hash = await _calculateFileHash(file);
-            if (hash == indexInfo['hash']) {
+            if (hash == indexHash) {
               localUnchanged.add(path);
               continue;
             }
@@ -93,7 +97,10 @@ class SyncEngine {
     if (localAdded.isNotEmpty && localDeleted.isNotEmpty) {
       Map<String, List<String>> hashToPaths = {};
       for (var entry in localIndex.entries) {
-        final hash = entry.value['hash'];
+        final value = entry.value;
+        if (value is! Map) continue;
+        final map = Map<String, dynamic>.from(value as Map);
+        final hash = map['cipherHashSha256'] ?? map['hash'];
         if (hash != null) {
           hashToPaths.putIfAbsent(hash, () => []).add(entry.key);
         }

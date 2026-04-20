@@ -46,6 +46,46 @@
 
 ## 方案设计（决策已锁定）
 
+### 0. 旧版兼容与“解锁时询问升级”
+
+目标：兼容旧 Vault（旧加密方式/旧数据结构），并在用户解锁成功后**询问是否升级到最新版结构**。
+
+#### 0.1 旧版识别
+
+- 依据 `vault_config.json`：
+  - `version` 缺失或为 `1`：视为旧版（现状：masterKey = KDF(password, salt, kdfParams) 直接用于文件名与内容加密）
+  - `version` 为 `2`：视为新版（本计划引入 DEK/KEK/包裹字段）
+
+#### 0.2 解锁兼容策略（必须可解锁）
+
+- 若 `version=2`：按新版流程（解出 DEK 作为 masterKey）
+- 若 `version=1/缺失`：按旧版流程（沿用现有 [encryption_page.dart](file:///workspace/lib/encryption/encryption_page.dart#L188-L221) 的校验与派生），得到 `oldMasterKey = deriveKey(password, oldSalt, ...)` 并进入 Vault
+
+#### 0.3 “解锁后询问升级”交互
+
+当检测到旧版 Vault 且解锁成功后，弹出对话框：
+
+- “此 Vault 使用旧版加密结构，是否升级到最新版？升级后可支持改密不重加密、清单/去重等能力。”
+- 按钮选项：
+  - **稍后再说**：不写任何文件，下次解锁仍提示（可加一个“不再提示”开关，执行阶段决定）
+  - **立即升级（不重加密，推荐）**：仅升级配置与索引结构，不改动任何密文文件
+  - **立即升级并重新加密（可选）**：生成新 DEK 并做全量轮换（与“修改密码-重新加密”路径复用）
+
+#### 0.4 旧版升级到新版的落地方式
+
+为确保“升级但不重加密”可行，采用以下映射：
+
+- 将旧版 `oldMasterKey` **直接作为 DEK(A)**（因为旧密文与旧文件名就是用它加密的）
+- 生成新的 KEK 参数（新 salt/nonce/kdfParams 可复用用户当前选择，也可沿用旧参数；本计划默认**生成新 salt 与 validationNonce**，降低离线枚举风险）
+- 用用户同一个密码派生 KEK_new，并包裹 DEK(A) 写入 `wrappedDek*`
+- 将 `vault_config.json` 写为 `version=2`
+- 旧字段保留策略：执行阶段决定
+  - 推荐：保留旧字段但标记 `legacy*`，方便回滚/诊断；或直接覆盖并只保留 version=2 字段（更干净）
+
+索引与清单兼容：
+- 旧版没有 `/.vault_manifest`：升级时创建空清单，后续导入/读取时渐进式补全
+- 旧版 `local_index.json` 若只有旧字段：读取时兼容缺字段，写回时补齐新版字段（渐进迁移）
+
 ### A. Vault 配置文件 schema 升级（vault_config.json）
 
 新增字段并引入版本号（向后兼容）：
@@ -150,6 +190,7 @@
    - 创建 Vault 时生成 DEK，并用 KEK 包裹后写入配置
 3. [encryption_page.dart](file:///workspace/lib/encryption/encryption_page.dart)
    - 解锁逻辑改为解出 DEK 作为 masterKey 传递
+   - 兼容旧版解锁（version 缺失/1）：解锁成功后弹窗询问升级，并支持“立即升级（不重加密）/升级并重加密”
 4. [sync_settings_dialog.dart](file:///workspace/lib/cloud_drive/sync_settings_dialog.dart)、[sync_config_page.dart](file:///workspace/lib/cloud_drive/sync_config_page.dart)
    - 同步场景的解锁/校验与 key 获取改为 DEK
 5. [encrypted_vfs.dart](file:///workspace/lib/vfs/encrypted_vfs.dart)
@@ -183,4 +224,3 @@
    - 同内容不同路径：触发密文复制，不走再加密
 5. 清单可读性
    - 解锁后可从 Vault 内读取清单并展示（后续 UI 需求可再扩展）
-

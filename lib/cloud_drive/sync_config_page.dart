@@ -144,26 +144,52 @@ class _SyncConfigPageState extends State<SyncConfigPage> {
                 setDialogState(() => unlocking = true);
                 try {
                   final config = item.config!;
-                  final derivedKey = await CryptoUtils.deriveKeyAsync(
+                  String padBase64Url(String input) {
+                    final pad = (4 - input.length % 4) % 4;
+                    return input + List.filled(pad, '=').join();
+                  }
+
+                  final kek = await CryptoUtils.deriveKeyAsync(
                     password: pwd,
                     saltBase64: config.salt,
                     kdfType: config.kdf,
                     kdfParams: config.kdfParams,
                   );
-                  final nonceBytes = base64Url.decode(config.nonce);
-                  final ciphertextBytes = base64Decode(config.validationCiphertext);
-                  final decryptedBytes = CryptoUtils.decrypt(
-                    key: derivedKey,
-                    nonce: nonceBytes,
-                    ciphertext: ciphertextBytes,
-                    algorithm: config.algorithm,
-                  );
-                  if (utf8.decode(decryptedBytes) == 'vault_magic_encrypted') {
-                    Navigator.pop(ctx);
-                    _onVaultUnlocked(item, derivedKey);
+
+                  Uint8List masterKey;
+                  final isV2 = config.version >= 2 &&
+                      config.wrappedDekNonce != null &&
+                      config.wrappedDekCiphertext != null;
+
+                  if (isV2) {
+                    final wrappedDekNonceBytes = base64Url.decode(padBase64Url(config.wrappedDekNonce!));
+                    final wrappedDekCipherBytes = base64Decode(config.wrappedDekCiphertext!);
+                    masterKey = CryptoUtils.decrypt(
+                      key: kek,
+                      nonce: wrappedDekNonceBytes,
+                      ciphertext: wrappedDekCipherBytes,
+                      algorithm: config.algorithm,
+                    );
+                    if (masterKey.length != 32) {
+                      throw Exception('Invalid DEK length');
+                    }
                   } else {
-                    throw Exception('Invalid magic');
+                    final nonceBytes = base64Url.decode(padBase64Url(config.nonce));
+                    final ciphertextBytes = base64Decode(config.validationCiphertext);
+                    final decryptedBytes = CryptoUtils.decrypt(
+                      key: kek,
+                      nonce: nonceBytes,
+                      ciphertext: ciphertextBytes,
+                      algorithm: config.algorithm,
+                    );
+                    if (utf8.decode(decryptedBytes) != 'vault_magic_encrypted') {
+                      throw Exception('Invalid magic');
+                    }
+                    masterKey = kek;
                   }
+
+                    Navigator.pop(ctx);
+                  _onVaultUnlocked(item, masterKey);
                 } catch (e) {
                   ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('密码错误')));
                 } finally {

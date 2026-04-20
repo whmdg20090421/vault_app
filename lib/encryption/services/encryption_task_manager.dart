@@ -3,6 +3,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
+import 'dart:typed_data';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
@@ -11,6 +12,8 @@ import 'package:uuid/uuid.dart';
 import '../../services/stats_service.dart';
 import '../models/encryption_node.dart';
 import 'local_index_service.dart';
+import 'vault_manifest_service.dart';
+import '../utils/aead_string.dart';
 import '../../vfs/local_vfs.dart';
 import '../../vfs/encrypted_vfs.dart';
 
@@ -61,6 +64,86 @@ class EncryptionTaskManager extends ChangeNotifier {
     rootNode.taskArgs = taskArgs;
 
     _tasks.add(rootNode);
+
+    if (taskArgs != null &&
+        taskArgs['vaultDirectoryPath'] is String &&
+        taskArgs['masterKey'] != null) {
+      try {
+        final vaultDirectoryPath = taskArgs['vaultDirectoryPath'] as String;
+        final encryptFilename = taskArgs['encryptFilename'] as bool? ?? false;
+        final currentPath = taskArgs['currentPath'] as String? ?? '/';
+
+        List<int> masterKeyList;
+        if (taskArgs['masterKey'] is Uint8List) {
+          masterKeyList = (taskArgs['masterKey'] as Uint8List).toList();
+        } else if (taskArgs['masterKey'] is List<int>) {
+          masterKeyList = (taskArgs['masterKey'] as List<int>).toList();
+        } else {
+          masterKeyList = (taskArgs['masterKey'] as List<dynamic>).cast<int>();
+        }
+        final masterKey = Uint8List.fromList(masterKeyList);
+
+        final manifestService = VaultManifestService();
+        final manifest = await manifestService.load(
+          vaultDirectoryPath: vaultDirectoryPath,
+          masterKey: masterKey,
+          encryptFilename: encryptFilename,
+        );
+        final entries = Map<String, dynamic>.from(manifest['entries'] as Map);
+
+        String basePath = currentPath;
+        if (basePath.endsWith('/') && basePath.length > 1) {
+          basePath = basePath.substring(0, basePath.length - 1);
+        }
+
+        void addNode(EncryptionNode node, String remotePath) {
+          String absolutePath;
+          if (node is FileNode) {
+            absolutePath = node.absolutePath;
+          } else if (node is FolderNode) {
+            absolutePath = node.absolutePath;
+          } else {
+            absolutePath = '';
+          }
+
+          DateTime modified;
+          try {
+            modified = FileStat.statSync(absolutePath).modified;
+          } catch (_) {
+            modified = DateTime.fromMillisecondsSinceEpoch(0);
+          }
+
+          entries[remotePath] = {
+            'type': node is FolderNode ? 'folder' : 'file',
+            'plainSize': node.rawSize,
+            'plainUpdatedAt': modified.toIso8601String(),
+            'sourceAbsolutePathEnc': AeadString.encryptUtf8(
+              key: masterKey,
+              plaintext: absolutePath,
+            ),
+          };
+
+          if (node is FolderNode) {
+            for (final child in node.children) {
+              final childRemote = remotePath == '/' ? '/${child.name}' : '$remotePath/${child.name}';
+              addNode(child, childRemote);
+            }
+          }
+        }
+
+        final rootRemote = basePath == '/' ? '/${rootNode.name}' : '$basePath/${rootNode.name}';
+        addNode(rootNode, rootRemote);
+
+        manifest['entries'] = entries;
+        await manifestService.save(
+          vaultDirectoryPath: vaultDirectoryPath,
+          masterKey: masterKey,
+          encryptFilename: encryptFilename,
+          manifest: manifest,
+        );
+      } catch (_) {}
+    }
+
     await _saveQueue(); // 持久化（SubTask 1.3）
     notifyListeners();
     
@@ -309,7 +392,7 @@ class EncryptionTaskManager extends ChangeNotifier {
     notifyListeners();
   }
 
-  void _handleMessage(dynamic message) {
+  Future<void> _handleMessage(dynamic message) async {
     if (message is Map<String, dynamic>) {
       final type = message['type'];
       final nodeId = message['nodeId'] as String;
@@ -324,13 +407,57 @@ class EncryptionTaskManager extends ChangeNotifier {
         node.status = NodeStatus.completed;
         _activeWorkers--;
         _isolates.remove(nodeId);
-        
-        LocalIndexService().updateFileIndex(
-          vaultDirectoryPath: message['vaultDirectoryPath'],
-          remotePath: message['remotePath'],
-          hash: message['hash'],
-          size: message['size'],
-          updatedAt: DateTime.parse(message['updatedAt']),
+
+        final vaultDirectoryPath = message['vaultDirectoryPath'] as String;
+        final remotePath = message['remotePath'] as String;
+
+        List<int> masterKeyList;
+        if (root.taskArgs?['masterKey'] is Uint8List) {
+          masterKeyList = (root.taskArgs!['masterKey'] as Uint8List).toList();
+        } else if (root.taskArgs?['masterKey'] is List<int>) {
+          masterKeyList = (root.taskArgs!['masterKey'] as List<int>).toList();
+        } else {
+          masterKeyList = (root.taskArgs?['masterKey'] as List<dynamic>? ?? const []).cast<int>();
+        }
+        final masterKey = Uint8List.fromList(masterKeyList);
+        final encryptFilename = (root.taskArgs?['encryptFilename'] as bool?) ?? false;
+
+        await LocalIndexService().updateFileIndex(
+          vaultDirectoryPath: vaultDirectoryPath,
+          remotePath: remotePath,
+          cipherHashSha256: message['cipherHashSha256'] as String,
+          cipherSize: message['cipherSize'] as int,
+          cipherUpdatedAt: DateTime.parse(message['cipherUpdatedAt'] as String),
+          plainHashSha256: message['plainHashSha256'] as String,
+          plainSize: message['plainSize'] as int,
+          plainUpdatedAt: DateTime.parse(message['plainUpdatedAt'] as String),
+          sourceAbsolutePathEnc: Map<String, String>.from(message['sourceAbsolutePathEnc'] as Map),
+        );
+
+        final manifestService = VaultManifestService();
+        final manifest = await manifestService.load(
+          vaultDirectoryPath: vaultDirectoryPath,
+          masterKey: masterKey,
+          encryptFilename: encryptFilename,
+        );
+        final entries = Map<String, dynamic>.from(manifest['entries'] as Map);
+        final normalizedRemotePath = remotePath.startsWith('/') ? remotePath : '/$remotePath';
+        entries[normalizedRemotePath] = {
+          'type': 'file',
+          'plainSize': message['plainSize'],
+          'plainUpdatedAt': message['plainUpdatedAt'],
+          'plainHashSha256': message['plainHashSha256'],
+          'cipherSize': message['cipherSize'],
+          'cipherUpdatedAt': message['cipherUpdatedAt'],
+          'cipherHashSha256': message['cipherHashSha256'],
+          'sourceAbsolutePathEnc': message['sourceAbsolutePathEnc'],
+        };
+        manifest['entries'] = entries;
+        await manifestService.save(
+          vaultDirectoryPath: vaultDirectoryPath,
+          masterKey: masterKey,
+          encryptFilename: encryptFilename,
+          manifest: manifest,
         );
 
         _updateRootStatus(root);
@@ -653,7 +780,8 @@ Future<void> _encryptionWorker(Map<String, dynamic> args) async {
     }
 
     final size = await file.length();
-    final stream = file.openRead();
+    final plainUpdatedAt = await file.lastModified();
+    final plainHashSha256 = (await sha256.bind(file.openRead()).first).toString();
 
     final localVfs = LocalVfs(rootPath: vaultDirectoryPath);
     final encryptedVfs = EncryptedVfs(
@@ -663,23 +791,91 @@ Future<void> _encryptionWorker(Map<String, dynamic> args) async {
     );
     await encryptedVfs.initEncryptedDomain('/');
 
-    await encryptedVfs.uploadStream(stream, size, remotePath);
+    final indexFile = File('$vaultDirectoryPath/local_index.json');
+    Map<String, dynamic> indexData = {};
+    if (await indexFile.exists()) {
+      try {
+        final content = await indexFile.readAsString();
+        if (content.isNotEmpty) {
+          indexData = jsonDecode(content) as Map<String, dynamic>;
+        }
+      } catch (_) {}
+    }
 
-    // 计算 Hash (MD5) - 此时计算加密后文件的哈希
+    bool skipEncryption = false;
+    String? copyFromRemotePath;
+
+    for (final entry in indexData.entries) {
+      final value = entry.value;
+      if (value is! Map) continue;
+      final map = Map<String, dynamic>.from(value as Map);
+      if (map['plainHashSha256'] != plainHashSha256) continue;
+      final sourceEnc = map['sourceAbsolutePathEnc'];
+      if (sourceEnc is Map) {
+        try {
+          final decryptedPath = AeadString.decryptUtf8(
+            key: masterKey,
+            payload: Map<String, dynamic>.from(sourceEnc as Map),
+          );
+          if (decryptedPath == absolutePath) {
+            skipEncryption = true;
+            copyFromRemotePath = entry.key;
+            break;
+          } else {
+            skipEncryption = true;
+            copyFromRemotePath = entry.key;
+          }
+        } catch (_) {}
+      } else {
+        skipEncryption = true;
+        copyFromRemotePath = entry.key;
+      }
+    }
+
+    if (skipEncryption && copyFromRemotePath != null && copyFromRemotePath != remotePath) {
+      final oldReal = encryptedVfs.getRealPath(copyFromRemotePath);
+      final newReal = encryptedVfs.getRealPath(remotePath);
+      final oldFile = File(localVfs.getRealPath(oldReal));
+      final newFile = File(localVfs.getRealPath(newReal));
+      if (await oldFile.exists()) {
+        if (!await newFile.parent.exists()) {
+          await newFile.parent.create(recursive: true);
+        }
+        await oldFile.copy(newFile.path);
+      } else {
+        skipEncryption = false;
+      }
+    }
+
+    if (!skipEncryption) {
+      final stream = file.openRead();
+      await encryptedVfs.uploadStream(stream, size, remotePath);
+    }
+
     final encryptedRemotePath = encryptedVfs.getRealPath(remotePath);
     final encryptedLocalPath = localVfs.getRealPath(encryptedRemotePath);
     final encryptedFile = File(encryptedLocalPath);
-    final hash = await md5.bind(encryptedFile.openRead()).first;
-    final hashStr = hash.toString();
+    final cipherUpdatedAt = await encryptedFile.lastModified();
+    final cipherSize = await encryptedFile.length();
+    final cipherHashSha256 = (await sha256.bind(encryptedFile.openRead()).first).toString();
+
+    final sourceAbsolutePathEnc = AeadString.encryptUtf8(
+      key: masterKey,
+      plaintext: absolutePath,
+    );
 
     sendPort.send({
       'type': 'done',
       'nodeId': nodeId,
       'vaultDirectoryPath': vaultDirectoryPath,
       'remotePath': remotePath,
-      'hash': hashStr,
-      'size': await encryptedFile.length(),
-      'updatedAt': (await encryptedFile.lastModified()).toIso8601String(),
+      'cipherHashSha256': cipherHashSha256,
+      'cipherSize': cipherSize,
+      'cipherUpdatedAt': cipherUpdatedAt.toIso8601String(),
+      'plainHashSha256': plainHashSha256,
+      'plainSize': size,
+      'plainUpdatedAt': plainUpdatedAt.toIso8601String(),
+      'sourceAbsolutePathEnc': sourceAbsolutePathEnc,
     });
   } catch (e) {
     sendPort.send({
