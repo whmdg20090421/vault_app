@@ -13,6 +13,7 @@ import '../main.dart';
 import '../theme/app_theme.dart';
 
 import 'models/vault_config.dart';
+import 'models/reencryption_task_state.dart';
 import 'utils/crypto_utils.dart';
 import '../utils/format_utils.dart';
 import 'vault_config_page.dart';
@@ -156,15 +157,15 @@ class _EncryptionPageState extends State<EncryptionPage> {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(_LegacyUpgradeChoice.later),
-              child: const Text('稍后再说'),
+              child: const Text('继续使用旧版方式'),
             ),
             TextButton(
               onPressed: () => Navigator.of(context).pop(_LegacyUpgradeChoice.upgradeAndReencrypt),
-              child: const Text('升级并重新加密'),
+              child: const Text('更新并重新加密全库'),
             ),
             ElevatedButton(
               onPressed: () => Navigator.of(context).pop(_LegacyUpgradeChoice.upgradeNoReencrypt),
-              child: const Text('立即升级'),
+              child: const Text('仅更新配置'),
             ),
           ],
         );
@@ -248,17 +249,25 @@ class _EncryptionPageState extends State<EncryptionPage> {
       return;
     }
 
+    if (globalReencryptionTask.value?.vaultPath == item.path && globalReencryptionTask.value?.isFinished == false) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('该保险箱正在重新加密中，请稍后再试')),
+      );
+      return;
+    }
+
     final passwordController = TextEditingController();
     bool isUnlocking = false;
+    bool dialogPopped = false;
 
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) {
+      builder: (dialogContext) {
         return StatefulBuilder(
-          builder: (context, setStateDialog) {
+          builder: (statefulContext, setStateDialog) {
             return AlertDialog(
-              title: Text('解锁保险箱 (Unlock Vault)'),
+              title: const Text('解锁保险箱 (Unlock Vault)'),
               content: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -280,7 +289,10 @@ class _EncryptionPageState extends State<EncryptionPage> {
               ),
               actions: [
                 TextButton(
-                  onPressed: isUnlocking ? null : () => Navigator.of(context).pop(),
+                  onPressed: isUnlocking ? null : () {
+                    dialogPopped = true;
+                    Navigator.of(dialogContext).pop();
+                  },
                   child: const Text('取消 (Cancel)'),
                 ),
                 ElevatedButton(
@@ -344,7 +356,10 @@ class _EncryptionPageState extends State<EncryptionPage> {
                             }
 
                             if (mounted) {
-                              Navigator.of(context).pop();
+                              if (!dialogPopped) {
+                                dialogPopped = true;
+                                Navigator.of(dialogContext).pop();
+                              }
 
                               VaultConfig configToUse = config;
                               if (!isV2) {
@@ -357,49 +372,45 @@ class _EncryptionPageState extends State<EncryptionPage> {
                                     oldMasterKey: masterKey,
                                   );
                                   if (mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
+                                    ScaffoldMessenger.of(this.context).showSnackBar(
                                       const SnackBar(content: Text('已升级到最新版加密结构')),
                                     );
                                   }
                                 } else if (choice == _LegacyUpgradeChoice.upgradeAndReencrypt) {
                                   final random = Random.secure();
                                   final newDek = Uint8List.fromList(List<int>.generate(32, (_) => random.nextInt(256)));
-                                  await VaultKeyRotationService().rotateInPlace(
+                                  
+                                  _startReencryptionTask(
                                     vaultDirectoryPath: item.path,
+                                    oldConfig: config,
+                                    password: pwd,
                                     oldMasterKey: masterKey,
                                     newMasterKey: newDek,
-                                    encryptFilename: config.encryptFilename,
                                   );
-                                  configToUse = await _writeV2ConfigFromDek(
-                                    vaultDirectoryPath: item.path,
-                                    baseConfig: config,
-                                    password: pwd,
-                                    dek: newDek,
-                                  );
-                                  masterKey = newDek;
-                                  if (mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(content: Text('已升级并完成重新加密')),
-                                    );
-                                  }
+                                  return;
                                 }
                               }
-                              Navigator.of(context).push(
-                                MaterialPageRoute(
-                                  builder: (context) => VaultExplorerPage(
-                                    vaultConfig: configToUse,
-                                    masterKey: masterKey,
-                                    vaultDirectoryPath: item.path,
+                              
+                              if (mounted) {
+                                Navigator.of(this.context).push(
+                                  MaterialPageRoute(
+                                    builder: (context) => VaultExplorerPage(
+                                      vaultConfig: configToUse,
+                                      masterKey: masterKey,
+                                      vaultDirectoryPath: item.path,
+                                    ),
                                   ),
-                                ),
-                              );
+                                );
+                              }
                             }
                           } catch (e) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('密码错误或配置损坏 (Incorrect password or corrupted config)')),
-                            );
-                          } finally {
                             if (mounted) {
+                              ScaffoldMessenger.of(this.context).showSnackBar(
+                                const SnackBar(content: Text('密码错误或配置损坏 (Incorrect password or corrupted config)')),
+                              );
+                            }
+                          } finally {
+                            if (mounted && !dialogPopped) {
                               setStateDialog(() {
                                 isUnlocking = false;
                               });
@@ -683,6 +694,159 @@ class _EncryptionPageState extends State<EncryptionPage> {
     }
   }
 
+  Future<void> _startReencryptionTask({
+    required String vaultDirectoryPath,
+    required VaultConfig oldConfig,
+    required String password,
+    required Uint8List oldMasterKey,
+    required Uint8List newMasterKey,
+  }) async {
+    globalReencryptionTask.value = ReencryptionTaskState(
+      vaultPath: vaultDirectoryPath,
+      vaultName: oldConfig.name,
+    );
+    
+    _showReencryptFullScreenDialog(context);
+
+    try {
+      await VaultKeyRotationService().rotateInPlace(
+        vaultDirectoryPath: vaultDirectoryPath,
+        oldMasterKey: oldMasterKey,
+        newMasterKey: newMasterKey,
+        encryptFilename: oldConfig.encryptFilename,
+        onProgress: (processed, total) {
+          globalReencryptionTask.value = globalReencryptionTask.value?.copyWith(
+            processedBytes: processed,
+            totalBytes: total,
+          );
+        },
+      );
+
+      await _writeV2ConfigFromDek(
+        vaultDirectoryPath: vaultDirectoryPath,
+        baseConfig: oldConfig,
+        password: password,
+        dek: newMasterKey,
+      );
+
+      globalReencryptionTask.value = globalReencryptionTask.value?.copyWith(isFinished: true);
+    } catch (e) {
+      globalReencryptionTask.value = globalReencryptionTask.value?.copyWith(
+        isFinished: true,
+        error: e.toString(),
+      );
+    }
+  }
+
+  void _showReencryptFullScreenDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      useSafeArea: false,
+      builder: (dialogContext) {
+        return PopScope(
+          canPop: false,
+          onPopInvoked: (didPop) async {
+            if (didPop) return;
+            final shouldPop = await _showHideWarning(dialogContext);
+            if (shouldPop && dialogContext.mounted) {
+              Navigator.of(dialogContext).pop();
+            }
+          },
+          child: Scaffold(
+            backgroundColor: Theme.of(context).colorScheme.surface,
+            body: Center(
+              child: ValueListenableBuilder<ReencryptionTaskState?>(
+                valueListenable: globalReencryptionTask,
+                builder: (context, state, child) {
+                  if (state == null) return const SizedBox.shrink();
+
+                  if (state.isFinished) {
+                    return Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.check_circle_outline, size: 64, color: Colors.green),
+                        const SizedBox(height: 16),
+                        Text(state.error == null ? '重新加密完成' : '重新加密失败', style: Theme.of(context).textTheme.headlineSmall),
+                        if (state.error != null) ...[
+                          const SizedBox(height: 8),
+                          Text(state.error!, style: const TextStyle(color: Colors.red)),
+                        ],
+                        const SizedBox(height: 32),
+                        ElevatedButton(
+                          onPressed: () {
+                            globalReencryptionTask.value = null;
+                            Navigator.of(dialogContext).pop();
+                          },
+                          child: const Text('关闭'),
+                        ),
+                      ],
+                    );
+                  }
+
+                  final progress = state.totalBytes == 0 ? 0.0 : state.processedBytes / state.totalBytes;
+                  final processedStr = FormatUtils.formatBytes(state.processedBytes);
+                  final totalStr = FormatUtils.formatBytes(state.totalBytes);
+
+                  return Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const CircularProgressIndicator(),
+                      const SizedBox(height: 24),
+                      Text('正在重新加密全库', style: Theme.of(context).textTheme.headlineSmall),
+                      const SizedBox(height: 8),
+                      Text(state.vaultName, style: Theme.of(context).textTheme.titleMedium),
+                      const SizedBox(height: 24),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 48.0),
+                        child: LinearProgressIndicator(value: progress),
+                      ),
+                      const SizedBox(height: 12),
+                      Text('$processedStr / $totalStr (${(progress * 100).toStringAsFixed(1)}%)'),
+                      const SizedBox(height: 48),
+                      OutlinedButton.icon(
+                        icon: const Icon(Icons.call_received),
+                        label: const Text('隐藏到后台'),
+                        onPressed: () async {
+                          final shouldPop = await _showHideWarning(dialogContext);
+                          if (shouldPop && dialogContext.mounted) {
+                            Navigator.of(dialogContext).pop();
+                          }
+                        },
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<bool> _showHideWarning(BuildContext context) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('二次警告'),
+        content: const Text('后台运行中如果App被系统清理，可能会导致未能被重新加密的文件永久丢失！\n\n确定要隐藏到后台吗？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(c, false),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(c, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('确定隐藏'),
+          ),
+        ],
+      ),
+    );
+    return result ?? false;
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -702,85 +866,155 @@ class _EncryptionPageState extends State<EncryptionPage> {
           ),
         ],
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _vaults.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.lock_outline_rounded,
-                        size: 64,
-                        color: theme.colorScheme.onSurface.withOpacity(0.2),
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        '暂无保险箱，点击右下角添加',
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          color: theme.colorScheme.onSurface.withOpacity(0.5),
-                        ),
-                      ),
-                    ],
-                  ),
-                )
-              : ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: _vaults.length,
-                  itemBuilder: (context, index) {
-                    final item = _vaults[index];
-                    final hasConfig = item.config != null;
-                    
-                    return Card(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      elevation: isCyberpunk ? 0 : 1,
-                      shape: isCyberpunk
-                          ? const RoundedRectangleBorder(
-                              borderRadius: BorderRadius.zero,
-                              side: BorderSide(color: Color(0xFF00E5FF), width: 1.0),
-                            )
-                          : RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
+      body: Stack(
+        children: [
+          _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : _vaults.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.lock_outline_rounded,
+                            size: 64,
+                            color: theme.colorScheme.onSurface.withOpacity(0.2),
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            '暂无保险箱，点击右下角添加',
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              color: theme.colorScheme.onSurface.withOpacity(0.5),
                             ),
-                      color: isCyberpunk ? theme.colorScheme.surfaceContainer : theme.colorScheme.surface,
-                      child: ListTile(
-                        onTap: () => _showUnlockDialog(item),
-                        onLongPress: hasConfig ? () => _showVaultActions(item, index) : null,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        leading: Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: isCyberpunk 
-                                ? theme.colorScheme.secondary.withValues(alpha: 0.1)
-                                : theme.colorScheme.primary.withValues(alpha: 0.1),
-                            borderRadius: isCyberpunk ? BorderRadius.zero : BorderRadius.circular(12),
                           ),
-                          child: Icon(
-                            hasConfig ? Icons.lock : Icons.error_outline,
-                            color: hasConfig
-                                ? (isCyberpunk ? theme.colorScheme.secondary : theme.colorScheme.primary)
-                                : theme.colorScheme.error,
-                          ),
-                        ),
-                        title: Text(
-                          hasConfig ? item.config!.name : '未配置 (Unconfigured)',
-                          style: const TextStyle(fontWeight: FontWeight.w600),
-                        ),
-                        subtitle: Text(
-                          item.path,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: theme.colorScheme.onSurface.withOpacity(0.6),
-                          ),
-                        ),
-                        trailing: IconButton(
-                          icon: Icon(Icons.delete_outline, color: theme.colorScheme.error),
-                          onPressed: () => _removeVault(index),
-                        ),
+                        ],
                       ),
-                    );
-                  },
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: _vaults.length,
+                      itemBuilder: (context, index) {
+                        final item = _vaults[index];
+                        final hasConfig = item.config != null;
+                        
+                        return Card(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          elevation: isCyberpunk ? 0 : 1,
+                          shape: isCyberpunk
+                              ? const RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.zero,
+                                  side: BorderSide(color: Color(0xFF00E5FF), width: 1.0),
+                                )
+                              : RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                          color: isCyberpunk ? theme.colorScheme.surfaceContainer : theme.colorScheme.surface,
+                          child: ListTile(
+                            onTap: () => _showUnlockDialog(item),
+                            onLongPress: hasConfig ? () => _showVaultActions(item, index) : null,
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            leading: Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: isCyberpunk 
+                                    ? theme.colorScheme.secondary.withValues(alpha: 0.1)
+                                    : theme.colorScheme.primary.withValues(alpha: 0.1),
+                                borderRadius: isCyberpunk ? BorderRadius.zero : BorderRadius.circular(12),
+                              ),
+                              child: Icon(
+                                hasConfig ? Icons.lock : Icons.error_outline,
+                                color: hasConfig
+                                    ? (isCyberpunk ? theme.colorScheme.secondary : theme.colorScheme.primary)
+                                    : theme.colorScheme.error,
+                              ),
+                            ),
+                            title: Text(
+                              hasConfig ? item.config!.name : '未配置 (Unconfigured)',
+                              style: const TextStyle(fontWeight: FontWeight.w600),
+                            ),
+                            subtitle: Text(
+                              item.path,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: theme.colorScheme.onSurface.withOpacity(0.6),
+                              ),
+                            ),
+                            trailing: IconButton(
+                              icon: Icon(Icons.delete_outline, color: theme.colorScheme.error),
+                              onPressed: () => _removeVault(index),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+          ValueListenableBuilder<ReencryptionTaskState?>(
+            valueListenable: globalReencryptionTask,
+            builder: (context, state, child) {
+              if (state == null) return const SizedBox.shrink();
+              
+              final bool isFinished = state.isFinished;
+              final progress = state.totalBytes == 0 ? 0.0 : state.processedBytes / state.totalBytes;
+              
+              return Positioned(
+                top: 16,
+                left: 16,
+                right: 16,
+                child: Center(
+                  child: GestureDetector(
+                    onTap: () {
+                      _showReencryptFullScreenDialog(context);
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.surfaceContainerHighest,
+                        borderRadius: BorderRadius.circular(32),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.2),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          )
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (isFinished)
+                            const Icon(Icons.check_circle, color: Colors.green, size: 20)
+                          else
+                            SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                value: progress,
+                                strokeWidth: 2,
+                              ),
+                            ),
+                          const SizedBox(width: 12),
+                          Text(
+                            isFinished ? '加密完成 (${state.vaultName})' : '正在重新加密 ${state.vaultName} ${(progress * 100).toStringAsFixed(0)}%',
+                            style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.bold),
+                          ),
+                          if (isFinished) ...[
+                            const SizedBox(width: 12),
+                            InkWell(
+                              onTap: () {
+                                globalReencryptionTask.value = null;
+                              },
+                              child: const Icon(Icons.close, size: 20),
+                            )
+                          ]
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
+              );
+            },
+          ),
+        ],
+      ),
       floatingActionButton: FloatingActionButton(
         onPressed: _pickFolderAndConfig,
         backgroundColor: theme.colorScheme.primary,

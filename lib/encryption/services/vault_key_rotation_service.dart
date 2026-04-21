@@ -10,6 +10,7 @@ class VaultKeyRotationService {
     required Uint8List oldMasterKey,
     required Uint8List newMasterKey,
     required bool encryptFilename,
+    void Function(int processed, int total)? onProgress,
   }) async {
     final tmpPath = p.join(vaultDirectoryPath, '.rotate_tmp');
     final backupPath = p.join(vaultDirectoryPath, '.rotate_backup');
@@ -28,6 +29,23 @@ class VaultKeyRotationService {
     );
     await oldEncryptedVfs.initEncryptedDomain('/');
 
+    int totalBytes = 0;
+    int processedBytes = 0;
+
+    Future<void> computeSize(String dirPath) async {
+      final children = await oldEncryptedVfs.list(dirPath);
+      for (final child in children) {
+        if (child.isDirectory) {
+          await computeSize(child.path);
+        } else {
+          totalBytes += child.size;
+        }
+      }
+    }
+    await computeSize('/');
+
+    onProgress?.call(0, totalBytes);
+
     final newLocalVfs = LocalVfs(rootPath: tmpPath);
     final newEncryptedVfs = EncryptedVfs(
       baseVfs: newLocalVfs,
@@ -44,7 +62,12 @@ class VaultKeyRotationService {
           await copyNode(child.path);
         } else {
           final stream = await oldEncryptedVfs.open(child.path);
-          await newEncryptedVfs.uploadStream(stream, child.size, child.path);
+          final progressStream = stream.map((chunk) {
+            processedBytes += chunk.length;
+            onProgress?.call(processedBytes, totalBytes);
+            return chunk;
+          });
+          await newEncryptedVfs.uploadStream(progressStream, child.size, child.path);
         }
       }
     }
