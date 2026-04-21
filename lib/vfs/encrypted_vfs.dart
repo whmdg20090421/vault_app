@@ -209,8 +209,11 @@ class EncryptedVfs implements VirtualFileSystem {
     List<VfsNode> virtualNodes = [];
 
     for (var realNode in realNodes) {
-      if (realNode.name == _markerFileName) {
-        continue; // 过滤并隐藏标记文件
+      if (realNode.name == _markerFileName ||
+          realNode.name == '.vault_manifest' ||
+          realNode.name == 'local_index.json' ||
+          realNode.name == 'vault_config.json') {
+        continue; // 过滤并隐藏标记文件和配置文件
       }
 
       String decryptedName = realNode.name;

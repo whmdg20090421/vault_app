@@ -41,7 +41,7 @@ class MainActivity : FlutterActivity() {
                 }
             }
             return md.digest().joinToString("") { "%02x".format(it) }
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             return ""
         }
     }
@@ -63,7 +63,7 @@ class MainActivity : FlutterActivity() {
             val md = java.security.MessageDigest.getInstance("SHA-256")
             md.update(cert)
             return md.digest().joinToString("") { "%02x".format(it) }
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             return ""
         }
     }
