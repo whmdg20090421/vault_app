@@ -429,30 +429,59 @@ class _EncryptionPageState extends State<EncryptionPage> {
 
   Future<void> _showVaultActions(_VaultItem item, int index) async {
     if (!mounted) return;
-    await showModalBottomSheet(
+    
+    final theme = Theme.of(context);
+    
+    await showGeneralDialog(
       context: context,
-      builder: (context) {
-        return SafeArea(
-          child: Column(
+      barrierDismissible: true,
+      barrierLabel: 'Dismiss',
+      barrierColor: Colors.black54,
+      transitionDuration: const Duration(milliseconds: 300),
+      pageBuilder: (context, animation, secondaryAnimation) {
+        return AlertDialog(
+          backgroundColor: theme.colorScheme.surface,
+          shape: RoundedRectangleBorder(
+            borderRadius: theme.brightness == Brightness.dark && theme.colorScheme.secondary == const Color(0xFF00E5FF)
+                ? BorderRadius.zero
+                : BorderRadius.circular(16),
+            side: theme.brightness == Brightness.dark && theme.colorScheme.secondary == const Color(0xFF00E5FF)
+                ? const BorderSide(color: Color(0xFF00E5FF), width: 1.0)
+                : BorderSide.none,
+          ),
+          title: Text('操作保险箱', style: TextStyle(color: theme.colorScheme.onSurface)),
+          content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               ListTile(
-                leading: const Icon(Icons.password),
-                title: const Text('修改密码'),
+                leading: Icon(Icons.password, color: theme.colorScheme.primary),
+                title: Text('修改密码', style: TextStyle(color: theme.colorScheme.onSurface)),
                 onTap: () async {
                   Navigator.pop(context);
                   await _showChangePasswordDialog(item);
                 },
               ),
               ListTile(
-                leading: const Icon(Icons.delete_outline),
-                title: const Text('移除保险箱'),
+                leading: Icon(Icons.delete_outline, color: theme.colorScheme.error),
+                title: Text('移除保险箱', style: TextStyle(color: theme.colorScheme.error)),
                 onTap: () {
                   Navigator.pop(context);
                   _removeVault(index);
                 },
               ),
             ],
+          ),
+        );
+      },
+      transitionBuilder: (context, animation, secondaryAnimation, child) {
+        return ScaleTransition(
+          scale: CurvedAnimation(
+            parent: animation,
+            curve: Curves.easeOutBack,
+          ),
+          child: FadeTransition(
+            opacity: animation,
+            child: child,
           ),
         );
       },
