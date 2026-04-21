@@ -5,9 +5,9 @@
 ## 最新版本概览
 
 <!-- RELEASE_SUMMARY_START -->
-- 当前版本：1.4.9
+- 当前版本：1.5.0
 - 本次更新详见 Release 页面
-- 完整更新：https://github.com/whmdg20090421/vault_app/releases/tag/v1.4.9
+- 完整更新：https://github.com/whmdg20090421/vault_app/releases/tag/v1.5.0
 <!-- RELEASE_SUMMARY_END -->
 
 ## 更新历史 (Changelog)
