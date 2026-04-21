@@ -8,6 +8,8 @@ import 'webdav_config.dart';
 import 'webdav_dashboard_page.dart';
 import 'webdav_edit_page.dart';
 import 'webdav_storage.dart';
+import 'webdav_new/webdav_client.dart';
+import 'webdav_new/webdav_service.dart';
 
 class CloudDrivePage extends StatefulWidget {
   const CloudDrivePage({
@@ -55,6 +57,34 @@ class _CloudDrivePageState extends State<CloudDrivePage> {
       _securityLevel = level;
       _loading = false;
     });
+  }
+
+  Future<void> _refreshConfigs() async {
+    for (int i = 0; i < _configs.length; i++) {
+      final config = _configs[i];
+      try {
+        final password = await _repository.readPassword(config.id);
+        final client = WebDavClient(
+          baseUrl: config.url,
+          username: config.username,
+          password: password ?? '',
+        );
+        final service = WebDavService(client);
+        
+        final targetPath = (config.path != null && config.path!.isNotEmpty) ? config.path! : '/';
+        final count = await service.countFiles(targetPath);
+        
+        final newConfig = config.copyWith(fileCount: count);
+        await _repository.upsertConfig(newConfig, password: password);
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('刷新 ${config.name} 失败: $e')),
+          );
+        }
+      }
+    }
+    await _reload();
   }
 
   Future<void> _ensureSecurityLevel() async {
@@ -224,44 +254,58 @@ class _CloudDrivePageState extends State<CloudDrivePage> {
                         ),
                       ),
                     )
-                  : ListView.separated(
-                      padding: const EdgeInsets.all(16),
-                      itemCount: _configs.length,
-                      separatorBuilder: (context, index) =>
-                          const SizedBox(height: 12),
-                      itemBuilder: (context, index) {
-                        final item = _configs[index];
-                        return Card(
-                          child: ListTile(
-                            leading:
-                                Icon(_levelIcon(), color: _levelColor(theme)),
-                            title: Text(item.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-                            subtitle: Text('${item.username} · ${item.url}', maxLines: 2, overflow: TextOverflow.ellipsis),
-                            onTap: () {
-                              Navigator.of(context).push(
-                                MaterialPageRoute(
-                                  builder: (_) => WebDAVDashboardPage(config: item),
-                                ),
-                              );
-                            },
-                            trailing: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(
-                                  tooltip: '编辑',
-                                  onPressed: () => _edit(item),
-                                  icon: const Icon(Icons.edit_rounded),
-                                ),
-                                IconButton(
-                                  tooltip: '删除',
-                                  onPressed: () => _delete(item),
-                                  icon: const Icon(Icons.delete_rounded),
-                                ),
-                              ],
+                  : RefreshIndicator(
+                      onRefresh: _refreshConfigs,
+                      child: ListView.separated(
+                        padding: const EdgeInsets.all(16),
+                        itemCount: _configs.length,
+                        separatorBuilder: (context, index) =>
+                            const SizedBox(height: 12),
+                        itemBuilder: (context, index) {
+                          final item = _configs[index];
+                          final subtitleText = '${item.username} · ${item.url}';
+                          final countText = item.fileCount != null ? '文件数: ${item.fileCount}' : '未同步文件数';
+                          
+                          return Card(
+                            child: ListTile(
+                              leading:
+                                  Icon(_levelIcon(), color: _levelColor(theme)),
+                              title: Text(item.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+                              subtitle: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(subtitleText, maxLines: 1, overflow: TextOverflow.ellipsis),
+                                  const SizedBox(height: 4),
+                                  Text(countText, style: TextStyle(fontSize: 12, color: theme.colorScheme.primary)),
+                                ],
+                              ),
+                              isThreeLine: true,
+                              onTap: () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) => WebDAVDashboardPage(config: item),
+                                  ),
+                                );
+                              },
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  IconButton(
+                                    tooltip: '编辑',
+                                    onPressed: () => _edit(item),
+                                    icon: const Icon(Icons.edit_rounded),
+                                  ),
+                                  IconButton(
+                                    tooltip: '删除',
+                                    onPressed: () => _delete(item),
+                                    icon: const Icon(Icons.delete_rounded),
+                                  ),
+                                ],
+                              ),
                             ),
-                          ),
-                        );
-                      },
+                          );
+                        },
+                      ),
                     ),
             ),
           ],

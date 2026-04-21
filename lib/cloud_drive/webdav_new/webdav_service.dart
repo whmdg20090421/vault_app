@@ -27,6 +27,26 @@ class WebDavService {
     }
   }
 
+  /// 获取指定路径下（包含所有子目录）的文件数量
+  /// 使用 Depth: infinity 请求
+  Future<int> countFiles(String path) async {
+    final response = await client.request<String>(
+      path,
+      method: 'PROPFIND',
+      headers: {'Depth': 'infinity'},
+    );
+
+    if (response.statusCode == 207 && response.data != null) {
+      final baseUrlPath = Uri.parse(client.dio.options.baseUrl).path;
+      final allNodes = WebDavParser.parseMultiStatus(response.data!, path, baseUrlPath);
+      // 过滤出文件（非目录）
+      final files = allNodes.where((node) => !node.isDirectory).toList();
+      return files.length;
+    } else {
+      throw Exception('Failed to count files: ${response.statusCode}');
+    }
+  }
+
   /// 创建目录 (MKCOL)
   /// [path] 要创建的目录路径
   Future<void> mkdir(String path) async {

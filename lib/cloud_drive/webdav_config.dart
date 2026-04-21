@@ -6,6 +6,7 @@ class WebDavConfig {
     required this.username,
     this.password,
     this.path,
+    this.fileCount,
   });
 
   final String id;
@@ -14,6 +15,7 @@ class WebDavConfig {
   final String username;
   final String? password;
   final String? path;
+  final int? fileCount;
 
   WebDavConfig copyWith({
     String? id,
@@ -22,6 +24,7 @@ class WebDavConfig {
     String? username,
     String? password,
     String? path,
+    int? fileCount,
   }) {
     return WebDavConfig(
       id: id ?? this.id,
@@ -30,6 +33,7 @@ class WebDavConfig {
       username: username ?? this.username,
       password: password ?? this.password,
       path: path ?? this.path,
+      fileCount: fileCount ?? this.fileCount,
     );
   }
 
@@ -41,6 +45,7 @@ class WebDavConfig {
       'username': username,
       'password': password,
       'path': path,
+      'fileCount': fileCount,
     };
   }
 
@@ -52,6 +57,7 @@ class WebDavConfig {
       username: (json['username'] as String?) ?? '',
       password: json['password'] as String?,
       path: json['path'] as String?,
+      fileCount: json['fileCount'] as int?,
     );
   }
 }
