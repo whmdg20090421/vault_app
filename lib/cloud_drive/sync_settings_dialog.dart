@@ -506,15 +506,21 @@ class _CloudDrivePickerPageState extends State<_CloudDrivePickerPage> {
   }
 
   Future<void> _loadConfigs() async {
-    final prefs = await SharedPreferences.getInstance();
-    final configsJson = prefs.getStringList('webdav_configs') ?? [];
-    final loaded = configsJson.map((str) => WebDavConfig.fromJson(jsonDecode(str))).toList();
-    
-    if (mounted) {
+    setState(() => _isLoading = true);
+    try {
+      final repo = WebDavConfigRepository();
+      final loaded = await repo.listConfigs();
+      if (!mounted) return;
       setState(() {
         _configs = loaded;
         _isLoading = false;
       });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('读取云盘配置失败: $e')),
+      );
     }
   }
 
@@ -578,19 +584,40 @@ class _CloudDrivePickerPageState extends State<_CloudDrivePickerPage> {
                 ],
               ),
             )
-          : ListView.builder(
-              itemCount: _configs.length,
-              itemBuilder: (context, index) {
-                final config = _configs[index];
-                return ListTile(
-                  leading: const Icon(Icons.cloud),
-                  title: Text(config.name),
-                  subtitle: Text(config.url),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => _onConfigSelected(config),
-                );
-              },
-            ),
+          : _configs.isEmpty
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24.0),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.cloud_off, size: 64),
+                        const SizedBox(height: 16),
+                        const Text('暂无云盘配置', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 8),
+                        const Text('请先在“云盘”页面添加 WebDAV 配置后再来选择同步文件夹。'),
+                        const SizedBox(height: 24),
+                        FilledButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          child: const Text('返回'),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              : ListView.builder(
+                  itemCount: _configs.length,
+                  itemBuilder: (context, index) {
+                    final config = _configs[index];
+                    return ListTile(
+                      leading: const Icon(Icons.cloud),
+                      title: Text(config.name),
+                      subtitle: Text(config.url),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () => _onConfigSelected(config),
+                    );
+                  },
+                ),
     );
   }
 }
