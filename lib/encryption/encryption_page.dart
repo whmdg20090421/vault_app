@@ -746,7 +746,7 @@ class _EncryptionPageState extends State<EncryptionPage> {
       builder: (dialogContext) {
         return PopScope(
           canPop: false,
-          onPopInvoked: (didPop) async {
+          onPopInvokedWithResult: (didPop, result) async {
             if (didPop) return;
             final shouldPop = await _showHideWarning(dialogContext);
             if (shouldPop && dialogContext.mounted) {
