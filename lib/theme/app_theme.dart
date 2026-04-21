@@ -112,11 +112,15 @@ ThemeData buildTheme(AppTheme theme, bool bgEnabled, double uiOpacity) {
       splashFactory: InkSparkle.splashFactory, // High-tech sparkle effect
       pageTransitionsTheme: const PageTransitionsTheme(
         builders: {
-          TargetPlatform.android: OpenUpwardsPageTransitionsBuilder(),
-          TargetPlatform.iOS: OpenUpwardsPageTransitionsBuilder(),
-          TargetPlatform.linux: OpenUpwardsPageTransitionsBuilder(),
-          TargetPlatform.macOS: OpenUpwardsPageTransitionsBuilder(),
-          TargetPlatform.windows: OpenUpwardsPageTransitionsBuilder(),
+          TargetPlatform.android: ZoomPageTransitionsBuilder(
+            allowEnterRouteSnapshotting: false,
+          ),
+          TargetPlatform.iOS: ZoomPageTransitionsBuilder(
+            allowEnterRouteSnapshotting: false,
+          ),
+          TargetPlatform.linux: ZoomPageTransitionsBuilder(),
+          TargetPlatform.macOS: ZoomPageTransitionsBuilder(),
+          TargetPlatform.windows: ZoomPageTransitionsBuilder(),
         },
       ),
       cardTheme: CardThemeData(
@@ -194,11 +198,15 @@ ThemeData buildTheme(AppTheme theme, bool bgEnabled, double uiOpacity) {
     splashFactory: InkRipple.splashFactory, // Classic smooth ripple
     pageTransitionsTheme: const PageTransitionsTheme(
       builders: {
-        TargetPlatform.android: CupertinoPageTransitionsBuilder(),
-        TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
-        TargetPlatform.linux: FadeUpwardsPageTransitionsBuilder(),
-        TargetPlatform.macOS: CupertinoPageTransitionsBuilder(),
-        TargetPlatform.windows: FadeUpwardsPageTransitionsBuilder(),
+        TargetPlatform.android: ZoomPageTransitionsBuilder(
+          allowEnterRouteSnapshotting: false,
+        ),
+        TargetPlatform.iOS: ZoomPageTransitionsBuilder(
+          allowEnterRouteSnapshotting: false,
+        ),
+        TargetPlatform.linux: ZoomPageTransitionsBuilder(),
+        TargetPlatform.macOS: ZoomPageTransitionsBuilder(),
+        TargetPlatform.windows: ZoomPageTransitionsBuilder(),
       },
     ),
     appBarTheme: AppBarTheme(

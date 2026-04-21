@@ -55,6 +55,24 @@ class _EncryptionProgressPanelState extends State<EncryptionProgressPanel> with 
     });
   }
 
+  bool _hasErrorTasks(List<EncryptionNode> nodes) {
+    for (var node in nodes) {
+      if (node.status == NodeStatus.error) return true;
+      if (node is FolderNode && _hasErrorTasks(node.children)) return true;
+    }
+    return false;
+  }
+
+  void _retryAllErrors(List<EncryptionNode> nodes) {
+    for (var node in nodes) {
+      if (node.status == NodeStatus.error) {
+        EncryptionTaskManager().markTaskAsFixed(node);
+      } else if (node is FolderNode) {
+        _retryAllErrors(node.children);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
@@ -102,6 +120,18 @@ class _EncryptionProgressPanelState extends State<EncryptionProgressPanel> with 
                             ),
                           ),
                         ),
+                        if (_hasErrorTasks(tasks))
+                          TextButton.icon(
+                            icon: const Icon(Icons.refresh, size: 18),
+                            label: const Text('重试报错'),
+                            style: TextButton.styleFrom(
+                              foregroundColor: Colors.red,
+                              padding: const EdgeInsets.symmetric(horizontal: 8),
+                            ),
+                            onPressed: () {
+                              _retryAllErrors(tasks);
+                            },
+                          ),
                         IconButton(
                           icon: const Icon(Icons.close),
                           onPressed: () => Navigator.of(context).pop(),
@@ -356,6 +386,14 @@ class _EncryptionTaskCard extends StatelessWidget {
                     ],
                   ),
                 ),
+                if (isError)
+                  IconButton(
+                    icon: const Icon(Icons.refresh, color: Colors.red),
+                    tooltip: '重试此任务',
+                    onPressed: () {
+                      EncryptionTaskManager().markTaskAsFixed(task);
+                    },
+                  ),
                 if (task is FolderNode)
                   Icon(
                     Icons.chevron_right,
