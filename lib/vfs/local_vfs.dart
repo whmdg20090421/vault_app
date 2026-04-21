@@ -11,7 +11,9 @@ class LocalVfs implements VirtualFileSystem {
     if (path.startsWith('/')) {
       path = path.substring(1);
     }
-    return p.join(rootPath, path);
+    String realPath = p.join(rootPath, path);
+    // Fix: Remove redundant slashes to prevent OS Error (No such file or directory)
+    return realPath.replaceAll(RegExp(r'/+'), '/');
   }
 
   VfsNode _mapEntity(FileSystemEntity entity) {
