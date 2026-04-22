@@ -420,16 +420,48 @@ class _EncryptionTaskCard extends StatelessWidget {
                     ),
                     const SizedBox(width: 8),
                     Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            task.name,
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          if (isError && task.errorMessage != null)
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    task.name,
+                                    style: const TextStyle(fontWeight: FontWeight.bold),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                if (task is FileNode && task.status == NodeStatus.encrypting)
+                                  Container(
+                                    margin: const EdgeInsets.only(left: 8),
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: task.encryptionMode == EncryptionMode.hardware
+                                          ? Colors.blue.withOpacity(0.2)
+                                          : Colors.orange.withOpacity(0.2),
+                                      borderRadius: BorderRadius.circular(4),
+                                      border: Border.all(
+                                        color: task.encryptionMode == EncryptionMode.hardware
+                                            ? Colors.blue
+                                            : Colors.orange,
+                                      ),
+                                    ),
+                                    child: Text(
+                                      task.encryptionMode == EncryptionMode.hardware ? '硬件加速' : '普通加密',
+                                      style: TextStyle(
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.bold,
+                                        color: task.encryptionMode == EncryptionMode.hardware
+                                            ? Colors.blue
+                                            : Colors.orange,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                            if (isError && task.errorMessage != null)
                             GestureDetector(
                               onTap: () {
                                 showDialog(

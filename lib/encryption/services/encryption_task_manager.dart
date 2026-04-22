@@ -727,11 +727,33 @@ class EncryptionTaskManager extends ChangeNotifier {
     return false;
   }
 
+  List<EncryptionNode> _getAllNodes(EncryptionNode root) {
+    List<EncryptionNode> nodes = [root];
+    if (root is FolderNode) {
+      for (final child in root.children) {
+        nodes.addAll(_getAllNodes(child));
+      }
+    }
+    return nodes;
+  }
+
   void pumpQueue() async {
     await _loadSettings();
+    
+    // We want to prioritize hardware encryption if possible.
+    // However, if hardware is busy, we fallback to software to maximize CPU usage.
+    
     while (_activeWorkers < _maxWorkers) {
       final node = _findNextPendingNode(_tasks);
       if (node == null) break;
+
+      // 决定分配模式：前一半 worker 优先分配硬件加速。
+      // 如果超过一半的核心在使用中，剩余核心通过普通（纯Dart CPU）进行加密以压榨全部算力。
+      int currentHardwareWorkers = _tasks.expand((root) => _getAllNodes(root)).where((n) => n.status == NodeStatus.encrypting && n.encryptionMode == EncryptionMode.hardware).length;
+      int maxHardwareWorkers = (_maxWorkers / 2).ceil();
+      bool useHardware = currentHardwareWorkers < maxHardwareWorkers;
+      
+      node.encryptionMode = useHardware ? EncryptionMode.hardware : EncryptionMode.software;
 
       // 立即标记为 encrypting 避免被其他 pumpQueue 调用重复获取
       node.status = NodeStatus.encrypting;
@@ -774,7 +796,8 @@ class EncryptionTaskManager extends ChangeNotifier {
       
       final args = {
         'sendPort': _globalReceivePort.sendPort,
-        'rootToken': RootIsolateToken.instance,
+        'rootToken': useHardware ? RootIsolateToken.instance : null,
+        'useHardware': useHardware,
         'taskId': root.taskId,
         'nodeId': node.absolutePath, // unique enough for file inside the same tree
         'absolutePath': node.absolutePath,
@@ -820,8 +843,9 @@ Future<void> _encryptionWorker(Map<String, dynamic> args) async {
   final nodeId = args['nodeId'] as String;
   
   try {
+    final useHardware = args['useHardware'] as bool? ?? false;
     final rootToken = args['rootToken'] as RootIsolateToken?;
-    if (rootToken != null) {
+    if (useHardware && rootToken != null) {
       BackgroundIsolateBinaryMessenger.ensureInitialized(rootToken);
       FlutterCryptography.defaultInstance.setUp();
     }
