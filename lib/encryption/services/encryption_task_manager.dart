@@ -32,6 +32,13 @@ class EncryptionTaskManager extends ChangeNotifier {
   
   final Set<String> _archivingTasks = {};
 
+  // For speed calculation (Task 1)
+  final List<MapEntry<DateTime, int>> _speedCache = [];
+  double _currentSpeedBytesPerSecond = 0.0;
+  Timer? _speedTimer;
+  
+  double get currentSpeedBytesPerSecond => _currentSpeedBytesPerSecond;
+
   List<EncryptionNode> get tasks => List.unmodifiable(_tasks);
   List<EncryptionNode> get historyTasks => List.unmodifiable(_historyTasks);
 
@@ -40,6 +47,13 @@ class EncryptionTaskManager extends ChangeNotifier {
     _loadHistory();
     _globalReceivePort.listen(_handleMessage);
     _loadSettings();
+    _speedTimer = Timer.periodic(const Duration(seconds: 1), (_) => _cleanSpeedCache());
+  }
+
+  @override
+  void dispose() {
+    _speedTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> _loadSettings() async {
@@ -474,12 +488,42 @@ class EncryptionTaskManager extends ChangeNotifier {
         _saveQueue();
         notifyListeners();
         pumpQueue();
-      } else if (type == 'progress') {
+      if (type == 'progress') {
         if (node is FileNode) {
+          int addedBytes = (message['processedBytes'] as int) - (node.encryptingCompletedBytes ?? 0);
+          if (addedBytes < 0) addedBytes = message['processedBytes'] as int;
           node.encryptingCompletedBytes = message['processedBytes'] as int;
+          _updateSpeed(addedBytes);
           notifyListeners();
         }
       }
+    }
+  }
+
+  void _updateSpeed(int newBytes) {
+    final now = DateTime.now();
+    _speedCache.add(MapEntry(now, newBytes));
+    _speedCache.removeWhere((entry) => now.difference(entry.key).inSeconds >= 5);
+    
+    if (_speedCache.isEmpty) {
+      _currentSpeedBytesPerSecond = 0.0;
+    } else {
+      int totalBytes = _speedCache.fold(0, (sum, item) => sum + item.value);
+      _currentSpeedBytesPerSecond = totalBytes / 5.0; // average over 5 seconds
+    }
+  }
+
+  void _cleanSpeedCache() {
+    final now = DateTime.now();
+    final previousLength = _speedCache.length;
+    _speedCache.removeWhere((entry) => now.difference(entry.key).inSeconds >= 5);
+    if (_speedCache.isEmpty && previousLength > 0) {
+      _currentSpeedBytesPerSecond = 0.0;
+      notifyListeners();
+    } else if (_speedCache.isNotEmpty) {
+      int totalBytes = _speedCache.fold(0, (sum, item) => sum + item.value);
+      _currentSpeedBytesPerSecond = totalBytes / 5.0;
+      notifyListeners();
     }
   }
 

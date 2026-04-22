@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 import 'changelog_page.dart';
+import 'utils/developer_mode.dart';
 
 class AboutPage extends StatefulWidget {
   const AboutPage({super.key});
@@ -13,11 +15,18 @@ class AboutPage extends StatefulWidget {
 class _AboutPageState extends State<AboutPage> {
   String _version = '加载中...';
   String _packageName = '加载中...';
+  Timer? _developerTimer;
 
   @override
   void initState() {
     super.initState();
     _loadPackageInfo();
+  }
+
+  @override
+  void dispose() {
+    _developerTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> _loadPackageInfo() async {
@@ -39,6 +48,54 @@ class _AboutPageState extends State<AboutPage> {
     }
   }
 
+  void _onLogoTapDown(TapDownDetails details) {
+    _developerTimer?.cancel();
+    _developerTimer = Timer(const Duration(seconds: 5), () {
+      _showDeveloperWarning();
+    });
+  }
+
+  void _onLogoTapUp(TapUpDetails details) {
+    _developerTimer?.cancel();
+  }
+
+  void _onLogoTapCancel() {
+    _developerTimer?.cancel();
+  }
+
+  void _showDeveloperWarning() {
+    if (DeveloperMode().isEnabled) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('已处于开发者模式')),
+      );
+      return;
+    }
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('进入开发者模式？', style: TextStyle(color: Colors.red)),
+        content: const Text('警告：开发者模式可能会损坏你的加密文件，并显示底层的调试信息。你确定要进入吗？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('取消'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+            onPressed: () {
+              DeveloperMode().enable();
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('已启用开发者模式')),
+              );
+            },
+            child: const Text('确定'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -49,7 +106,12 @@ class _AboutPageState extends State<AboutPage> {
         padding: const EdgeInsets.all(16.0),
         children: [
           const SizedBox(height: 40),
-          const FlutterLogo(size: 100),
+          GestureDetector(
+            onTapDown: _onLogoTapDown,
+            onTapUp: _onLogoTapUp,
+            onTapCancel: _onLogoTapCancel,
+            child: const FlutterLogo(size: 100),
+          ),
           const SizedBox(height: 20),
           Text(
             '天眼·艨艟战舰',

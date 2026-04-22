@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../services/encryption_task_manager.dart';
 import '../models/encryption_node.dart';
 import '../../utils/format_utils.dart';
+import '../../utils/developer_mode.dart';
 
 void showEncryptionProgressPanel(BuildContext context) {
   final theme = Theme.of(context);
@@ -341,151 +342,227 @@ class _EncryptionTaskCard extends StatelessWidget {
     final bool isError = task.status == NodeStatus.error;
     final bool isCompleted = task.status == NodeStatus.completed;
 
-    return GestureDetector(
-      onLongPress: () => _showActionMenu(context),
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.elasticOut,
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: isCyberpunk ? Colors.transparent : theme.colorScheme.surface,
-          borderRadius: isCyberpunk ? BorderRadius.zero : BorderRadius.circular(16),
-          border: isCyberpunk
-              ? Border.all(color: theme.colorScheme.primary.withOpacity(0.3))
-              : Border.all(color: Colors.transparent),
-          boxShadow: isCyberpunk
-              ? null
-              : [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  )
-                ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Line 1: Pause button + Name
-            Row(
+    final double speed = EncryptionTaskManager().currentSpeedBytesPerSecond;
+    final String speedStr = speed > 0 ? ' (${FormatUtils.formatBytes(speed.toInt())}/s)' : '';
+    
+    int remainingSize = totalSize - completedSize - encryptingCompletedSize;
+    if (remainingSize < 0) remainingSize = 0;
+    
+    String timeRemainingStr = '';
+    if (speed > 0 && !isCompleted && !isPaused && !isError) {
+      int secondsRemaining = (remainingSize / speed).ceil();
+      if (secondsRemaining > 0) {
+        int minutes = secondsRemaining ~/ 60;
+        int seconds = secondsRemaining % 60;
+        timeRemainingStr = ' (${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')})';
+      }
+    }
+
+    return ListenableBuilder(
+      listenable: DeveloperMode(),
+      builder: (context, _) {
+        return GestureDetector(
+          onLongPress: () => _showActionMenu(context),
+          onTap: onTap,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 500),
+            curve: Curves.elasticOut,
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: isCyberpunk ? Colors.transparent : theme.colorScheme.surface,
+              borderRadius: isCyberpunk ? BorderRadius.zero : BorderRadius.circular(16),
+              border: isCyberpunk
+                  ? Border.all(color: theme.colorScheme.primary.withOpacity(0.3))
+                  : Border.all(color: Colors.transparent),
+              boxShadow: isCyberpunk
+                  ? null
+                  : [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.05),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      )
+                    ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                IconButton(
-                  icon: Icon(
-                    isCompleted
-                        ? Icons.check_circle_outline
-                        : (isPaused || isError)
-                            ? Icons.play_arrow_rounded
-                            : Icons.pause_rounded,
-                    color: isCompleted
-                        ? Colors.green
-                        : isError
-                            ? Colors.red
-                            : theme.colorScheme.primary,
-                  ),
-                  onPressed: isCompleted
-                      ? null
-                      : () {
-                          if (isError) {
-                            EncryptionTaskManager().markTaskAsFixed(task); // Retry on error
-                          } else if (isPaused) {
-                            EncryptionTaskManager().resumeTask(task);
-                          } else {
-                            EncryptionTaskManager().pauseTask(task);
-                          }
-                        },
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        task.name,
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                // Line 1: Pause button + Name
+                Row(
+                  children: [
+                    IconButton(
+                      icon: Icon(
+                        isCompleted
+                            ? Icons.check_circle_outline
+                            : (isPaused || isError)
+                                ? Icons.play_arrow_rounded
+                                : Icons.pause_rounded,
+                        color: isCompleted
+                            ? Colors.green
+                            : isError
+                                ? Colors.red
+                                : theme.colorScheme.primary,
                       ),
-                      if (isError && task.errorMessage != null)
-                        GestureDetector(
-                          onTap: () {
-                            showDialog(
-                              context: context,
-                              builder: (context) => AlertDialog(
-                                title: const Text('解析失败', style: TextStyle(color: Colors.red)),
-                                content: SingleChildScrollView(
-                                  child: Text(task.errorMessage!, style: const TextStyle(fontSize: 12)),
-                                ),
-                                actions: [
-                                  TextButton(
-                                    onPressed: () => Navigator.pop(context),
-                                    child: const Text('关闭'),
-                                  ),
-                                ],
-                              ),
-                            );
-                          },
-                          child: Text(
-                            task.errorMessage!,
-                            style: const TextStyle(color: Colors.red, fontSize: 12),
-                            maxLines: 2,
+                      onPressed: isCompleted
+                          ? null
+                          : () {
+                              if (isError) {
+                                EncryptionTaskManager().markTaskAsFixed(task); // Retry on error
+                              } else if (isPaused) {
+                                EncryptionTaskManager().resumeTask(task);
+                              } else {
+                                EncryptionTaskManager().pauseTask(task);
+                              }
+                            },
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            task.name,
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                            maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
-                        ),
-                    ],
-                  ),
-                ),
-                if (task is FolderNode)
-                  Icon(
-                    Icons.chevron_right,
-                    color: theme.colorScheme.onSurface.withOpacity(0.5),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            // Line 2: Very thin 4-color progress bar (1% rule)
-            SizedBox(
-              height: 4,
-              width: double.infinity,
-              child: CustomPaint(
-                painter: _EncryptionProgressLinePainter(
-                              completedSize: completedSize,
-                              encryptingCompletedSize: encryptingCompletedSize,
-                              encryptingRemainingSize: encryptingRemainingSize,
-                              pendingSize: pendingSize,
-                              pausedErrorSize: pausedErrorSize,
-                              totalSize: totalSize,
+                          if (isError && task.errorMessage != null)
+                            GestureDetector(
+                              onTap: () {
+                                showDialog(
+                                  context: context,
+                                  builder: (context) => AlertDialog(
+                                    title: const Text('解析失败', style: TextStyle(color: Colors.red)),
+                                    content: SingleChildScrollView(
+                                      child: Text(task.errorMessage!, style: const TextStyle(fontSize: 12)),
+                                    ),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () => Navigator.pop(context),
+                                        child: const Text('关闭'),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                              child: Text(
+                                task.errorMessage!,
+                                style: const TextStyle(color: Colors.red, fontSize: 12),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            // Line 3: Percentage + Statistics
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  '${(progress * 100).toStringAsFixed(1)}%',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: theme.colorScheme.onSurface.withOpacity(0.7),
+                        ],
+                      ),
+                    ),
+                    if (task is FolderNode)
+                      Icon(
+                        Icons.chevron_right,
+                        color: theme.colorScheme.onSurface.withOpacity(0.5),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                // Line 2: Very thin 4-color progress bar (1% rule)
+                SizedBox(
+                  height: 4,
+                  width: double.infinity,
+                  child: CustomPaint(
+                    painter: _EncryptionProgressLinePainter(
+                                  completedSize: completedSize,
+                                  encryptingCompletedSize: encryptingCompletedSize,
+                                  encryptingRemainingSize: encryptingRemainingSize,
+                                  pendingSize: pendingSize,
+                                  pausedErrorSize: pausedErrorSize,
+                                  totalSize: totalSize,
+                                ),
                   ),
                 ),
-                Text(
-                  '${FormatUtils.formatBytes(completedSize + encryptingCompletedSize)} / ${FormatUtils.formatBytes(totalSize)}',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: theme.colorScheme.onSurface.withOpacity(0.5),
-                  ),
+                const SizedBox(height: 8),
+                // Line 3: Percentage + Statistics
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    RichText(
+                      text: TextSpan(
+                        text: '${(progress * 100).toStringAsFixed(1)}%',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: theme.colorScheme.onSurface.withOpacity(0.7),
+                        ),
+                        children: [
+                          if (speedStr.isNotEmpty && !isCompleted && !isPaused && !isError)
+                            TextSpan(
+                              text: speedStr,
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.normal,
+                                color: theme.colorScheme.onSurface.withOpacity(0.5),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    RichText(
+                      text: TextSpan(
+                        text: '${FormatUtils.formatBytes(completedSize + encryptingCompletedSize)} / ${FormatUtils.formatBytes(totalSize)}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          letterSpacing: -0.5,
+                          color: theme.colorScheme.onSurface.withOpacity(0.5),
+                        ),
+                        children: [
+                          if (timeRemainingStr.isNotEmpty)
+                            TextSpan(
+                              text: timeRemainingStr,
+                              style: TextStyle(
+                                fontSize: 11,
+                                letterSpacing: 0,
+                                color: theme.colorScheme.onSurface.withOpacity(0.5),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
+                // Developer Mode Panel
+                if (DeveloperMode().isEnabled) ...[
+                  const SizedBox(height: 12),
+                  AnimatedSize(
+                    duration: const Duration(milliseconds: 400),
+                    curve: Curves.elasticOut,
+                    child: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: theme.colorScheme.error.withOpacity(0.5)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('🛠️ Debug 信息 (开发者模式)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: theme.colorScheme.error)),
+                          const SizedBox(height: 4),
+                          Text('• 加密算法: ChaCha20-Poly1305 / AES-GCM (自动适配)', style: TextStyle(fontSize: 10, color: theme.colorScheme.onSurface.withOpacity(0.7))),
+                          Text('• 底层调用: cryptography 包', style: TextStyle(fontSize: 10, color: theme.colorScheme.onSurface.withOpacity(0.7))),
+                          Text('• 状态: ' + (isCompleted ? 'Finished' : isError ? 'Error' : isPaused ? 'Paused' : 'Active'), style: TextStyle(fontSize: 10, color: theme.colorScheme.onSurface.withOpacity(0.7))),
+                          Text('• 当前负载: Isolate Worker Thread (Port communication)', style: TextStyle(fontSize: 10, color: theme.colorScheme.onSurface.withOpacity(0.7))),
+                          Text('• Task ID: ${task.taskId ?? "N/A"}', style: TextStyle(fontSize: 10, color: theme.colorScheme.onSurface.withOpacity(0.7))),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ],
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }
