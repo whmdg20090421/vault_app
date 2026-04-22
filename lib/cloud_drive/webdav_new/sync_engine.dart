@@ -115,7 +115,11 @@ class SyncEngine {
       }
 
       for (var addedPath in localAdded.toList()) {
-        final hash = await _calculateFileHash(currentLocalFiles[addedPath]!);
+        final file = currentLocalFiles[addedPath]!;
+        final stat = await file.stat();
+        if (stat.size > 20 * 1024 * 1024) continue; // Skip hash for files > 20MB to prevent UI hang
+        
+        final hash = await _calculateFileHash(file);
         if (hashToPaths.containsKey(hash)) {
           final possibleOldPaths = hashToPaths[hash]!;
           String? chosenOldPath;
@@ -161,16 +165,21 @@ class SyncEngine {
       }
     }
 
+    // 更新任务对象状态为同步中，避免用户以为卡在准备阶段
+    if (task != null) {
+      task.status = SyncStatus.syncing;
+      task.startedAt = DateTime.now();
+      CloudDriveProgressManager.instance.updateTask(task);
+    }
+
     // 4. PROPFIND 获取云端状态并进行精准差异比对
     final syncTasks = <_SyncJob>[];
     await _syncRecursiveDir(remoteDir, localDirPath, localAdded, localDeleted, localModified, currentLocalFiles, syncTasks);
 
-    // 更新任务对象
+    // 更新任务包含的具体子任务
     if (task != null) {
       task.items.clear();
       task.items.addAll(syncTasks.map((j) => j.item));
-      task.status = SyncStatus.syncing;
-      task.startedAt = DateTime.now();
       CloudDriveProgressManager.instance.updateTask(task);
     }
 
@@ -226,6 +235,8 @@ class SyncEngine {
     final localEntities = await localDirectory.list().toList();
     final localFileMap = {for (var e in localEntities) p.basename(e.path): e};
 
+    final List<Future<void>> subDirFutures = [];
+
     for (final remoteFile in remoteFiles) {
       if (remoteFile.name.isEmpty) continue;
 
@@ -234,7 +245,7 @@ class SyncEngine {
       if (!relativePath.startsWith('/')) relativePath = '/' + relativePath;
 
       if (remoteFile.isDirectory) {
-        await _syncRecursiveDir(remoteFile.path, localEntityPath, localAdded, localDeleted, localModified, currentLocalFiles, syncTasks);
+        subDirFutures.add(_syncRecursiveDir(remoteFile.path, localEntityPath, localAdded, localDeleted, localModified, currentLocalFiles, syncTasks));
       } else {
         if (localFileMap.containsKey(remoteFile.name)) {
           // Both exist
@@ -248,7 +259,6 @@ class SyncEngine {
             if (localStat.size != remoteFile.size) {
               isDifferent = true;
             } else if (remoteMod != null && localMod.toIso8601String() != remoteMod.toIso8601String()) {
-              final hash = await _calculateFileHash(localEntity);
               // In a real scenario we might not have remote hash, so we assume different if time differs
               isDifferent = true; 
             }
@@ -303,6 +313,9 @@ class SyncEngine {
       }
     }
 
+    await Future.wait(subDirFutures);
+    subDirFutures.clear();
+
     // Process remaining local files (Local Added)
     if (direction == SyncDirection.localToCloud || direction == SyncDirection.twoWay) {
       for (final localEntity in localEntities) {
@@ -330,10 +343,11 @@ class SyncEngine {
             } catch (e) {
               // Ignore if exists
             }
-            await _syncRecursiveDir(remotePath, localEntity.path, localAdded, localDeleted, localModified, currentLocalFiles, syncTasks);
+            subDirFutures.add(_syncRecursiveDir(remotePath, localEntity.path, localAdded, localDeleted, localModified, currentLocalFiles, syncTasks));
           }
         }
       }
+      await Future.wait(subDirFutures);
     }
   }
 
