@@ -16,10 +16,12 @@ class EncryptedVfs implements VirtualFileSystem {
   static const String _algorithm = 'AES-256-GCM';
 
   // Chunking constants for file content encryption
-  static const int _chunkSize = 65536; // 64KB plaintext chunk
+  static const int _defaultChunkSize = 65536; // 64KB plaintext chunk
   static const int _chunkMacLength = 16;
-  static const int _chunkCipherSize = _chunkSize + _chunkMacLength; // 65552
   static const int _fileIdLength = 16;
+  static final Uint8List _magicHeader = Uint8List.fromList([0x56, 0x41, 0x55, 0x4C, 0x54, 0x01]); // VAULT\x01
+  static const int _magicHeaderLength = 6;
+  static const int _v2HeaderLength = _magicHeaderLength + 4 + _fileIdLength; // 26 bytes
 
   final VirtualFileSystem baseVfs;
   final Uint8List masterKey;
@@ -32,6 +34,11 @@ class EncryptedVfs implements VirtualFileSystem {
 
   // 缓存处于加密域中的虚拟路径
   final Set<String> _encryptedDomains = {};
+  
+  // Manifest cache for storing chunk sizes and plaintext sizes
+  Map<String, dynamic> _manifestEntries = {};
+  bool _manifestLoaded = false;
+  static const String _manifestPath = '/.vault_manifest';
 
   EncryptedVfs({
     required this.baseVfs,
@@ -76,6 +83,42 @@ class EncryptedVfs implements VirtualFileSystem {
       current = _getParentPath(current);
     }
     return false;
+  }
+
+  Future<void> _loadManifest() async {
+    if (_manifestLoaded) return;
+    _manifestLoaded = true;
+    try {
+      final realManifestPath = getRealPath(_manifestPath);
+      final stream = await baseVfs.open(realManifestPath);
+      final chunks = <int>[];
+      await for (final chunk in stream) {
+        chunks.addAll(chunk);
+      }
+      if (chunks.isNotEmpty) {
+        final jsonMap = jsonDecode(utf8.decode(chunks)) as Map<String, dynamic>;
+        final entriesRaw = jsonMap['entries'];
+        if (entriesRaw is Map) {
+          _manifestEntries = Map<String, dynamic>.from(entriesRaw);
+        }
+      }
+    } catch (_) {
+      // Ignored if manifest doesn't exist
+    }
+  }
+
+  Future<void> _saveManifest() async {
+    try {
+      final jsonMap = {
+        'version': 1,
+        'entries': _manifestEntries,
+      };
+      final bytes = utf8.encode(jsonEncode(jsonMap));
+      final realManifestPath = getRealPath(_manifestPath);
+      await baseVfs.uploadStream(Stream.value(bytes), bytes.length, realManifestPath);
+    } catch (e) {
+      print('Failed to save manifest: $e');
+    }
   }
 
   /// 将虚拟（解密后）的路径转换为真实（加密的）路径
@@ -161,12 +204,17 @@ class EncryptedVfs implements VirtualFileSystem {
     }
   }
 
-  int _getPlaintextSize(int ciphertextSize) {
+  int _getPlaintextSize(int ciphertextSize, String virtualPath) {
+    if (_manifestEntries.containsKey(virtualPath)) {
+      return _manifestEntries[virtualPath]['plaintextSize'] ?? 0;
+    }
+    // Fallback for old files
     if (ciphertextSize <= _fileIdLength) return 0;
     int dataSize = ciphertextSize - _fileIdLength;
-    int fullChunks = dataSize ~/ _chunkCipherSize;
-    int remainder = dataSize % _chunkCipherSize;
-    int size = fullChunks * _chunkSize;
+    int chunkCipherSize = _defaultChunkSize + _chunkMacLength;
+    int fullChunks = dataSize ~/ chunkCipherSize;
+    int remainder = dataSize % chunkCipherSize;
+    int size = fullChunks * _defaultChunkSize;
     if (remainder > 0) {
       if (remainder <= _chunkMacLength) {
         return size;
@@ -176,19 +224,31 @@ class EncryptedVfs implements VirtualFileSystem {
     return size;
   }
 
-  int _getCiphertextSize(int plaintextSize) {
-    if (plaintextSize == 0) return _fileIdLength;
-    int fullChunks = plaintextSize ~/ _chunkSize;
-    int remainder = plaintextSize % _chunkSize;
-    int size = _fileIdLength + fullChunks * _chunkCipherSize;
+  int _getCiphertextSize(int plaintextSize, int chunkSize) {
+    if (plaintextSize == 0) return _v2HeaderLength;
+    int fullChunks = plaintextSize ~/ chunkSize;
+    int remainder = plaintextSize % chunkSize;
+    int chunkCipherSize = chunkSize + _chunkMacLength;
+    int size = _v2HeaderLength + fullChunks * chunkCipherSize;
     if (remainder > 0) {
       size += remainder + _chunkMacLength;
     }
     return size;
   }
 
+  int _determineChunkSize(int fileSize) {
+    if (fileSize < 1024 * 1024) {
+      return 262144; // 256KB for small files
+    } else if (fileSize <= 10 * 1024 * 1024) {
+      return 1048576; // 1MB for medium files
+    } else {
+      return 4194304; // 4MB for large files
+    }
+  }
+
   @override
   Future<List<VfsNode>> list(String path) async {
+    await _loadManifest();
     String virtualPath = _normalizePath(path);
     String realPath = getRealPath(virtualPath);
     
@@ -233,7 +293,7 @@ class EncryptedVfs implements VirtualFileSystem {
 
       int finalSize = realNode.size;
       if (isEncrypted && !realNode.isDirectory) {
-        finalSize = _getPlaintextSize(realNode.size);
+        finalSize = _getPlaintextSize(realNode.size, childVirtualPath);
       }
 
       virtualNodes.add(VfsNode(
@@ -250,6 +310,7 @@ class EncryptedVfs implements VirtualFileSystem {
 
   @override
   Future<Stream<List<int>>> open(String path, {int? start, int? end}) async {
+    await _loadManifest();
     String virtualPath = _normalizePath(path);
     String realPath = getRealPath(virtualPath);
 
@@ -258,17 +319,34 @@ class EncryptedVfs implements VirtualFileSystem {
       return baseVfs.open(realPath, start: start, end: end);
     }
 
+    int chunkSize = _defaultChunkSize;
+    if (_manifestEntries.containsKey(virtualPath)) {
+      chunkSize = _manifestEntries[virtualPath]['chunkSize'] ?? _defaultChunkSize;
+    }
+    
+    // Check if it has a magic header (V2) or old format (V1)
+    bool isNewFormat = false;
+    if (_manifestEntries.containsKey(virtualPath) && _manifestEntries[virtualPath]['chunkSize'] != null) {
+      isNewFormat = true;
+    } else {
+      // If we don't have manifest, we can't reliably seek randomly without reading the header first.
+      // But we always load manifest now. If it's not in manifest, we assume it's V1.
+    }
+
+    int headerLength = isNewFormat ? _v2HeaderLength : _fileIdLength;
+    int chunkCipherSize = chunkSize + _chunkMacLength;
+
     int cipherStart = 0;
     int? cipherEnd;
     int startChunkIndex = 0;
 
     if (start != null) {
-      startChunkIndex = start ~/ _chunkSize;
-      cipherStart = _fileIdLength + startChunkIndex * _chunkCipherSize;
+      startChunkIndex = start ~/ chunkSize;
+      cipherStart = headerLength + startChunkIndex * chunkCipherSize;
     }
     if (end != null) {
-      int endChunkIndex = end ~/ _chunkSize;
-      cipherEnd = _fileIdLength + (endChunkIndex + 1) * _chunkCipherSize - 1;
+      int endChunkIndex = end ~/ chunkSize;
+      cipherEnd = headerLength + (endChunkIndex + 1) * chunkCipherSize - 1;
     }
 
     final cipherStream = await baseVfs.open(realPath, start: cipherStart, end: cipherEnd);
@@ -277,20 +355,47 @@ class EncryptedVfs implements VirtualFileSystem {
     Stream<List<int>> dataStream;
 
     if (cipherStart == 0) {
-      final firstBytes = await _readFirstBytes(cipherStream, _fileIdLength);
-      fileId = firstBytes.keys.first;
+      final firstBytes = await _readFirstBytes(cipherStream, headerLength);
+      final headerData = firstBytes.keys.first;
       dataStream = firstBytes.values.first;
+      
+      if (isNewFormat && headerData.length == _v2HeaderLength) {
+        // Verify magic
+        final magic = headerData.sublist(0, 6);
+        bool magicMatch = true;
+        for (int i = 0; i < 6; i++) {
+          if (magic[i] != _magicHeader[i]) magicMatch = false;
+        }
+        if (magicMatch) {
+          final bd = ByteData.sublistView(headerData, 6, 10);
+          chunkSize = bd.getUint32(0, Endian.big);
+          fileId = headerData.sublist(10, 26);
+        } else {
+          // Fallback if marked as new format but magic mismatch (shouldn't happen)
+          fileId = headerData.sublist(0, 16);
+        }
+      } else {
+        fileId = headerData.sublist(0, 16);
+      }
     } else {
-      final idStream = await baseVfs.open(realPath, start: 0, end: _fileIdLength - 1);
+      final idStream = await baseVfs.open(realPath, start: 0, end: headerLength - 1);
       final idBytes = <int>[];
       await for (final chunk in idStream) {
         idBytes.addAll(chunk);
       }
-      fileId = Uint8List.fromList(idBytes);
+      final headerData = Uint8List.fromList(idBytes);
+      
+      if (isNewFormat && headerData.length == _v2HeaderLength) {
+        final bd = ByteData.sublistView(headerData, 6, 10);
+        chunkSize = bd.getUint32(0, Endian.big);
+        fileId = headerData.sublist(10, 26);
+      } else {
+        fileId = headerData.sublist(0, 16);
+      }
       dataStream = cipherStream;
     }
 
-    return _decryptStream(dataStream, fileId, startChunkIndex, start ?? 0, end);
+    return _decryptStream(dataStream, fileId, startChunkIndex, start ?? 0, end, chunkSize);
   }
 
   Future<Map<Uint8List, Stream<List<int>>>> _readFirstBytes(Stream<List<int>> stream, int length) async {
@@ -338,23 +443,24 @@ class EncryptedVfs implements VirtualFileSystem {
     return completer.future;
   }
 
-  Stream<List<int>> _decryptStream(Stream<List<int>> cipherStream, Uint8List fileId, int startChunkIndex, int plainStart, int? plainEnd) async* {
+  Stream<List<int>> _decryptStream(Stream<List<int>> cipherStream, Uint8List fileId, int startChunkIndex, int plainStart, int? plainEnd, int chunkSize) async* {
     int chunkIndex = startChunkIndex;
-    int currentOffset = startChunkIndex * _chunkSize;
+    int currentOffset = startChunkIndex * chunkSize;
     int bufferOffset = 0;
-    final buffer = Uint8List(_chunkCipherSize);
+    int chunkCipherSize = chunkSize + _chunkMacLength;
+    final buffer = Uint8List(chunkCipherSize);
 
     await for (final chunk in cipherStream) {
       int chunkOffset = 0;
       while (chunkOffset < chunk.length) {
-        int remainingSpace = _chunkCipherSize - bufferOffset;
+        int remainingSpace = chunkCipherSize - bufferOffset;
         int bytesToCopy = min(remainingSpace, chunk.length - chunkOffset);
-        buffer.setRange(bufferOffset, bufferOffset + bytesToCopy, chunk.sublist(chunkOffset, chunkOffset + bytesToCopy));
+        buffer.setRange(bufferOffset, bufferOffset + bytesToCopy, chunk, chunkOffset);
         bufferOffset += bytesToCopy;
         chunkOffset += bytesToCopy;
 
-        if (bufferOffset == _chunkCipherSize) {
-          final plainChunk = _chunkCrypto.decryptChunkSync(
+        if (bufferOffset == chunkCipherSize) {
+          final plainChunk = await _chunkCrypto.decryptChunk(
             chunkData: buffer,
             fileId: fileId,
             chunkIndex: chunkIndex++,
@@ -367,7 +473,7 @@ class EncryptedVfs implements VirtualFileSystem {
     }
 
     if (bufferOffset > 0) {
-      final plainChunk = _chunkCrypto.decryptChunkSync(
+      final plainChunk = await _chunkCrypto.decryptChunk(
         chunkData: Uint8List.sublistView(buffer, 0, bufferOffset),
         fileId: fileId,
         chunkIndex: chunkIndex++,
@@ -398,6 +504,7 @@ class EncryptedVfs implements VirtualFileSystem {
 
   @override
   Future<VfsNode> stat(String path) async {
+    await _loadManifest();
     String virtualPath = _normalizePath(path);
     String realPath = getRealPath(virtualPath);
     if (path.endsWith('/') && realPath != '/') {
@@ -415,7 +522,7 @@ class EncryptedVfs implements VirtualFileSystem {
         decryptedName = _decryptName(realNode.name);
       }
       if (!realNode.isDirectory) {
-        finalSize = _getPlaintextSize(realNode.size);
+        finalSize = _getPlaintextSize(realNode.size, virtualPath);
       }
     }
 
@@ -430,6 +537,7 @@ class EncryptedVfs implements VirtualFileSystem {
 
   @override
   Future<void> upload(String localFilePath, String remotePath) async {
+    await _loadManifest();
     String virtualPath = _normalizePath(remotePath);
     String realPath = getRealPath(virtualPath);
     if (remotePath.endsWith('/') && realPath != '/') {
@@ -443,15 +551,25 @@ class EncryptedVfs implements VirtualFileSystem {
 
     final file = File(localFilePath);
     final fileSize = await file.length();
-    final cipherSize = _getCiphertextSize(fileSize);
+    
+    final chunkSize = _determineChunkSize(fileSize);
+    final cipherSize = _getCiphertextSize(fileSize, chunkSize);
 
     final fileId = _generateRandomBytes(_fileIdLength);
-    final stream = _encryptStream(file.openRead(), fileId);
-    return baseVfs.uploadStream(stream, cipherSize, realPath);
+    final stream = _encryptStream(file.openRead(), fileId, chunkSize);
+    
+    await baseVfs.uploadStream(stream, cipherSize, realPath);
+    
+    _manifestEntries[virtualPath] = {
+      'chunkSize': chunkSize,
+      'plaintextSize': fileSize,
+    };
+    await _saveManifest();
   }
 
   @override
   Future<void> uploadStream(Stream<List<int>> stream, int length, String remotePath) async {
+    await _loadManifest();
     String virtualPath = _normalizePath(remotePath);
     String realPath = getRealPath(virtualPath);
     if (remotePath.endsWith('/') && realPath != '/') {
@@ -463,31 +581,46 @@ class EncryptedVfs implements VirtualFileSystem {
       return baseVfs.uploadStream(stream, length, realPath);
     }
 
-    final cipherSize = _getCiphertextSize(length);
+    final chunkSize = _determineChunkSize(length);
+    final cipherSize = _getCiphertextSize(length, chunkSize);
     final fileId = _generateRandomBytes(_fileIdLength);
-    final encStream = _encryptStream(stream, fileId);
+    final encStream = _encryptStream(stream, fileId, chunkSize);
 
-    return baseVfs.uploadStream(encStream, cipherSize, realPath);
+    await baseVfs.uploadStream(encStream, cipherSize, realPath);
+    
+    _manifestEntries[virtualPath] = {
+      'chunkSize': chunkSize,
+      'plaintextSize': length,
+    };
+    await _saveManifest();
   }
 
-  Stream<List<int>> _encryptStream(Stream<List<int>> plainStream, Uint8List fileId) async* {
-    yield fileId;
+  Stream<List<int>> _encryptStream(Stream<List<int>> plainStream, Uint8List fileId, int chunkSize) async* {
+    final headerBuilder = BytesBuilder(copy: false);
+    headerBuilder.add(_magicHeader);
+    
+    final chunkSizeBytes = ByteData(4);
+    chunkSizeBytes.setUint32(0, chunkSize, Endian.big);
+    headerBuilder.add(chunkSizeBytes.buffer.asUint8List());
+    
+    headerBuilder.add(fileId);
+    yield headerBuilder.takeBytes();
 
     int chunkIndex = 0;
     int bufferOffset = 0;
-    final buffer = Uint8List(_chunkSize);
+    final buffer = Uint8List(chunkSize);
 
     await for (final chunk in plainStream) {
       int chunkOffset = 0;
       while (chunkOffset < chunk.length) {
-        int remainingSpace = _chunkSize - bufferOffset;
+        int remainingSpace = chunkSize - bufferOffset;
         int bytesToCopy = min(remainingSpace, chunk.length - chunkOffset);
-        buffer.setRange(bufferOffset, bufferOffset + bytesToCopy, chunk.sublist(chunkOffset, chunkOffset + bytesToCopy));
+        buffer.setRange(bufferOffset, bufferOffset + bytesToCopy, chunk, chunkOffset);
         bufferOffset += bytesToCopy;
         chunkOffset += bytesToCopy;
 
-        if (bufferOffset == _chunkSize) {
-          yield _chunkCrypto.encryptChunkSync(
+        if (bufferOffset == chunkSize) {
+          yield await _chunkCrypto.encryptChunk(
             chunkData: buffer,
             fileId: fileId,
             chunkIndex: chunkIndex++,
@@ -498,7 +631,7 @@ class EncryptedVfs implements VirtualFileSystem {
     }
 
     if (bufferOffset > 0) {
-      yield _chunkCrypto.encryptChunkSync(
+      yield await _chunkCrypto.encryptChunk(
         chunkData: Uint8List.sublistView(buffer, 0, bufferOffset),
         fileId: fileId,
         chunkIndex: chunkIndex++,
@@ -508,6 +641,7 @@ class EncryptedVfs implements VirtualFileSystem {
 
   @override
   Future<void> delete(String path) async {
+    await _loadManifest();
     String virtualPath = _normalizePath(path);
     String realPath = getRealPath(virtualPath);
     if (path.endsWith('/') && realPath != '/') {
@@ -519,10 +653,16 @@ class EncryptedVfs implements VirtualFileSystem {
     _virtualToReal.remove(virtualPath);
     _realToVirtual.remove(_normalizePath(realPath));
     _encryptedDomains.remove(virtualPath);
+    
+    if (_manifestEntries.containsKey(virtualPath)) {
+      _manifestEntries.remove(virtualPath);
+      await _saveManifest();
+    }
   }
 
   @override
   Future<void> rename(String oldPath, String newPath) async {
+    await _loadManifest();
     String virtualOldPath = _normalizePath(oldPath);
     String realOldPath = getRealPath(virtualOldPath);
     if (oldPath.endsWith('/') && realOldPath != '/') {
@@ -549,6 +689,11 @@ class EncryptedVfs implements VirtualFileSystem {
     if (_encryptedDomains.contains(virtualOldPath)) {
       _encryptedDomains.remove(virtualOldPath);
       _encryptedDomains.add(virtualNewPath);
+    }
+    
+    if (_manifestEntries.containsKey(virtualOldPath)) {
+      _manifestEntries[virtualNewPath] = _manifestEntries.remove(virtualOldPath);
+      await _saveManifest();
     }
   }
 

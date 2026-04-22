@@ -372,22 +372,22 @@ class _EncryptionTaskCard extends StatelessWidget {
                 IconButton(
                   icon: Icon(
                     isCompleted
-                        ? Icons.check_circle
-                        : isError
-                            ? Icons.error
-                            : isPaused
-                                ? Icons.play_arrow_rounded
-                                : Icons.pause_rounded,
+                        ? Icons.check_circle_outline
+                        : (isPaused || isError)
+                            ? Icons.play_arrow_rounded
+                            : Icons.pause_rounded,
                     color: isCompleted
                         ? Colors.green
                         : isError
                             ? Colors.red
                             : theme.colorScheme.primary,
                   ),
-                  onPressed: isCompleted || isError
+                  onPressed: isCompleted
                       ? null
                       : () {
-                          if (isPaused) {
+                          if (isError) {
+                            EncryptionTaskManager().markTaskAsFixed(task);
+                          } else if (isPaused) {
                             EncryptionTaskManager().resumeTask(task);
                           } else {
                             EncryptionTaskManager().pauseTask(task);

@@ -8,7 +8,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import '../main.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:pointycastle/export.dart' as pc;
+import 'package:cryptography/cryptography.dart' as crypto;
 import '../theme/app_theme.dart';
 
 import 'models/vault_config.dart';
@@ -489,7 +489,8 @@ class _BenchmarkDialogState extends State<BenchmarkDialog> {
       _currentTask = null;
 
       final seconds = stopwatch.elapsedMilliseconds / 1000.0;
-      final speed = 500.0 / seconds;
+      final actualMbDone = _doneBytes / (1024 * 1024);
+      final speed = seconds > 0 ? actualMbDone / seconds : 0.0;
 
       setState(() {
         _progress = 1.0;
@@ -639,6 +640,11 @@ class BenchmarkTask {
           bytesDone += bytes;
           if (bytesDone > totalBytes) bytesDone = totalBytes;
           onProgress(bytesDone);
+        } else if (type == 'error') {
+          final error = message['error'];
+          if (!_completer.isCompleted) {
+            _completer.completeError(error);
+          }
         } else if (type == 'done') {
           doneWorkers += 1;
           if (doneWorkers >= workerCount && !_completer.isCompleted) {
@@ -691,10 +697,10 @@ Uint8List _nonceWithCounter(Uint8List base, int counter) {
 
 dynamic _createCipher(String algorithm) {
   if (algorithm == 'AES-256-GCM') {
-    return pc.GCMBlockCipher(pc.AESEngine());
+    return crypto.AesGcm.with256bits();
   }
   if (algorithm == 'ChaCha20-Poly1305') {
-    return pc.ChaCha20Poly1305(pc.ChaCha7539Engine(), pc.Poly1305());
+    return crypto.Chacha20.poly1305Aead();
   }
   throw Exception('Unsupported algorithm: $algorithm');
 }
@@ -706,7 +712,7 @@ void _benchmarkEncryptWorker(Map<String, dynamic> args) async {
   final endChunk = args['endChunk'] as int;
   final chunkSize = args['chunkSize'] as int;
   final algorithm = args['algorithm'] as String;
-  final key = Uint8List.fromList(args['key'] as Uint8List);
+  final keyBytes = Uint8List.fromList(args['key'] as Uint8List);
   final baseNonce = Uint8List.fromList(args['baseNonce'] as Uint8List);
 
   RandomAccessFile? raf;
@@ -714,7 +720,8 @@ void _benchmarkEncryptWorker(Map<String, dynamic> args) async {
     raf = await File(filePath).open();
     await raf.setPosition(startChunk * chunkSize);
 
-    final cipher = _createCipher(algorithm);
+    final cipher = _createCipher(algorithm) as crypto.Cipher;
+    final secretKey = crypto.SecretKey(keyBytes);
     var bytesSinceLastReport = 0;
 
     for (int chunkIndex = startChunk; chunkIndex < endChunk; chunkIndex++) {
@@ -722,13 +729,15 @@ void _benchmarkEncryptWorker(Map<String, dynamic> args) async {
       if (data.isEmpty) break;
 
       final nonce = _nonceWithCounter(baseNonce, chunkIndex);
-      final params = pc.AEADParameters(pc.KeyParameter(key), 128, nonce, Uint8List(0));
+      
+      final secretBox = await cipher.encrypt(
+        data,
+        secretKey: secretKey,
+        nonce: nonce,
+      );
 
-      cipher.reset();
-      cipher.init(true, params);
-      final out = Uint8List(cipher.getOutputSize(data.length));
-      var outLen = cipher.processBytes(data, 0, data.length, out, 0);
-      outLen += cipher.doFinal(out, outLen);
+      // 真实加密的产物
+      final outLen = secretBox.cipherText.length + secretBox.mac.macBytes.length;
 
       bytesSinceLastReport += data.length;
       if (bytesSinceLastReport >= 4 * 1024 * 1024) {
@@ -740,8 +749,8 @@ void _benchmarkEncryptWorker(Map<String, dynamic> args) async {
     if (bytesSinceLastReport > 0) {
       sendPort.send({'type': 'progress', 'bytes': bytesSinceLastReport});
     }
-  } catch (e) {
-    sendPort.send({'type': 'progress', 'bytes': 0});
+  } catch (e, stack) {
+    sendPort.send({'type': 'error', 'error': '$e\n$stack'});
   } finally {
     try {
       await raf?.close();

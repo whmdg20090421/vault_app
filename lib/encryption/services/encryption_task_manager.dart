@@ -607,10 +607,10 @@ class EncryptionTaskManager extends ChangeNotifier {
   /// 标记已修复：将该节点及其子节点下的 error 状态重置为 pending_waiting，并重试
   void markTaskAsFixed(EncryptionNode node) {
     void fixRecursively(EncryptionNode n) {
-      if (n.status == NodeStatus.error) {
+      n.isPaused = false;
+      if (n.status == NodeStatus.error || n.status == NodeStatus.pending_paused) {
         n.status = NodeStatus.pending_waiting;
         n.errorMessage = null;
-        n.isPaused = false;
       }
       if (n is FolderNode) {
         for (var child in n.children) {

@@ -958,6 +958,18 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
                                         });
                                       },
                                     ),
+                                    ListTile(
+                                      leading: const Icon(Icons.delete, color: Colors.red),
+                                      title: const Text('删除', style: TextStyle(color: Colors.red)),
+                                      onTap: () {
+                                        Navigator.pop(context);
+                                        setState(() {
+                                          _selectedNodes.clear();
+                                          _selectedNodes.add(file);
+                                        });
+                                        _deleteSelected();
+                                      },
+                                    ),
                                   ],
                                 ),
                               );
