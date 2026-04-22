@@ -1,44 +1,48 @@
-# 修复加密与UI相关问题计划 (Plan for Fixing Encryption & UI Issues)
+# 修复加密性能与UI相关问题计划 (Plan for Encryption Performance & UI Issues)
 
 ## 1. 现状分析 (Current State Analysis)
-- **问题 1：手动暂停与子任务恢复异常**
-  目前在 `EncryptionTaskManager` 中，暂停文件夹时会将所有处于 `pending_waiting` 的子节点标记为 `pending_paused`。当用户在包含错误的文件夹上点击重试（或者使用 `markTaskAsFixed`）时，系统只重置了 `error` 状态的节点，而遗漏了 `pending_paused` 状态的节点，导致其无法恢复为黄色（进行中）并继续加密。此外，UI 中的重试/播放按钮在 `isError` 时被禁用，导致无法直观地一键恢复报错节点。
-- **问题 2：加密时间过长 (性能瓶颈)**
-  分析发现，目前的加密底层算法 `ChunkCrypto` 中的 `_encryptChunkSync` 和 `_decryptChunkSync` 是静态方法，对于每一个 64KB 的数据块，都会重新实例化 `pc.GCMBlockCipher(pc.AESEngine())`。这不仅导致海量对象的创建，还使得系统对每个 64KB 块都重复进行 AES 的密钥扩展（Key Schedule）操作。对于 30MB 的文件，这一操作会重复进行 480 次，极大地拖慢了加密速度。
-- **问题 3：加密文件夹中无法通过长按删除**
-  在 `VaultExplorerPage` 中，长按文件/文件夹弹出的菜单只有“多选”、“移动”和“复制”，缺少“删除”选项。
-- **附加检查：核心 VFS 引擎功能验证 (参考 libcryfs)**
-  用户提到参考 `libcryfs`（一个在内存中提供加密文件系统 API 而无需 FUSE 的底层库）。我们应用中的 `EncryptedVfs` 正是承担了相同的角色。在对 `ChunkCrypto` 进行底层性能优化后，必须确保加密流的分块读写、MAC 校验等核心机制完全不受影响，并与历史加密数据 100% 兼容。
+
+根据您的详细要求，我们对加密性能过慢的 5 个根本原因进行了深入剖析：
+1. **未开启 AES 硬件加密加速**：目前应用完全依赖 `pointycastle`，该库无法调用移动端设备的硬件 AES 指令集。
+2. **加密缓冲区过小**：目前分块大小硬编码为 `64KB`，对于 30MB 的大文件来说，分块多达 480 块，带来极大的 I/O 与加密调用的调度开销。
+3. **单文件内重复初始化 Cipher 对象**：在 `ChunkCrypto._encryptChunkSync` 中，每个 64KB 的块都会重新 `pc.GCMBlockCipher(pc.AESEngine())` 并重新执行耗时的 AES 密钥扩展操作。
+4. **流读写与内存拷贝过于频繁**：`EncryptedVfs.uploadStream` 使用了 `List<int> buffer` 配合 `addAll` 不断追加数据，触发了大量不必要的内存重分配与深拷贝。
+5. **使用纯软件实现**：纯 Dart 实现的 AES 速度受限于 Dart 虚拟机，无法发挥操作系统的底层 C/C++ 加密库性能。
+
+此外，UI 层面上还存在两个遗留问题：
+- 手动暂停父文件夹后，个别报错的子文件无法一键恢复。
+- 长按保险箱中的文件夹没有“删除”选项。
 
 ## 2. 拟定更改 (Proposed Changes)
 
-### 2.1 修复暂停与错误恢复逻辑
-**目标文件**: `lib/encryption/services/encryption_task_manager.dart` 和 `lib/encryption/widgets/encryption_progress_panel.dart`
-- **更改**: 
-  - 在 `EncryptionTaskManager.markTaskAsFixed` 中的 `fixRecursively` 方法内，不仅重置 `error` 状态，还要同时将 `pending_paused` 的节点重置为 `pending_waiting`，并设置 `n.isPaused = false`。
-  - 在进度面板 UI 中，修改播放/暂停按钮的逻辑：当 `isError` 时不再禁用按钮，而是将其点击事件映射为 `markTaskAsFixed(task)`（重试），从而实现一键恢复执行。
+我们将针对上述每一个问题创建对应的任务节点并进行修复：
 
-### 2.2 优化 AES-GCM 算法性能并保证 VFS 兼容性
+### 任务 1 & 5：引入系统底层硬件加密库
+**目标文件**: `pubspec.yaml`, `lib/encryption/utils/chunk_crypto.dart`
+- **更改**: 引入业内标准的 `cryptography` 与 `cryptography_flutter` 依赖库。该库在 Android 上自动桥接 `javax.crypto.Cipher`，在 iOS 上桥接 `CommonCrypto`，能直接利用设备的硬件 AES 加速指令。
+- **验证**: 我们将重写 `ChunkCrypto`，使用 `AesGcm.with256bits()` 进行加解密，并在隔离线程中调用，确保大文件加密速度得到质的飞跃且不崩溃。
+
+### 任务 2：增大加密缓冲区并保持老文件兼容
+**目标文件**: `lib/vfs/encrypted_vfs.dart`
+- **更改**: 引入“魔数头”机制。新加密的文件头部将写入 6 字节魔数 `VAULT\x01`（标识 V1 大缓冲版），紧跟 16 字节 File ID，其分块大小提升至 **1MB**。
+- **兼容层**: 解密时首先读取前 6 字节，若匹配 `VAULT\x01`，则以 1MB 缓冲流式解密；若不匹配，则判定为老文件（头部为 16 字节随机 File ID），自动回退使用 **64KB** 的老版本缓冲大小进行解密，确保您的历史数据 100% 安全可用。
+
+### 任务 3：消除重复的 Cipher 与密钥初始化
 **目标文件**: `lib/encryption/utils/chunk_crypto.dart`
+- **更改**: 在处理单个文件流时，仅在开始前将 32 字节的主密钥包装为底层的 `SecretKey` 对象一次。后续的所有 1MB 分块都复用这个已经完成密钥扩展的 `SecretKey` 和统一的 `AesGcm` 实例，彻底消除每块重复初始化的开销。
+
+### 任务 4：优化流读写与消除内存频繁拷贝
+**目标文件**: `lib/vfs/encrypted_vfs.dart`
+- **更改**: 废弃原有的 `buffer.addAll(chunk)` 做法。改为预先分配一个固定大小的 `Uint8List(1MB)` 或使用零拷贝的 `BytesBuilder(copy: false)`。通过维护游标 (offset) 将流数据直接写入固定内存区，满 1MB 后直接送入硬件加密层，极大降低 GC（垃圾回收）压力。
+
+### 任务 6 & 7：UI 交互修复（暂停恢复与长按删除）
+**目标文件**: `lib/encryption/services/encryption_task_manager.dart`, `lib/encryption/widgets/encryption_progress_panel.dart`, `lib/encryption/vault_explorer_page.dart`
 - **更改**: 
-  - 将 `_encryptChunkSync` 和 `_decryptChunkSync` 从静态方法改为实例方法。
-  - 在 `ChunkCrypto` 的构造函数中初始化并持有 `pc.GCMBlockCipher(pc.AESEngine())` 实例（如 `_encryptCipher` 和 `_decryptCipher`）。
-  - 在加解密每个数据块时，直接调用现成实例的 `init()` 并处理数据，避免重复分配内存和实例化 AES 引擎。这将显著提升处理大文件时的加密效率。
-  - **核心功能保障**：优化后的算法不会改变块大小 (64KB) 和 MAC 长度 (16 bytes)，将通过测试脚本对比优化前后的密文输出，确保 `EncryptedVfs` 的行为与之前完全一致，保证应用级 VFS（类似 libcryfs）的稳定性。
+  - 修复 `markTaskAsFixed`，确保同时重置 `pending_paused` 状态的子文件，并允许用户直接点击进度条的“播放”按钮恢复红色的报错任务。
+  - 在 `VaultExplorerPage` 的长按菜单中新增红色的“删除”按钮，并对接现有的 `_vfs.delete` 删除逻辑。
 
-### 2.3 添加长按删除功能
-**目标文件**: `lib/encryption/vault_explorer_page.dart`
-- **更改**: 
-  - 在 `onLongPress` 弹出的 `showModalBottomSheet` 菜单中，添加一个 `ListTile`（图标：`Icons.delete`，颜色：红色，文字：“删除”）。
-  - 点击后弹出二次确认框，确认后调用 `_vfs.delete(file.path)` 删除文件/文件夹，并调用 `_loadFiles()` 刷新列表。
-
-## 3. 假设与决策 (Assumptions & Decisions)
-- 假设目前的 64KB 分块大小在不重复实例化密码器的情况下已经能满足性能预期（Dart 运行时的纯 AES 性能极限），不更改块大小可以保持前向兼容。
-- 决定直接复用进度条面板上的“播放/重试”按钮来处理错误节点的恢复，这符合用户操作直觉。
-- 考虑到用户提及的 `libcryfs`，我们将在优化后特别关注内存中的加解密流媒体处理是否依然正常。
-
-## 4. 验证步骤 (Verification Steps)
-1. 运行应用，上传大文件并中途手动暂停文件夹，然后使某个子文件出错或保持暂停，点击播放按钮，确认所有子节点均能恢复为黄色（正在加密）。
-2. 上传一个 30MB 的测试文件，测量加密耗时，验证其时间是否显著降低（期望从十几秒降至数秒内）。
-3. 进入保险箱，长按一个文件夹，验证菜单中是否出现“删除”选项，且点击后能够正常删除该文件夹。
-4. 编写或运行简易 Dart 脚本，验证优化后的 `ChunkCrypto` 加密输出与原有静态方法输出的字节完全一致，确保底层 VFS 加解密机制（同 libcryfs 概念）正常运作。
+## 3. 验证步骤 (Verification Steps)
+1. 编译并运行，上传 30MB 的大文件，确认耗时从十几秒下降到 1~2 秒以内。
+2. 尝试打开/预览以前用 64KB 纯软件加密的老文件，确保可以无缝解密查看（老文件兼容性测试）。
+3. 暂停一个上传文件夹，手动使其子文件报错，点击播放按钮，确认可自动恢复为黄色（加密中）。
+4. 在保险箱中长按文件夹，确认可直接点击删除。
