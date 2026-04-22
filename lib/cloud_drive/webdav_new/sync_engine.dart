@@ -6,6 +6,14 @@ import 'webdav_service.dart';
 import 'webdav_file.dart';
 import '../../encryption/services/local_index_service.dart';
 import '../../models/sync_task.dart';
+import '../cloud_drive_progress_manager.dart';
+
+class _SyncJob {
+  final SyncFileItem item;
+  final Future<void> Function() execute;
+
+  _SyncJob(this.item, this.execute);
+}
 
 /// 同步引擎，负责将 WebDAV 远端文件与本地目录进行双向同步
 class SyncEngine {
@@ -40,7 +48,7 @@ class SyncEngine {
   }
 
   /// 启动同步流程
-  Future<void> sync(String remoteDir, {bool forceSync = false}) async {
+  Future<void> sync(String remoteDir, {bool forceSync = false, SyncTask? task}) async {
     print('Starting sync from remote: $remoteDir to local: $localDirPath with direction: $direction');
 
     // 1. 读取本地历史状态 (local_index.json)
@@ -154,14 +162,30 @@ class SyncEngine {
     }
 
     // 4. PROPFIND 获取云端状态并进行精准差异比对
-    final syncTasks = <Future<void> Function()>[];
+    final syncTasks = <_SyncJob>[];
     await _syncRecursiveDir(remoteDir, localDirPath, localAdded, localDeleted, localModified, currentLocalFiles, syncTasks);
 
+    // 更新任务对象
+    if (task != null) {
+      task.items.clear();
+      task.items.addAll(syncTasks.map((j) => j.item));
+      task.status = SyncStatus.syncing;
+      task.startedAt = DateTime.now();
+      CloudDriveProgressManager.instance.updateTask(task);
+    }
+
     // 5. 控制并发执行任务
-    await _executeConcurrently(syncTasks, maxConcurrency);
+    await _executeConcurrently(syncTasks, maxConcurrency, task);
 
     // 6. 更新并保存规范的本地索引
     await _saveLocalIndex(currentLocalFiles, localIndexService);
+
+    if (task != null) {
+      bool allSuccess = task.items.every((i) => i.status == SyncStatus.completed);
+      task.status = allSuccess ? SyncStatus.completed : SyncStatus.failed;
+      task.completedAt = DateTime.now();
+      CloudDriveProgressManager.instance.updateTask(task);
+    }
     
     print('Sync completed.');
   }
@@ -183,7 +207,7 @@ class SyncEngine {
     Set<String> localDeleted, 
     Set<String> localModified, 
     Map<String, File> currentLocalFiles, 
-    List<Future<void> Function()> syncTasks
+    List<_SyncJob> syncTasks
   ) async {
     List<WebDavFile> remoteFiles;
     try {
@@ -232,15 +256,21 @@ class SyncEngine {
             if (isDifferent) {
               if (direction == SyncDirection.cloudToLocal || 
                  (direction == SyncDirection.twoWay && remoteMod != null && remoteMod.isAfter(localMod))) {
-                syncTasks.add(() async {
-                  print('Downloading updated file: ${remoteFile.name}');
-                  await service.download(remoteFile.path, localEntityPath);
-                });
+                syncTasks.add(_SyncJob(
+                  SyncFileItem(path: localEntityPath, name: remoteFile.name, size: remoteFile.size ?? 0),
+                  () async {
+                    print('Downloading updated file: ${remoteFile.name}');
+                    await service.download(remoteFile.path, localEntityPath);
+                  }
+                ));
               } else if (direction == SyncDirection.localToCloud || direction == SyncDirection.twoWay) {
-                syncTasks.add(() async {
-                  print('Uploading updated file: ${remoteFile.name}');
-                  await service.upload(localEntityPath, remoteFile.path);
-                });
+                syncTasks.add(_SyncJob(
+                  SyncFileItem(path: localEntityPath, name: remoteFile.name, size: localStat.size),
+                  () async {
+                    print('Uploading updated file: ${remoteFile.name}');
+                    await service.upload(localEntityPath, remoteFile.path);
+                  }
+                ));
               }
             }
             localModified.remove(relativePath);
@@ -249,18 +279,24 @@ class SyncEngine {
           // On remote, not locally
           if (localDeleted.contains(relativePath)) {
             if (direction == SyncDirection.localToCloud || direction == SyncDirection.twoWay) {
-              syncTasks.add(() async {
-                print('Deleting remote file: ${remoteFile.name}');
-                await service.remove(remoteFile.path);
-              });
+              syncTasks.add(_SyncJob(
+                SyncFileItem(path: remoteFile.path, name: remoteFile.name, size: remoteFile.size ?? 0),
+                () async {
+                  print('Deleting remote file: ${remoteFile.name}');
+                  await service.remove(remoteFile.path);
+                }
+              ));
             }
             localDeleted.remove(relativePath);
           } else {
             if (direction == SyncDirection.cloudToLocal || direction == SyncDirection.twoWay) {
-              syncTasks.add(() async {
-                print('Downloading new file: ${remoteFile.name}');
-                await service.download(remoteFile.path, localEntityPath);
-              });
+              syncTasks.add(_SyncJob(
+                SyncFileItem(path: localEntityPath, name: remoteFile.name, size: remoteFile.size ?? 0),
+                () async {
+                  print('Downloading new file: ${remoteFile.name}');
+                  await service.download(remoteFile.path, localEntityPath);
+                }
+              ));
             }
           }
         }
@@ -277,11 +313,15 @@ class SyncEngine {
           if (!relativePath.startsWith('/')) relativePath = '/' + relativePath;
 
           if (localEntity is File && localAdded.contains(relativePath)) {
-            syncTasks.add(() async {
-              print('Uploading new file: $name');
-              String remotePath = _buildRemotePath(remoteDir, name);
-              await service.upload(localEntityPath, remotePath);
-            });
+            final stat = await localEntity.stat();
+            syncTasks.add(_SyncJob(
+              SyncFileItem(path: localEntityPath, name: name, size: stat.size),
+              () async {
+                print('Uploading new file: $name');
+                String remotePath = _buildRemotePath(remoteDir, name);
+                await service.upload(localEntityPath, remotePath);
+              }
+            ));
             localAdded.remove(relativePath);
           } else if (localEntity is Directory) {
             String remotePath = _buildRemotePath(remoteDir, name);
@@ -319,16 +359,30 @@ class SyncEngine {
     await localIndexService.saveLocalIndex(localDirPath, newIndexData);
   }
 
-  Future<void> _executeConcurrently(List<Future<void> Function()> tasks, int concurrency) async {
+  Future<void> _executeConcurrently(List<_SyncJob> tasks, int concurrency, SyncTask? parentTask) async {
     if (tasks.isEmpty) return;
     int index = 0;
     Future<void> worker() async {
       while (index < tasks.length) {
         final taskIndex = index++;
+        final job = tasks[taskIndex];
+        
+        job.item.status = SyncStatus.syncing;
+        if (parentTask != null) {
+          CloudDriveProgressManager.instance.updateTask(parentTask);
+        }
+
         try {
-          await tasks[taskIndex]();
+          await job.execute();
+          job.item.status = SyncStatus.completed;
         } catch (e) {
           print('Task failed: $e');
+          job.item.status = SyncStatus.failed;
+          job.item.errorMessage = e.toString();
+        }
+
+        if (parentTask != null) {
+          CloudDriveProgressManager.instance.updateTask(parentTask);
         }
       }
     }

@@ -1,0 +1,15 @@
+# Tasks
+- [x] Task 1: 扩展 CloudDriveProgressManager 以支持任务更新
+  - [x] SubTask 1.1: 在 `CloudDriveProgressManager` 中添加 `updateTask(SyncTask task)` 方法，将任务加入 `_pendingUpdates` 并启动刷新定时器。
+- [x] Task 2: 重构 SyncEngine 以支持 SyncTask 跟踪
+  - [x] SubTask 2.1: 修改 `lib/cloud_drive/webdav_new/sync_engine.dart` 中的 `sync` 方法签名，支持传入可选的 `SyncTask? task` 参数。
+  - [x] SubTask 2.2: 引入 `_SyncJob` 内部类，包裹 `SyncFileItem` 与实际执行的 `Future<void> Function()`。
+  - [x] SubTask 2.3: 在 `_syncRecursiveDir` 中构造 `_SyncJob` 并追加到列表中。
+  - [x] SubTask 2.4: 在进入 `_executeConcurrently` 之前，将所有 `_SyncJob.item` 追加到 `task.items`，更新 `task.status = SyncStatus.syncing`，并通知 `CloudDriveProgressManager`。
+  - [x] SubTask 2.5: 在 `_executeConcurrently` 中执行各子任务时，更新对应 `item.status` 并通知管理器，最终更新任务整体状态为 `completed` 或 `failed`。
+- [x] Task 3: 在开始同步时创建并注册 SyncTask
+  - [x] SubTask 3.1: 在 `WebDAVStateManager.startSync` 中创建 `SyncTask`，配置方向与策略，添加至 `CloudDriveProgressManager`。
+  - [x] SubTask 3.2: 将创建的 `SyncTask` 传递给 `syncEngine.sync()` 执行。
+- [x] Task 4: 调整云盘同步面板入口 UI
+  - [x] SubTask 4.1: 在 `lib/main.dart` 的 `AppBar.actions` 中，当 `_index == 1` 时添加一个云盘同步的 IconButton，点击调用 `showCloudDriveProgressPanel(context)`。
+  - [x] SubTask 4.2: 移除 `NavigationBar` 中双击“云盘”呼出同步面板的逻辑。

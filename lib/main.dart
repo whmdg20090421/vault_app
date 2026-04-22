@@ -211,16 +211,20 @@ class _MainShellState extends State<MainShell> {
         title: Text(titles[_index].toUpperCase()),
         centerTitle: true,
         actions: [
-          if (_index == 0) const EncryptionProgressIcon(),
+          if (_index == 0 || _index == 2) const EncryptionProgressIcon(),
+          if (_index == 1)
+            IconButton(
+              icon: const Icon(Icons.cloud_sync_rounded),
+              onPressed: () => showCloudDriveProgressPanel(context),
+              tooltip: '同步任务列表',
+            ),
         ],
       ),
       body: IndexedStack(index: _index, children: pages),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
         onDestinationSelected: (value) {
-          if (value == 1 && _index == 1) {
-            showCloudDriveProgressPanel(context);
-          } else if (value == 2 && _index == 2) {
+          if (value == 2 && _index == 2) {
             showEncryptionProgressPanel(context);
           } else {
             setState(() => _index = value);

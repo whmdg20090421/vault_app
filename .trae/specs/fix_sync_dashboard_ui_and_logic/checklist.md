@@ -1,0 +1,6 @@
+- [x] CloudDriveProgressManager 拥有 `updateTask` 方法并能正确响应更新。
+- [x] `WebDAVStateManager.startSync` 能正确创建 `SyncTask` 并在 UI 面板中可见。
+- [x] 新的同步引擎 `webdav_new/sync_engine.dart` 能正确解析差异，并生成 `SyncFileItem` 反馈至 UI。
+- [x] 同步任务执行期间，子文件的状态（同步中、已完成）能实时更新，并在完成后更新总体状态。
+- [x] `MainShell` 的 AppBar 右上方在“云盘” Tab 时显示云盘同步图标，且点击能呼出同步面板。
+- [x] 底部导航栏不再包含双击“云盘”呼出面板的逻辑。

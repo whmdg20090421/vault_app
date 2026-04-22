@@ -156,6 +156,11 @@ class CloudDriveProgressManager extends ChangeNotifier with WidgetsBindingObserv
     _startTimerIfNeeded();
   }
 
+  void updateTask(SyncTask task) {
+    _pendingUpdates[task.id] = task;
+    _startTimerIfNeeded();
+  }
+
   void pauseAll() {
     for (var t in _tasks) {
       if (t.status == SyncStatus.syncing || t.status == SyncStatus.pending) {

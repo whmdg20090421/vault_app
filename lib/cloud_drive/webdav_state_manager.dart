@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:uuid/uuid.dart';
 import 'webdav_config.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
@@ -7,6 +8,8 @@ import 'webdav_storage.dart';
 import 'webdav_new/webdav_client.dart';
 import 'webdav_new/webdav_service.dart';
 import 'webdav_new/sync_engine.dart';
+import '../models/sync_task.dart';
+import 'cloud_drive_progress_manager.dart';
 
 class SyncLog {
   final DateTime time;
@@ -67,8 +70,21 @@ class WebDAVStateManager extends ChangeNotifier {
         localDirPath: localDirPath,
       );
 
+      final task = SyncTask(
+        id: const Uuid().v4(),
+        direction: SyncDirection.twoWay,
+        strategy: SyncStrategy.merge,
+        status: SyncStatus.pending,
+        items: [],
+        createdAt: DateTime.now(),
+        localVaultPath: localDirPath,
+        cloudWebDavId: config.id,
+        cloudFolderPath: remoteDir,
+      );
+      await CloudDriveProgressManager.instance.addTask(task);
+
       addLog('正在同步...');
-      await syncEngine.sync(remoteDir, forceSync: forceSync);
+      await syncEngine.sync(remoteDir, forceSync: forceSync, task: task);
       addLog('同步完成');
       _lastSyncTime = DateTime.now();
     } catch (e) {
