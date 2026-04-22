@@ -12,11 +12,12 @@ class WebDavService {
 
   /// 读取指定路径下的目录内容
   /// [path] 目标目录路径
-  Future<List<WebDavFile>> readDir(String path) async {
+  /// [depth] 请求深度，默认为 1，可传 'infinity'
+  Future<List<WebDavFile>> readDir(String path, {String depth = '1'}) async {
     final response = await client.request<String>(
       path,
       method: 'PROPFIND',
-      headers: {'Depth': '1'},
+      headers: {'Depth': depth},
     );
 
     if (response.statusCode == 207 && response.data != null) {

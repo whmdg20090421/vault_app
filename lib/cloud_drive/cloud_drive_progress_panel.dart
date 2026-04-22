@@ -155,6 +155,23 @@ class _CloudDriveProgressPanelState extends State<CloudDriveProgressPanel> with 
 
   Widget _buildSyncTaskCard(SyncTask task, ThemeData theme, bool isCyberpunk) {
     final progress = task.status == SyncStatus.completed ? 1.0 : (task.items.isEmpty ? 0.0 : task.items.where((i) => i.status == SyncStatus.completed).length / task.items.length);
+    
+    String statusText;
+    Color statusColor;
+    if (task.status == SyncStatus.completed) {
+      statusText = '完成';
+      statusColor = Colors.green;
+    } else if (task.status == SyncStatus.failed) {
+      statusText = '失败';
+      statusColor = Colors.red;
+    } else if (task.status == SyncStatus.pending) {
+      statusText = '准备中...';
+      statusColor = theme.colorScheme.primary.withOpacity(0.7);
+    } else {
+      statusText = '同步中';
+      statusColor = theme.colorScheme.primary;
+    }
+
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
       curve: Curves.elasticOut,
@@ -184,8 +201,8 @@ class _CloudDriveProgressPanelState extends State<CloudDriveProgressPanel> with 
                 ),
               ),
               Text(
-                task.status == SyncStatus.completed ? '完成' : (task.status == SyncStatus.syncing ? '同步中' : '失败'),
-                style: TextStyle(color: task.status == SyncStatus.completed ? Colors.green : (task.status == SyncStatus.failed ? Colors.red : theme.colorScheme.primary)),
+                statusText,
+                style: TextStyle(color: statusColor),
               ),
             ],
           ),
@@ -193,14 +210,14 @@ class _CloudDriveProgressPanelState extends State<CloudDriveProgressPanel> with 
           ClipRRect(
             borderRadius: BorderRadius.circular(4),
             child: LinearProgressIndicator(
-              value: progress,
+              value: task.status == SyncStatus.pending ? null : progress,
               backgroundColor: theme.colorScheme.primary.withOpacity(0.1),
               valueColor: AlwaysStoppedAnimation<Color>(task.status == SyncStatus.completed ? Colors.green : theme.colorScheme.primary),
             ),
           ),
           const SizedBox(height: 8),
           Text(
-            '${(progress * 100).toStringAsFixed(1)}%',
+            task.status == SyncStatus.pending ? '正在扫描文件差异...' : '${(progress * 100).toStringAsFixed(1)}%',
             style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurface.withOpacity(0.7)),
           ),
         ],

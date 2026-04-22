@@ -5,8 +5,11 @@ import '../services/sync_storage_service.dart';
 import '../services/sync_engine.dart';
 
 class CloudDriveProgressManager extends ChangeNotifier with WidgetsBindingObserver {
+  bool _isInitialized = false;
+  Future<void>? _initFuture;
+
   CloudDriveProgressManager._() {
-    _init();
+    _initFuture = _init();
   }
   static final instance = CloudDriveProgressManager._();
 
@@ -28,6 +31,7 @@ class CloudDriveProgressManager extends ChangeNotifier with WidgetsBindingObserv
   Future<void> _init() async {
     WidgetsBinding.instance.addObserver(this);
     _tasks = await _storageService.loadTasks();
+    _isInitialized = true;
     notifyListeners();
 
     syncEngine.taskUpdates.listen((updatedTask) {
@@ -36,10 +40,15 @@ class CloudDriveProgressManager extends ChangeNotifier with WidgetsBindingObserv
     });
   }
 
+  Future<void> _ensureInitialized() async {
+    if (!_isInitialized && _initFuture != null) {
+      await _initFuture;
+    }
+  }
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _isForeground = state == AppLifecycleState.resumed;
-    // When returning to foreground, force a UI refresh immediately
     if (_isForeground && _refreshTimer != null) {
       _processUpdates(forceUI: true);
     }
@@ -150,8 +159,9 @@ class CloudDriveProgressManager extends ChangeNotifier with WidgetsBindingObserv
   }
 
   Future<void> addTask(SyncTask task) async {
+    await _ensureInitialized();
     _tasks.add(task);
-    await _storageService.saveTask(task);
+    await _storageService.saveTasks(_tasks);
     notifyListeners();
     _startTimerIfNeeded();
   }
@@ -161,7 +171,8 @@ class CloudDriveProgressManager extends ChangeNotifier with WidgetsBindingObserv
     _startTimerIfNeeded();
   }
 
-  void pauseAll() {
+  void pauseAll() async {
+    await _ensureInitialized();
     for (var t in _tasks) {
       if (t.status == SyncStatus.syncing || t.status == SyncStatus.pending) {
         syncEngine.pauseTask(t.id);
@@ -172,7 +183,8 @@ class CloudDriveProgressManager extends ChangeNotifier with WidgetsBindingObserv
     notifyListeners();
   }
 
-  void startAll() {
+  void startAll() async {
+    await _ensureInitialized();
     // To actually start tasks, credentials are required. 
     // Here we just mark them as pending for the UI.
     for (var t in _tasks) {
@@ -201,7 +213,8 @@ class CloudDriveProgressManager extends ChangeNotifier with WidgetsBindingObserv
     _setTaskStatus(id, SyncStatus.failed);
   }
 
-  void _setTaskStatus(String id, SyncStatus status) {
+  void _setTaskStatus(String id, SyncStatus status) async {
+    await _ensureInitialized();
     for (var t in _tasks) {
       if (t.id == id) {
         t.status = status;
