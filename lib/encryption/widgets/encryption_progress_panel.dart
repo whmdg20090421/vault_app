@@ -464,7 +464,7 @@ class _EncryptionTaskCard extends StatelessWidget {
                                 if (task is FileNode && task.status == NodeStatus.encrypting && task.encryptionMode != EncryptionMode.unknown)
                                   _buildModeTag(task.encryptionMode),
                                 if (task is FolderNode && activeEncryptionModes.isNotEmpty)
-                                  ...activeEncryptionModes.map((mode) => _buildModeTag(mode)),
+                                  ...activeEncryptionModes.map<Widget>((mode) => _buildModeTag(mode)),
                               ],
                             ),
                             if (isError && task.errorMessage != null)
