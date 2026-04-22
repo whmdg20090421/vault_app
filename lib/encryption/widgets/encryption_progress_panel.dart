@@ -681,14 +681,25 @@ class _EncryptionProgressLinePainter extends CustomPainter {
     // 1. Fully completed files (Green)
     drawSegment(completedW, Colors.green);
 
-    // 2. White separator if both fully completed and partially completed portions exist
-    if (completedW > 0 && encryptingCompletedW > 0) {
-      final whitePaint = Paint()..color = Colors.white;
-      canvas.drawRect(Rect.fromLTWH(currentX - 1, 0, 2, h), whitePaint);
+    // 2. Partially completed files (Gradient: light green to yellow-green)
+    if (encryptingCompletedW > 0) {
+      final gradient = const LinearGradient(
+        colors: [Colors.lightGreenAccent, Colors.limeAccent],
+        begin: Alignment.centerLeft,
+        end: Alignment.centerRight,
+      );
+      final rect = Rect.fromLTWH(currentX, 0, encryptingCompletedW, h);
+      final paint = Paint()..shader = gradient.createShader(rect);
+      canvas.drawRect(rect, paint);
+      currentX += encryptingCompletedW;
     }
 
-    // 3. Partially completed files (Green)
-    drawSegment(encryptingCompletedW, Colors.green);
+    // 3. White separator if both fully completed and partially completed portions exist
+    if (completedW > 0 && encryptingCompletedW > 0) {
+      final whitePaint = Paint()..color = Colors.white;
+      // Draw a very thin white line at the boundary (currentX - encryptingCompletedW)
+      canvas.drawRect(Rect.fromLTWH(currentX - encryptingCompletedW - 0.5, 0, 1, h), whitePaint);
+    }
 
     // 4. Remaining to encrypt (Yellow)
     drawSegment(encryptingRemainingW, Colors.yellow);

@@ -26,6 +26,7 @@ class EncryptionTaskManager extends ChangeNotifier {
 
   int _activeWorkers = 0;
   int _maxWorkers = 2;
+  String _allocationStrategy = 'smart';
   final ReceivePort _globalReceivePort = ReceivePort();
   
   final List<EncryptionNode> _tasks = [];
@@ -36,6 +37,7 @@ class EncryptionTaskManager extends ChangeNotifier {
 
   // For speed calculation (Task 1)
   final List<MapEntry<DateTime, int>> _speedCache = [];
+  DateTime? _speedSessionStartTime;
   double _currentSpeedBytesPerSecond = 0.0;
   Timer? _speedTimer;
   
@@ -61,6 +63,7 @@ class EncryptionTaskManager extends ChangeNotifier {
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
     _maxWorkers = prefs.getInt('encryption_cores') ?? (Platform.numberOfProcessors ~/ 2).clamp(1, 999);
+    _allocationStrategy = prefs.getString('encryption_allocation_strategy') ?? 'smart';
   }
 
   /// 创建一个新的加密任务树（SubTask 1.2）
@@ -504,28 +507,42 @@ class EncryptionTaskManager extends ChangeNotifier {
 
   void _updateSpeed(int newBytes) {
     final now = DateTime.now();
+    _speedSessionStartTime ??= now;
     _speedCache.add(MapEntry(now, newBytes));
-    _speedCache.removeWhere((entry) => now.difference(entry.key).inSeconds >= 5);
-    
-    if (_speedCache.isEmpty) {
-      _currentSpeedBytesPerSecond = 0.0;
-    } else {
-      int totalBytes = _speedCache.fold(0, (sum, item) => sum + item.value);
-      _currentSpeedBytesPerSecond = totalBytes / 5.0; // average over 5 seconds
-    }
+    _calculateCurrentSpeed();
   }
 
   void _cleanSpeedCache() {
-    final now = DateTime.now();
     final previousLength = _speedCache.length;
-    _speedCache.removeWhere((entry) => now.difference(entry.key).inSeconds >= 5);
+    _calculateCurrentSpeed();
     if (_speedCache.isEmpty && previousLength > 0) {
-      _currentSpeedBytesPerSecond = 0.0;
       notifyListeners();
     } else if (_speedCache.isNotEmpty) {
-      int totalBytes = _speedCache.fold(0, (sum, item) => sum + item.value);
-      _currentSpeedBytesPerSecond = totalBytes / 5.0;
       notifyListeners();
+    }
+  }
+
+  void _calculateCurrentSpeed() {
+    final now = DateTime.now();
+    _speedCache.removeWhere((entry) => now.difference(entry.key).inSeconds >= 10);
+
+    if (_speedCache.isEmpty) {
+      _currentSpeedBytesPerSecond = 0.0;
+      _speedSessionStartTime = null;
+      return;
+    }
+
+    final totalBytes = _speedCache.fold(0, (sum, item) => sum + item.value);
+    double elapsedSession = now.difference(_speedSessionStartTime!).inMilliseconds / 1000.0;
+
+    if (elapsedSession < 1.0) {
+      elapsedSession = 1.0; // avoid division by zero or huge initial spikes
+    }
+
+    if (elapsedSession < 10.0) {
+      _currentSpeedBytesPerSecond = totalBytes / elapsedSession;
+    } else {
+      _currentSpeedBytesPerSecond = totalBytes / 10.0;
     }
   }
 
@@ -747,11 +764,19 @@ class EncryptionTaskManager extends ChangeNotifier {
       final node = _findNextPendingNode(_tasks);
       if (node == null) break;
 
-      // 决定分配模式：前一半 worker 优先分配硬件加速。
-      // 如果超过一半的核心在使用中，剩余核心通过普通（纯Dart CPU）进行加密以压榨全部算力。
-      int currentHardwareWorkers = _tasks.expand((root) => _getAllNodes(root)).where((n) => n.status == NodeStatus.encrypting && n.encryptionMode == EncryptionMode.hardware).length;
-      int maxHardwareWorkers = (_maxWorkers / 2).ceil();
-      bool useHardware = currentHardwareWorkers < maxHardwareWorkers;
+      // 决定分配模式：
+      bool useHardware;
+      if (_allocationStrategy == 'hardware') {
+        useHardware = true;
+      } else if (_allocationStrategy == 'software') {
+        useHardware = false;
+      } else {
+        // 智能分配：前一半 worker 优先分配硬件加速。
+        // 如果超过一半的核心在使用中，剩余核心通过普通（纯Dart CPU）进行加密以压榨全部算力。
+        int currentHardwareWorkers = _tasks.expand((root) => _getAllNodes(root)).where((n) => n.status == NodeStatus.encrypting && n.encryptionMode == EncryptionMode.hardware).length;
+        int maxHardwareWorkers = (_maxWorkers / 2).ceil();
+        useHardware = currentHardwareWorkers < maxHardwareWorkers;
+      }
       
       node.encryptionMode = useHardware ? EncryptionMode.hardware : EncryptionMode.software;
 
@@ -931,20 +956,22 @@ Future<void> _encryptionWorker(Map<String, dynamic> args) async {
 
     if (!skipEncryption) {
       int processedBytes = 0;
-      int lastReportedBytes = 0;
       
       Stream<List<int>> streamWithProgress(Stream<List<int>> source) async* {
+        int lastReportedTime = DateTime.now().millisecondsSinceEpoch;
         await for (final chunk in source) {
           yield chunk;
           processedBytes += chunk.length;
-          // Report every ~1MB or if it's the last bit
-          if (processedBytes - lastReportedBytes >= 1024 * 1024 || processedBytes == size) {
+          
+          final now = DateTime.now().millisecondsSinceEpoch;
+          // Report if at least 32ms have passed (approx 30fps) or if it's the last bit
+          if (now - lastReportedTime >= 32 || processedBytes == size) {
             sendPort.send({
               'type': 'progress',
               'nodeId': nodeId,
               'processedBytes': processedBytes,
             });
-            lastReportedBytes = processedBytes;
+            lastReportedTime = now;
           }
         }
       }

@@ -18,12 +18,14 @@ class PerformanceSettingsPage extends StatefulWidget {
 
 class _PerformanceSettingsPageState extends State<PerformanceSettingsPage> {
   static const _prefsKeyEncryptionCores = 'encryption_cores';
+  static const _prefsKeyAllocationStrategy = 'encryption_allocation_strategy';
 
   late final TextEditingController _coresController;
   int _totalCores = 1;
   int _maxUsableCores = 1;
   int _selectedCores = 1;
   bool _autoRefreshOnStartup = false;
+  String _allocationStrategy = 'smart';
 
   @override
   void initState() {
@@ -48,6 +50,7 @@ class _PerformanceSettingsPageState extends State<PerformanceSettingsPage> {
     _coresController.text = _selectedCores.toString();
 
     _autoRefreshOnStartup = prefs.getBool('auto_refresh_on_startup') ?? false;
+    _allocationStrategy = prefs.getString(_prefsKeyAllocationStrategy) ?? 'smart';
 
     if (mounted) setState(() {});
   }
@@ -58,6 +61,16 @@ class _PerformanceSettingsPageState extends State<PerformanceSettingsPage> {
     setState(() {
       _autoRefreshOnStartup = value;
     });
+  }
+
+  Future<void> _setAllocationStrategy(String value) async {
+    if (value == _allocationStrategy) return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_prefsKeyAllocationStrategy, value);
+    setState(() {
+      _allocationStrategy = value;
+    });
+    EncryptionTaskManager().pumpQueue();
   }
 
   Future<void> _persist(int value) async {
@@ -257,6 +270,41 @@ class _PerformanceSettingsPageState extends State<PerformanceSettingsPage> {
                     ),
                   ),
                   onSubmitted: (v) => _setCores(int.tryParse(v) ?? _selectedCores),
+                ),
+                const SizedBox(height: 24),
+                const Divider(),
+                const SizedBox(height: 16),
+                Text(
+                  '加密分配策略',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 8),
+                RadioListTile<String>(
+                  title: const Text('智能分配 (推荐)'),
+                  subtitle: const Text('自动在硬件加速与软件加密之间分配任务，以压榨全部算力'),
+                  value: 'smart',
+                  groupValue: _allocationStrategy,
+                  onChanged: (v) => v != null ? _setAllocationStrategy(v) : null,
+                  contentPadding: EdgeInsets.zero,
+                  activeColor: theme.colorScheme.primary,
+                ),
+                RadioListTile<String>(
+                  title: const Text('仅硬件加速'),
+                  subtitle: const Text('仅使用 FlutterCryptography 进行硬件加速加密'),
+                  value: 'hardware',
+                  groupValue: _allocationStrategy,
+                  onChanged: (v) => v != null ? _setAllocationStrategy(v) : null,
+                  contentPadding: EdgeInsets.zero,
+                  activeColor: theme.colorScheme.primary,
+                ),
+                RadioListTile<String>(
+                  title: const Text('仅软件加密'),
+                  subtitle: const Text('仅使用 DartCryptography 纯软件实现加密'),
+                  value: 'software',
+                  groupValue: _allocationStrategy,
+                  onChanged: (v) => v != null ? _setAllocationStrategy(v) : null,
+                  contentPadding: EdgeInsets.zero,
+                  activeColor: theme.colorScheme.primary,
                 ),
               ],
             ),
