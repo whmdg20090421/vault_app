@@ -1,3 +1,15 @@
+# 版本 1.5.2 (2026-04-22)
+
+### ✨ Features, Performance & Bug Fixes
+- **Hardware Crypto Acceleration**: 引入了底层的 `cryptography` 库，全面开启 AES 和 ChaCha20 的硬件加速，极大提升了大文件加密解密性能。
+- **Adaptive Chunk Size**: 实现了根据文件大小自适应调整加密块大小（64KB~5MB）的算法，并引入了 V2 兼容头以保持老文件的完美解密。
+- **Zero-copy Stream Optimization**: 重构了加密虚拟文件系统 (`EncryptedVfs`) 的流读写逻辑，预分配固定大小内存进行写入，彻底消除了内存深拷贝和 GC 压力。
+- **Benchmark Fix**: 修复了底层加密速度基准测试 (Benchmark) 在 ChaCha20 下发生异常并抛出虚假数万兆速度的 Bug，同时更正了真实测速的计算公式。
+- **Vault Explorer Enhancements**: 
+  - 在保险箱的文件/文件夹长按菜单中新增了**“重命名”**与**“删除”**功能，可直接管理文件。
+  - 在点击打开加密文件夹时，新增了二次确认弹窗，并对内部解密映射进行了强校验。
+- **Encryption Progress Recovery**: 修复了手动暂停加密任务后，报错节点（红色）无法通过点击“播放”按钮一键恢复（黄色）的问题。
+
 # 版本 1.4.7 (2026-04-19)
 
 ### ✨ Bug Fixes & UI Enhancements
