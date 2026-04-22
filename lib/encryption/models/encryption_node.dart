@@ -113,11 +113,15 @@ abstract class EncryptionNode {
 class FileNode extends EncryptionNode {
   /// 绝对路径，用于后续读取
   String absolutePath;
+  
+  /// 正在加密时的已完成字节数（仅状态为 encrypting 时有效）
+  int encryptingCompletedBytes;
 
   FileNode({
     String? taskId,
     required String name,
     required this.absolutePath,
+    this.encryptingCompletedBytes = 0,
     bool isPaused = false,
     int rawSize = 0,
     NodeStatus status = NodeStatus.pending_waiting,

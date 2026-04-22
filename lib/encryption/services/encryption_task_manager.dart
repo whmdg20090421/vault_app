@@ -474,6 +474,11 @@ class EncryptionTaskManager extends ChangeNotifier {
         _saveQueue();
         notifyListeners();
         pumpQueue();
+      } else if (type == 'progress') {
+        if (node is FileNode) {
+          node.encryptingCompletedBytes = message['processedBytes'] as int;
+          notifyListeners();
+        }
       }
     }
   }
@@ -848,7 +853,26 @@ Future<void> _encryptionWorker(Map<String, dynamic> args) async {
     }
 
     if (!skipEncryption) {
-      final stream = file.openRead();
+      int processedBytes = 0;
+      int lastReportedBytes = 0;
+      
+      Stream<List<int>> streamWithProgress(Stream<List<int>> source) async* {
+        await for (final chunk in source) {
+          yield chunk;
+          processedBytes += chunk.length;
+          // Report every ~1MB or if it's the last bit
+          if (processedBytes - lastReportedBytes >= 1024 * 1024 || processedBytes == size) {
+            sendPort.send({
+              'type': 'progress',
+              'nodeId': nodeId,
+              'processedBytes': processedBytes,
+            });
+            lastReportedBytes = processedBytes;
+          }
+        }
+      }
+
+      final stream = streamWithProgress(file.openRead());
       await encryptedVfs.uploadStream(stream, size, remotePath);
     }
 

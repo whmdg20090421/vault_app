@@ -302,7 +302,8 @@ class _EncryptionTaskCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     int completedSize = 0;
-    int encryptingSize = 0;
+    int encryptingCompletedSize = 0;
+    int encryptingRemainingSize = 0;
     int pendingSize = 0;
     int pausedErrorSize = 0;
     int totalSize = 0;
@@ -319,7 +320,8 @@ class _EncryptionTaskCard extends StatelessWidget {
             completedSize += node.rawSize;
             break;
           case NodeStatus.encrypting:
-            encryptingSize += node.rawSize;
+            encryptingCompletedSize += node.encryptingCompletedBytes;
+            encryptingRemainingSize += (node.rawSize - node.encryptingCompletedBytes);
             break;
           case NodeStatus.pending_waiting:
             pendingSize += node.rawSize;
@@ -334,7 +336,7 @@ class _EncryptionTaskCard extends StatelessWidget {
 
     traverse(task);
 
-    final double progress = totalSize > 0 ? completedSize / totalSize : 0;
+    final double progress = totalSize > 0 ? (completedSize + encryptingCompletedSize) / totalSize : 0;
     final bool isPaused = task.isPaused;
     final bool isError = task.status == NodeStatus.error;
     final bool isCompleted = task.status == NodeStatus.completed;
@@ -450,12 +452,13 @@ class _EncryptionTaskCard extends StatelessWidget {
               width: double.infinity,
               child: CustomPaint(
                 painter: _EncryptionProgressLinePainter(
-                  completedSize: completedSize,
-                  encryptingSize: encryptingSize,
-                  pendingSize: pendingSize,
-                  pausedErrorSize: pausedErrorSize,
-                  totalSize: totalSize,
-                ),
+                              completedSize: completedSize,
+                              encryptingCompletedSize: encryptingCompletedSize,
+                              encryptingRemainingSize: encryptingRemainingSize,
+                              pendingSize: pendingSize,
+                              pausedErrorSize: pausedErrorSize,
+                              totalSize: totalSize,
+                            ),
               ),
             ),
             const SizedBox(height: 8),
@@ -472,7 +475,7 @@ class _EncryptionTaskCard extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  '${FormatUtils.formatBytes(completedSize)} / ${FormatUtils.formatBytes(totalSize)}',
+                  '${FormatUtils.formatBytes(completedSize + encryptingCompletedSize)} / ${FormatUtils.formatBytes(totalSize)}',
                   style: TextStyle(
                     fontSize: 12,
                     color: theme.colorScheme.onSurface.withOpacity(0.5),
@@ -489,14 +492,16 @@ class _EncryptionTaskCard extends StatelessWidget {
 
 class _EncryptionProgressLinePainter extends CustomPainter {
   final int completedSize;
-  final int encryptingSize;
+  final int encryptingCompletedSize;
+  final int encryptingRemainingSize;
   final int pendingSize;
   final int pausedErrorSize;
   final int totalSize;
 
   _EncryptionProgressLinePainter({
     required this.completedSize,
-    required this.encryptingSize,
+    required this.encryptingCompletedSize,
+    required this.encryptingRemainingSize,
     required this.pendingSize,
     required this.pausedErrorSize,
     required this.totalSize,
@@ -520,21 +525,24 @@ class _EncryptionProgressLinePainter extends CustomPainter {
     double minWidth = w * 0.01;
 
     double completedW = completedSize > 0 ? (completedSize / totalSize * w) : 0;
-    double encryptingW = encryptingSize > 0 ? (encryptingSize / totalSize * w) : 0;
+    double encryptingCompletedW = encryptingCompletedSize > 0 ? (encryptingCompletedSize / totalSize * w) : 0;
+    double encryptingRemainingW = encryptingRemainingSize > 0 ? (encryptingRemainingSize / totalSize * w) : 0;
     double pendingW = pendingSize > 0 ? (pendingSize / totalSize * w) : 0;
     double pausedErrorW = pausedErrorSize > 0 ? (pausedErrorSize / totalSize * w) : 0;
 
     if (completedSize > 0 && completedW < minWidth) completedW = minWidth;
-    if (encryptingSize > 0 && encryptingW < minWidth) encryptingW = minWidth;
+    if (encryptingCompletedSize > 0 && encryptingCompletedW < minWidth) encryptingCompletedW = minWidth;
+    if (encryptingRemainingSize > 0 && encryptingRemainingW < minWidth) encryptingRemainingW = minWidth;
     if (pendingSize > 0 && pendingW < minWidth) pendingW = minWidth;
     if (pausedErrorSize > 0 && pausedErrorW < minWidth) pausedErrorW = minWidth;
 
-    double totalW = completedW + encryptingW + pendingW + pausedErrorW;
+    double totalW = completedW + encryptingCompletedW + encryptingRemainingW + pendingW + pausedErrorW;
 
     if (totalW > w) {
       double scale = w / totalW;
       completedW *= scale;
-      encryptingW *= scale;
+      encryptingCompletedW *= scale;
+      encryptingRemainingW *= scale;
       pendingW *= scale;
       pausedErrorW *= scale;
     }
@@ -553,10 +561,26 @@ class _EncryptionProgressLinePainter extends CustomPainter {
       currentX += width;
     }
 
+    // 1. Fully completed files (Green)
     drawSegment(completedW, Colors.green);
-    drawSegment(encryptingW, Colors.yellow);
-    drawSegment(pendingW, Colors.red);
-    drawSegment(pausedErrorW, Colors.grey);
+
+    // 2. White separator if both fully completed and partially completed portions exist
+    if (completedW > 0 && encryptingCompletedW > 0) {
+      final whitePaint = Paint()..color = Colors.white;
+      canvas.drawRect(Rect.fromLTWH(currentX - 1, 0, 2, h), whitePaint);
+    }
+
+    // 3. Partially completed files (Green)
+    drawSegment(encryptingCompletedW, Colors.green);
+
+    // 4. Remaining to encrypt (Yellow)
+    drawSegment(encryptingRemainingW, Colors.yellow);
+
+    // 5. Paused/Error (Red)
+    drawSegment(pausedErrorW, Colors.red);
+
+    // 6. Pending (Grey)
+    drawSegment(pendingW, Colors.grey.withOpacity(0.4));
 
     if (currentX < w) {
       drawSegment(w - currentX, Colors.grey.withOpacity(0.3));
@@ -568,7 +592,8 @@ class _EncryptionProgressLinePainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _EncryptionProgressLinePainter oldDelegate) {
     return oldDelegate.completedSize != completedSize ||
-        oldDelegate.encryptingSize != encryptingSize ||
+        oldDelegate.encryptingCompletedSize != encryptingCompletedSize ||
+        oldDelegate.encryptingRemainingSize != encryptingRemainingSize ||
         oldDelegate.pendingSize != pendingSize ||
         oldDelegate.pausedErrorSize != pausedErrorSize ||
         oldDelegate.totalSize != totalSize;
