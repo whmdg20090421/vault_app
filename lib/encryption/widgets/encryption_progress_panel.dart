@@ -117,29 +117,7 @@ class _EncryptionProgressPanelState extends State<EncryptionProgressPanel> with 
     );
   }
 
-  Widget _buildModeTag(EncryptionMode mode) {
-    if (mode == EncryptionMode.unknown) return const SizedBox.shrink();
-    final isHardware = mode == EncryptionMode.hardware;
-    return Container(
-      margin: const EdgeInsets.only(left: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(
-        color: isHardware ? Colors.blue.withOpacity(0.2) : Colors.orange.withOpacity(0.2),
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(
-          color: isHardware ? Colors.blue : Colors.orange,
-        ),
-      ),
-      child: Text(
-        isHardware ? '硬件加速' : '普通加密',
-        style: TextStyle(
-          fontSize: 9,
-          fontWeight: FontWeight.bold,
-          color: isHardware ? Colors.blue : Colors.orange,
-        ),
-      ),
-    );
-  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -272,6 +250,30 @@ class _EncryptionTaskCard extends StatelessWidget {
     this.isHistory = false,
     this.onTap,
   });
+
+  Widget _buildModeTag(EncryptionMode mode) {
+    if (mode == EncryptionMode.unknown) return const SizedBox.shrink();
+    final isHardware = mode == EncryptionMode.hardware;
+    return Container(
+      margin: const EdgeInsets.only(left: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: isHardware ? Colors.blue.withOpacity(0.2) : Colors.orange.withOpacity(0.2),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(
+          color: isHardware ? Colors.blue : Colors.orange,
+        ),
+      ),
+      child: Text(
+        isHardware ? '硬件加速' : '普通加密',
+        style: TextStyle(
+          fontSize: 9,
+          fontWeight: FontWeight.bold,
+          color: isHardware ? Colors.blue : Colors.orange,
+        ),
+      ),
+    );
+  }
 
   void _showActionMenu(BuildContext context) {
     showModalBottomSheet(
