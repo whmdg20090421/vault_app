@@ -649,13 +649,25 @@ class EncryptedVfs implements VirtualFileSystem {
     }
     await baseVfs.delete(realPath);
     
-    // 从缓存中移除
-    _virtualToReal.remove(virtualPath);
-    _realToVirtual.remove(_normalizePath(realPath));
-    _encryptedDomains.remove(virtualPath);
+    // 从缓存中移除 (包括所有子路径)
+    String vPrefix = virtualPath == '/' ? '/' : '$virtualPath/';
+    String normRealPath = _normalizePath(realPath);
+    String rPrefix = normRealPath == '/' ? '/' : '$normRealPath/';
+
+    _virtualToReal.removeWhere((k, v) => k == virtualPath || k.startsWith(vPrefix));
+    _realToVirtual.removeWhere((k, v) => k == normRealPath || k.startsWith(rPrefix));
+    _encryptedDomains.removeWhere((k) => k == virtualPath || k.startsWith(vPrefix));
     
-    if (_manifestEntries.containsKey(virtualPath)) {
-      _manifestEntries.remove(virtualPath);
+    bool manifestChanged = false;
+    _manifestEntries.removeWhere((k, v) {
+      if (k == virtualPath || k.startsWith(vPrefix)) {
+        manifestChanged = true;
+        return true;
+      }
+      return false;
+    });
+
+    if (manifestChanged) {
       await _saveManifest();
     }
   }
@@ -678,21 +690,84 @@ class EncryptedVfs implements VirtualFileSystem {
 
     await baseVfs.rename(realOldPath, realNewPath);
 
-    // 更新缓存
-    _virtualToReal.remove(virtualOldPath);
-    _realToVirtual.remove(_normalizePath(realOldPath));
-    
-    // getRealPath 内部可能已经添加了新映射，但这里再确认一下
-    _virtualToReal[virtualNewPath] = _normalizePath(realNewPath);
-    _realToVirtual[_normalizePath(realNewPath)] = virtualNewPath;
+    String normRealOldPath = _normalizePath(realOldPath);
+    String normRealNewPath = _normalizePath(realNewPath);
 
-    if (_encryptedDomains.contains(virtualOldPath)) {
-      _encryptedDomains.remove(virtualOldPath);
-      _encryptedDomains.add(virtualNewPath);
-    }
-    
-    if (_manifestEntries.containsKey(virtualOldPath)) {
-      _manifestEntries[virtualNewPath] = _manifestEntries.remove(virtualOldPath);
+    String vOldPrefix = virtualOldPath == '/' ? '/' : '$virtualOldPath/';
+    String vNewPrefix = virtualNewPath == '/' ? '/' : '$virtualNewPath/';
+    String rOldPrefix = normRealOldPath == '/' ? '/' : '$normRealOldPath/';
+    String rNewPrefix = normRealNewPath == '/' ? '/' : '$normRealNewPath/';
+
+    // Update _virtualToReal
+    final Map<String, String> newV2R = {};
+    _virtualToReal.removeWhere((k, v) {
+      if (k == virtualOldPath) {
+        newV2R[virtualNewPath] = normRealNewPath;
+        return true;
+      }
+      if (k.startsWith(vOldPrefix)) {
+        String suffix = k.substring(vOldPrefix.length);
+        String rSuffix = v.substring(rOldPrefix.length);
+        newV2R['$vNewPrefix$suffix'] = '$rNewPrefix$rSuffix';
+        return true;
+      }
+      return false;
+    });
+    _virtualToReal.addAll(newV2R);
+
+    // Update _realToVirtual
+    final Map<String, String> newR2V = {};
+    _realToVirtual.removeWhere((k, v) {
+      if (k == normRealOldPath) {
+        newR2V[normRealNewPath] = virtualNewPath;
+        return true;
+      }
+      if (k.startsWith(rOldPrefix)) {
+        String suffix = k.substring(rOldPrefix.length);
+        String vSuffix = v.substring(vOldPrefix.length);
+        newR2V['$rNewPrefix$suffix'] = '$vNewPrefix$vSuffix';
+        return true;
+      }
+      return false;
+    });
+    _realToVirtual.addAll(newR2V);
+
+    // Update _encryptedDomains
+    final Set<String> newDomains = {};
+    _encryptedDomains.removeWhere((k) {
+      if (k == virtualOldPath) {
+        newDomains.add(virtualNewPath);
+        return true;
+      }
+      if (k.startsWith(vOldPrefix)) {
+        String suffix = k.substring(vOldPrefix.length);
+        newDomains.add('$vNewPrefix$suffix');
+        return true;
+      }
+      return false;
+    });
+    _encryptedDomains.addAll(newDomains);
+
+    // Update manifest
+    bool manifestChanged = false;
+    final Map<String, dynamic> newManifest = {};
+    _manifestEntries.removeWhere((k, v) {
+      if (k == virtualOldPath) {
+        newManifest[virtualNewPath] = v;
+        manifestChanged = true;
+        return true;
+      }
+      if (k.startsWith(vOldPrefix)) {
+        String suffix = k.substring(vOldPrefix.length);
+        newManifest['$vNewPrefix$suffix'] = v;
+        manifestChanged = true;
+        return true;
+      }
+      return false;
+    });
+    _manifestEntries.addAll(newManifest);
+
+    if (manifestChanged) {
       await _saveManifest();
     }
   }

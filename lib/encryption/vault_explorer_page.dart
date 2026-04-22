@@ -590,6 +590,56 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
     }
   }
 
+  Future<void> _renameFile(VfsNode file) async {
+    final controller = TextEditingController(text: file.name);
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('重命名'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(labelText: '新名称'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('取消'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, controller.text.trim()),
+            child: const Text('确定'),
+          ),
+        ],
+      ),
+    );
+
+    if (result != null && result.isNotEmpty && result != file.name) {
+      if (mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => const Center(child: CircularProgressIndicator()),
+        );
+      }
+      try {
+        final newPath = p.join(p.dirname(file.path), result).replaceAll(r'\', '/');
+        await _vfs.rename(file.path, newPath);
+        if (mounted) {
+          Navigator.pop(context); // Close loading
+          _loadFiles();
+        }
+      } catch (e) {
+        if (mounted) {
+          Navigator.pop(context); // Close loading
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('重命名失败: $e')),
+          );
+        }
+      }
+    }
+  }
+
   Future<void> _shareSelected() async {
     if (_selectedNodes.isEmpty) return;
 
@@ -937,6 +987,14 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
                                       },
                                     ),
                                     ListTile(
+                                      leading: const Icon(Icons.edit),
+                                      title: const Text('重命名'),
+                                      onTap: () {
+                                        Navigator.pop(context);
+                                        _renameFile(file);
+                                      },
+                                    ),
+                                    ListTile(
                                       leading: const Icon(Icons.drive_file_move_outline),
                                       title: const Text('移动'),
                                       onTap: () {
@@ -988,10 +1046,30 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
                           });
                         } else {
                           if (file.isDirectory) {
-                            setState(() {
-                              _currentPath = file.path;
+                            showDialog<bool>(
+                              context: context,
+                              builder: (context) => AlertDialog(
+                                title: const Text('打开文件夹'),
+                                content: Text('是否打开文件夹 ${file.name}?'),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(context, false),
+                                    child: const Text('取消'),
+                                  ),
+                                  ElevatedButton(
+                                    onPressed: () => Navigator.pop(context, true),
+                                    child: const Text('确定'),
+                                  ),
+                                ],
+                              ),
+                            ).then((confirm) {
+                              if (confirm == true) {
+                                setState(() {
+                                  _currentPath = file.path;
+                                });
+                                _loadFiles();
+                              }
                             });
-                            _loadFiles();
                           } else {
                             _previewFile(file);
                           }
