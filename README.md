@@ -5,13 +5,13 @@
 ## 最新版本概览
 
 <!-- RELEASE_SUMMARY_START -->
-- 当前版本：1.5.3
-- **硬件级底层加速**：打通了 Flutter Platform Channel，使得后台多线程在进行 AES/ChaCha20 文件加密时可直接调用操作系统底层的硬件加密指令集（Android BoringSSL / iOS CommonCrypto），大文件加密速度提升超过 10 倍以上。
-- **动态流水线调度 (Pipeline Scheduling)**：
-- 优化了内存分块加密流水线，支持异步提交加密请求并实现磁盘读取与加密的并行操作（最高并发度为 4），极大降低了 I/O 阻塞。
-- 新增智能任务分配算法。当总核心数未被占满时优先分配“硬件加速通道”；当队列排队且剩余 CPU 闲置时，自动将其分配给纯 Dart 实现的“普通加密模式”，实现软硬件混合全功率压榨。
-- **任务状态追踪与 UI 呈现**：在进度列表中直观显示当前正在使用的加密模式（“硬件加速”蓝标 vs “普通加密”橙标），并在开发者模式下提供详细的调度追踪信息。
-- 完整更新：https://github.com/whmdg20090421/vault_app/releases/tag/v1.5.3
+- 当前版本：1.5.2
+- **Hardware Crypto Acceleration**: 引入了底层的 `cryptography` 库，全面开启 AES 和 ChaCha20 的硬件加速，极大提升了大文件加密解密性能。
+- **Adaptive Chunk Size**: 实现了根据文件大小自适应调整加密块大小（64KB~5MB）的算法，并引入了 V2 兼容头以保持老文件的完美解密。
+- **Zero-copy Stream Optimization**: 重构了加密虚拟文件系统 (`EncryptedVfs`) 的流读写逻辑，预分配固定大小内存进行写入，彻底消除了内存深拷贝和 GC 压力。
+- **Benchmark Fix**: 修复了底层加密速度基准测试 (Benchmark) 在 ChaCha20 下发生异常并抛出虚假数万兆速度的 Bug，同时更正了真实测速的计算公式。
+- **Vault Explorer Enhancements**:
+- 完整更新：https://github.com/whmdg20090421/vault_app/releases/tag/v1.5.2
 <!-- RELEASE_SUMMARY_END -->
 
 ## 更新历史 (Changelog)
