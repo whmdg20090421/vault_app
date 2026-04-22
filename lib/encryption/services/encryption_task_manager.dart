@@ -490,7 +490,7 @@ class EncryptionTaskManager extends ChangeNotifier {
         _saveQueue();
         notifyListeners();
         pumpQueue();
-      if (type == 'progress') {
+      } else if (type == 'progress') {
         if (node is FileNode) {
           int addedBytes = (message['processedBytes'] as int) - (node.encryptingCompletedBytes ?? 0);
           if (addedBytes < 0) addedBytes = message['processedBytes'] as int;
@@ -847,7 +847,7 @@ Future<void> _encryptionWorker(Map<String, dynamic> args) async {
     final rootToken = args['rootToken'] as RootIsolateToken?;
     if (useHardware && rootToken != null) {
       BackgroundIsolateBinaryMessenger.ensureInitialized(rootToken);
-      FlutterCryptography.defaultInstance.setUp();
+      FlutterCryptography.enable();
     }
 
     final absolutePath = args['absolutePath'] as String;

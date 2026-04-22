@@ -26,7 +26,7 @@ import 'security/security_check.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  FlutterCryptography.defaultInstance.setUp();
+  FlutterCryptography.enable();
   await BackgroundSettings.instance.init();
   await ErrorReporter.instance.initialize();
   await StatsService().init();
