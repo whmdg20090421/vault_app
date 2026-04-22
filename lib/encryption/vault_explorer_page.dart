@@ -213,7 +213,7 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
       try {
         for (final file in result.files) {
           if (file.path != null) {
-            final taskArgs = {
+            final taskArgs = <String, dynamic>{
               'vaultDirectoryPath': widget.vaultDirectoryPath,
               'masterKey': widget.masterKey.toList(),
               'encryptFilename': widget.vaultConfig.encryptFilename,
@@ -487,6 +487,17 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
     }
   }
 
+  Future<Directory> _getCacheDirectory() async {
+    Directory? tempDir;
+    if (Platform.isAndroid) {
+      final dirs = await getExternalCacheDirectories();
+      if (dirs != null && dirs.isNotEmpty) {
+        tempDir = dirs.first;
+      }
+    }
+    return tempDir ?? await getTemporaryDirectory();
+  }
+
   Future<void> _renameFile(VfsNode file) async {
     final controller = TextEditingController(text: file.name);
     String? result;
@@ -554,7 +565,7 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
     }
 
     try {
-      final tempDir = await getTemporaryDirectory();
+      final tempDir = await _getCacheDirectory();
       final shareDir = Directory(p.join(tempDir.path, 'vault_share_${DateTime.now().millisecondsSinceEpoch}'));
       await shareDir.create(recursive: true);
       _tempDirs.add(shareDir);
@@ -631,7 +642,7 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
     }
 
     try {
-      final tempDir = await getTemporaryDirectory();
+      final tempDir = await _getCacheDirectory();
       final previewDir = Directory(p.join(tempDir.path, 'vault_preview_${DateTime.now().millisecondsSinceEpoch}'));
       await previewDir.create(recursive: true);
       _tempDirs.add(previewDir);
@@ -949,11 +960,16 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
                           });
                         } else {
                           if (file.isDirectory) {
+                            setState(() {
+                              _currentPath = file.path;
+                            });
+                            _loadFiles();
+                          } else {
                             showDialog<bool>(
                               context: context,
                               builder: (context) => AlertDialog(
-                                title: const Text('打开文件夹'),
-                                content: Text('是否打开文件夹 ${file.name}?'),
+                                title: const Text('打开文件'),
+                                content: Text('是否打开文件 ${file.name}?'),
                                 actions: [
                                   TextButton(
                                     onPressed: () => Navigator.pop(context, false),
@@ -967,14 +983,9 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
                               ),
                             ).then((confirm) {
                               if (confirm == true) {
-                                setState(() {
-                                  _currentPath = file.path;
-                                });
-                                _loadFiles();
+                                _previewFile(file);
                               }
                             });
-                          } else {
-                            _previewFile(file);
                           }
                         }
                       },

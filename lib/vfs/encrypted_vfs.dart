@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
+import 'package:crypto/crypto.dart';
 
 import '../encryption/utils/base64url_utils.dart';
 import '../encryption/utils/crypto_utils.dart';
@@ -181,7 +182,12 @@ class EncryptedVfs implements VirtualFileSystem {
       algorithm: _algorithm,
     );
 
-    return Base64UrlUtils.encode(ciphertext);
+    final b64 = Base64UrlUtils.encode(ciphertext);
+    if (b64.length > 200) {
+      final digest = sha256.convert(utf8.encode(b64)).bytes;
+      return 'LFN_' + Base64UrlUtils.encode(Uint8List.fromList(digest)).substring(0, 32);
+    }
+    return b64;
   }
 
   /// 确定性解密文件名：Base64Url -> AES-GCM Ciphertext -> Plaintext
@@ -278,7 +284,25 @@ class EncryptedVfs implements VirtualFileSystem {
 
       String decryptedName = realNode.name;
       if (isEncrypted && encryptFilename) {
-        decryptedName = _decryptName(realNode.name);
+        if (realNode.name.startsWith('LFN_')) {
+          bool found = false;
+          for (String entryPath in _manifestEntries.keys) {
+            String entryParent = _getParentPath(entryPath);
+            if (entryParent == virtualPath) {
+              String possibleName = entryPath.substring(entryParent == '/' ? 1 : entryParent.length + 1);
+              if (_encryptName(possibleName) == realNode.name) {
+                decryptedName = possibleName;
+                found = true;
+                break;
+              }
+            }
+          }
+          if (!found) {
+            decryptedName = _decryptName(realNode.name);
+          }
+        } else {
+          decryptedName = _decryptName(realNode.name);
+        }
       }
 
       String childVirtualPath = virtualPath == '/'
@@ -541,7 +565,7 @@ class EncryptedVfs implements VirtualFileSystem {
 
     if (isEncrypted && realNode.name != _markerFileName) {
       if (encryptFilename) {
-        decryptedName = _decryptName(realNode.name);
+        decryptedName = virtualPath == '/' ? '/' : virtualPath.substring(virtualPath.lastIndexOf('/') + 1);
       }
       if (!realNode.isDirectory) {
         finalSize = _getPlaintextSize(realNode.size, virtualPath);
