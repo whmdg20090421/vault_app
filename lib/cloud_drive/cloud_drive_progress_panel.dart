@@ -142,10 +142,7 @@ class _CloudDriveProgressPanelState extends State<CloudDriveProgressPanel> with 
           builder: (context, value, child) {
             return Transform.scale(
               scale: value,
-              child: Opacity(
-                opacity: value.clamp(0.0, 1.0),
-                child: _buildSyncTaskCard(task, theme, isCyberpunk),
-              ),
+              child: _buildSyncTaskCard(task, theme, isCyberpunk),
             );
           },
         );
@@ -207,13 +204,11 @@ class _CloudDriveProgressPanelState extends State<CloudDriveProgressPanel> with 
             ],
           ),
           const SizedBox(height: 12),
-          ClipRRect(
+          LinearProgressIndicator(
+            value: task.status == SyncStatus.pending ? null : progress,
+            backgroundColor: theme.colorScheme.primary.withOpacity(0.1),
+            valueColor: AlwaysStoppedAnimation<Color>(task.status == SyncStatus.completed ? Colors.green : theme.colorScheme.primary),
             borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(
-              value: task.status == SyncStatus.pending ? null : progress,
-              backgroundColor: theme.colorScheme.primary.withOpacity(0.1),
-              valueColor: AlwaysStoppedAnimation<Color>(task.status == SyncStatus.completed ? Colors.green : theme.colorScheme.primary),
-            ),
           ),
           const SizedBox(height: 8),
           Text(

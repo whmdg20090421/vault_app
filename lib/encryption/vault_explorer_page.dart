@@ -22,122 +22,8 @@ import 'dart:isolate';
 import '../theme/app_theme.dart';
 import 'encryption_page.dart';
 
-Future<void> doImportFileIsolate(Map<String, dynamic> args) async {
-  final sendPort = args['sendPort'] as SendPort;
-  final files = args['files'] as List<Map<String, String>>;
-  final taskId = args['taskId'] as String;
 
-  try {
-    for (final fileInfo in files) {
-      final localPath = fileInfo['localPath']!;
-      final remotePath = fileInfo['remotePath']!;
-      final file = File(localPath);
-      if (await file.exists()) {
-        final size = await file.length();
-        final childId = '$taskId/${p.basename(localPath)}';
-        
-        sendPort.send({
-          'type': 'add_child',
-          'taskId': taskId,
-          'child': {
-            'id': childId,
-            'name': p.basename(localPath),
-            'isDirectory': false,
-            'totalBytes': size,
-          }
-        });
 
-        // 模拟文件处理进度
-        await Future.delayed(const Duration(milliseconds: 500));
-        sendPort.send({'type': 'progress', 'taskId': childId, 'bytes': size});
-        
-        // Report file imported
-        sendPort.send({
-          'type': 'file_imported',
-          'taskId': taskId,
-          'localPath': localPath,
-          'remotePath': remotePath,
-          'hash': 'dummy_hash',
-          'size': size,
-          'vaultDirectoryPath': args['vaultDirectoryPath'],
-        });
-      }
-    }
-    sendPort.send({'type': 'done', 'taskId': taskId});
-  } catch (e) {
-    sendPort.send({'type': 'error', 'taskId': taskId, 'error': e.toString()});
-  }
-}
-
-Future<void> doImportFolderIsolate(Map<String, dynamic> args) async {
-  final sendPort = args['sendPort'] as SendPort;
-  final result = args['result'] as String;
-  final currentPath = args['currentPath'] as String;
-  final taskId = args['taskId'] as String;
-
-  try {
-    final dir = Directory(result);
-    if (await dir.exists()) {
-      final baseName = p.basename(result);
-      final remoteDirPath = p.join(currentPath, baseName).replaceAll(r'\', '/');
-
-      // Build task tree recursively
-      Map<String, dynamic> buildTree(Directory d, String parentId, String currentRemotePath) {
-        int totalSize = 0;
-        List<Map<String, dynamic>> children = [];
-        List<FileSystemEntity> entities = [];
-        try {
-          entities = d.listSync(followLinks: false);
-        } catch (_) {
-          entities = [];
-        }
-
-        for (final entity in entities) {
-          final name = p.basename(entity.path);
-          final id = '$parentId/$name';
-          if (entity is File) {
-            int size = 0;
-            try {
-              size = entity.lengthSync();
-            } catch (_) {
-              continue;
-            }
-            totalSize += size;
-            children.add({
-              'id': id,
-              'name': name,
-              'isDirectory': false,
-              'totalBytes': size,
-              'path': entity.path,
-              'remotePath': p.join(currentRemotePath, name).replaceAll(r'\', '/'),
-            });
-          } else if (entity is Directory) {
-            final childRemotePath = p.join(currentRemotePath, name).replaceAll(r'\', '/');
-            final childMap = buildTree(entity, id, childRemotePath);
-            totalSize += childMap['totalBytes'] as int;
-            children.add(childMap);
-          }
-        }
-        return {
-          'id': parentId,
-          'name': p.basename(d.path),
-          'isDirectory': true,
-          'totalBytes': totalSize,
-          'children': children,
-          'remotePath': currentRemotePath,
-        };
-      }
-
-      final treeMap = buildTree(dir, taskId, remoteDirPath);
-      sendPort.send({'type': 'tree', 'taskId': taskId, 'tree': treeMap});
-
-      // Skip processing here, let ETM (EncryptionTaskManager) pumpQueue handle the actual multi-threaded file import
-      sendPort.send({'type': 'done', 'taskId': taskId});
-    }
-  } catch (e) {
-    sendPort.send({'type': 'error', 'taskId': taskId, 'error': e.toString()});
-  }
-}
 
 
 
@@ -238,6 +124,7 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
   final Set<VfsNode> _selectedNodes = {};
   final List<ReceivePort> _receivePorts = [];
   final List<Directory> _tempDirs = [];
+  final List<Timer> _previewTimers = [];
   
   VfsNode? _clipboardNode;
   bool _isCut = false;
@@ -261,6 +148,12 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
       });
     }
     _tempDirs.clear();
+
+    for (final timer in _previewTimers) {
+      timer.cancel();
+    }
+    _previewTimers.clear();
+
     super.dispose();
   }
 
@@ -431,50 +324,54 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
     }
   }
 
-  void _newFolder() {
+  Future<void> _newFolder() async {
     setState(() => _isMenuOpen = false);
     final controller = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('新建文件夹'),
-          content: TextField(
-            controller: controller,
-            decoration: const InputDecoration(labelText: '文件夹名称'),
-            autofocus: true,
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('取消'),
+    try {
+      await showDialog(
+        context: context,
+        builder: (context) {
+          return AlertDialog(
+            title: const Text('新建文件夹'),
+            content: TextField(
+              controller: controller,
+              decoration: const InputDecoration(labelText: '文件夹名称'),
+              autofocus: true,
             ),
-            ElevatedButton(
-              onPressed: () async {
-                final name = controller.text.trim();
-                if (name.isNotEmpty) {
-                  try {
-                    final newPath = p.join(_currentPath, name).replaceAll(r'\', '/');
-                    await _vfs.mkdir(newPath);
-                    if (mounted) {
-                      Navigator.of(context).pop();
-                      _loadFiles();
-                    }
-                  } catch (e) {
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('创建失败: $e')),
-                      );
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('取消'),
+              ),
+              ElevatedButton(
+                onPressed: () async {
+                  final name = controller.text.trim();
+                  if (name.isNotEmpty) {
+                    try {
+                      final newPath = p.join(_currentPath, name).replaceAll(r'\', '/');
+                      await _vfs.mkdir(newPath);
+                      if (mounted) {
+                        Navigator.of(context).pop();
+                        _loadFiles();
+                      }
+                    } catch (e) {
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('创建失败: $e')),
+                        );
+                      }
                     }
                   }
-                }
-              },
-              child: const Text('创建'),
-            ),
-          ],
-        );
-      },
-    ).whenComplete(() => controller.dispose());
+                },
+                child: const Text('创建'),
+              ),
+            ],
+          );
+        },
+      );
+    } finally {
+      controller.dispose();
+    }
   }
 
   Future<void> _paste() async {
@@ -592,27 +489,32 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
 
   Future<void> _renameFile(VfsNode file) async {
     final controller = TextEditingController(text: file.name);
-    final result = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('重命名'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: const InputDecoration(labelText: '新名称'),
+    String? result;
+    try {
+      result = await showDialog<String>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('重命名'),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            decoration: const InputDecoration(labelText: '新名称'),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('取消'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, controller.text.trim()),
+              child: const Text('确定'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('取消'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, controller.text.trim()),
-            child: const Text('确定'),
-          ),
-        ],
-      ),
-    );
+      );
+    } finally {
+      controller.dispose();
+    }
 
     if (result != null && result.isNotEmpty && result != file.name) {
       if (mounted) {
@@ -767,7 +669,7 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
             SnackBar(content: Text('打开文件失败: ${result.message}')),
           );
         }
-        Timer(const Duration(minutes: 10), () async {
+        final timer = Timer(const Duration(minutes: 10), () async {
           try {
             if (await previewDir.exists()) {
               await previewDir.delete(recursive: true);
@@ -775,6 +677,7 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
           } catch (_) {}
           _tempDirs.remove(previewDir);
         });
+        _previewTimers.add(timer);
       }
     } catch (e) {
       if (mounted) {

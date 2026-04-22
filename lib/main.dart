@@ -160,15 +160,14 @@ class _BackgroundShellState extends State<_BackgroundShell> {
         ),
         if (widget.enabled && _imageProvider != null)
           Positioned.fill(
-            child: Opacity(
-              opacity: widget.imageOpacity,
-              child: Image(
-                key: const ValueKey('app_background_image_layer'),
-                image: _imageProvider!,
-                fit: BoxFit.cover,
-                gaplessPlayback: true,
-                filterQuality: FilterQuality.low,
-              ),
+            child: Image(
+              key: const ValueKey('app_background_image_layer'),
+              image: _imageProvider!,
+              fit: BoxFit.cover,
+              gaplessPlayback: true,
+              filterQuality: FilterQuality.low,
+              color: Colors.white.withOpacity(widget.imageOpacity),
+              colorBlendMode: BlendMode.modulate,
             ),
           ),
         widget.child,

@@ -20,9 +20,6 @@ class SecurityCheck {
       final apkHash = await _channel.invokeMethod<String>('getApkHash') ?? '';
       final signatureHash = await _channel.invokeMethod<String>('getSignatureHash') ?? '';
 
-      print('Current APK Hash: $apkHash');
-      print('Current Signature Hash: $signatureHash');
-
       // 现在的校验逻辑要求必须提供签名或APK的哈希（二者选一或都填），
       // 否则代表应用未经正确配置就发布，视为不安全。
       // 但如果你是在自己开发时运行，可以将这两个预期哈希暂时置空。
@@ -105,6 +102,12 @@ class _SecurityPasswordWidgetState extends State<_SecurityPasswordWidget> {
   final TextEditingController _controller = TextEditingController();
   bool _hasError = false;
 
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
   void _verify() {
     final input = _controller.text;
     final bytes = utf8.encode(input);
@@ -118,7 +121,7 @@ class _SecurityPasswordWidgetState extends State<_SecurityPasswordWidget> {
         _hasError = true;
       });
       // Optionally terminate process on wrong password after some attempts
-      // SystemNavigator.pop();
+      SystemNavigator.pop();
     }
   }
 

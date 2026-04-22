@@ -1,5 +1,3 @@
-import 'dart:typed_data';
-
 /// 虚拟文件系统节点模型
 class VfsNode {
   final String name;

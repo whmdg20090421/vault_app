@@ -108,12 +108,12 @@ class _SyncConfigPageState extends State<SyncConfigPage> {
   }
 
   // --- Step 1 Actions ---
-  void _unlockVault(_VaultItem item) {
+  void _unlockVault(_VaultItem item) async {
     if (item.config == null) return;
     final pwdCtrl = TextEditingController();
     bool unlocking = false;
 
-    showDialog(
+    await showDialog(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => StatefulBuilder(
@@ -201,7 +201,8 @@ class _SyncConfigPageState extends State<SyncConfigPage> {
           ],
         ),
       ),
-    ).whenComplete(() => pwdCtrl.dispose());
+    );
+    pwdCtrl.dispose();
   }
 
   void _onVaultUnlocked(_VaultItem item, Uint8List key) async {

@@ -402,14 +402,18 @@ class EncryptedVfs implements VirtualFileSystem {
     final buffer = <int>[];
     StreamController<List<int>>? controller;
     final completer = Completer<Map<Uint8List, Stream<List<int>>>>();
+    StreamSubscription<List<int>>? subscription;
 
-    stream.listen(
+    subscription = stream.listen(
       (chunk) {
         if (controller == null) {
           buffer.addAll(chunk);
           if (buffer.length >= length) {
             final header = Uint8List.fromList(buffer.sublist(0, length));
             controller = StreamController<List<int>>();
+            controller!.onCancel = () {
+              subscription?.cancel();
+            };
             if (buffer.length > length) {
               controller!.add(buffer.sublist(length));
             }
@@ -431,6 +435,9 @@ class EncryptedVfs implements VirtualFileSystem {
           if (buffer.length >= length) {
             final header = Uint8List.fromList(buffer.sublist(0, length));
             controller = StreamController<List<int>>();
+            controller!.onCancel = () {
+              subscription?.cancel();
+            };
             completer.complete({header: controller!.stream});
           } else {
             completer.completeError(Exception('Encrypted file is too short'));
