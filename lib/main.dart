@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 
+import 'package:cryptography_flutter/cryptography_flutter.dart';
 import 'services/stats_service.dart';
 import 'cloud_drive/cloud_drive_page.dart';
 import 'encryption/encryption_page.dart';
@@ -25,6 +26,7 @@ import 'security/security_check.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  FlutterCryptography.defaultInstance.setUp();
   await BackgroundSettings.instance.init();
   await ErrorReporter.instance.initialize();
   await StatsService().init();

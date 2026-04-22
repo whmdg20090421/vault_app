@@ -6,6 +6,8 @@ import 'dart:isolate';
 import 'dart:typed_data';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
+import 'package:cryptography_flutter/cryptography_flutter.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
@@ -772,6 +774,7 @@ class EncryptionTaskManager extends ChangeNotifier {
       
       final args = {
         'sendPort': _globalReceivePort.sendPort,
+        'rootToken': RootIsolateToken.instance,
         'taskId': root.taskId,
         'nodeId': node.absolutePath, // unique enough for file inside the same tree
         'absolutePath': node.absolutePath,
@@ -817,6 +820,12 @@ Future<void> _encryptionWorker(Map<String, dynamic> args) async {
   final nodeId = args['nodeId'] as String;
   
   try {
+    final rootToken = args['rootToken'] as RootIsolateToken?;
+    if (rootToken != null) {
+      BackgroundIsolateBinaryMessenger.ensureInitialized(rootToken);
+      FlutterCryptography.defaultInstance.setUp();
+    }
+
     final absolutePath = args['absolutePath'] as String;
     final vaultDirectoryPath = args['vaultDirectoryPath'] as String;
     final masterKey = args['masterKey'] as Uint8List;

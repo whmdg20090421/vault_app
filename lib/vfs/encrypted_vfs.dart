@@ -448,7 +448,10 @@ class EncryptedVfs implements VirtualFileSystem {
     int currentOffset = startChunkIndex * chunkSize;
     int bufferOffset = 0;
     int chunkCipherSize = chunkSize + _chunkMacLength;
-    final buffer = Uint8List(chunkCipherSize);
+    Uint8List buffer = Uint8List(chunkCipherSize);
+
+    final List<Future<Uint8List>> pendingTasks = [];
+    const int maxConcurrency = 4;
 
     await for (final chunk in cipherStream) {
       int chunkOffset = 0;
@@ -460,25 +463,37 @@ class EncryptedVfs implements VirtualFileSystem {
         chunkOffset += bytesToCopy;
 
         if (bufferOffset == chunkCipherSize) {
-          final plainChunk = await _chunkCrypto.decryptChunk(
-            chunkData: buffer,
+          final dataToDecrypt = buffer;
+          buffer = Uint8List(chunkCipherSize);
+
+          pendingTasks.add(_chunkCrypto.decryptChunk(
+            chunkData: dataToDecrypt,
             fileId: fileId,
             chunkIndex: chunkIndex++,
-          );
-          yield* _sliceAndYield(plainChunk, currentOffset, plainStart, plainEnd);
-          currentOffset += plainChunk.length;
+          ));
+
+          if (pendingTasks.length >= maxConcurrency) {
+            final plainChunk = await pendingTasks.removeAt(0);
+            yield* _sliceAndYield(plainChunk, currentOffset, plainStart, plainEnd);
+            currentOffset += plainChunk.length;
+          }
           bufferOffset = 0;
         }
       }
     }
 
     if (bufferOffset > 0) {
-      final plainChunk = await _chunkCrypto.decryptChunk(
+      pendingTasks.add(_chunkCrypto.decryptChunk(
         chunkData: Uint8List.sublistView(buffer, 0, bufferOffset),
         fileId: fileId,
         chunkIndex: chunkIndex++,
-      );
+      ));
+    }
+    
+    for (final task in pendingTasks) {
+      final plainChunk = await task;
       yield* _sliceAndYield(plainChunk, currentOffset, plainStart, plainEnd);
+      currentOffset += plainChunk.length;
     }
   }
 
@@ -608,7 +623,10 @@ class EncryptedVfs implements VirtualFileSystem {
 
     int chunkIndex = 0;
     int bufferOffset = 0;
-    final buffer = Uint8List(chunkSize);
+    Uint8List buffer = Uint8List(chunkSize);
+    
+    final List<Future<Uint8List>> pendingTasks = [];
+    const int maxConcurrency = 4;
 
     await for (final chunk in plainStream) {
       int chunkOffset = 0;
@@ -620,22 +638,33 @@ class EncryptedVfs implements VirtualFileSystem {
         chunkOffset += bytesToCopy;
 
         if (bufferOffset == chunkSize) {
-          yield await _chunkCrypto.encryptChunk(
-            chunkData: buffer,
+          final dataToEncrypt = buffer;
+          buffer = Uint8List(chunkSize);
+
+          pendingTasks.add(_chunkCrypto.encryptChunk(
+            chunkData: dataToEncrypt,
             fileId: fileId,
             chunkIndex: chunkIndex++,
-          );
+          ));
+
+          if (pendingTasks.length >= maxConcurrency) {
+            yield await pendingTasks.removeAt(0);
+          }
           bufferOffset = 0;
         }
       }
     }
 
     if (bufferOffset > 0) {
-      yield await _chunkCrypto.encryptChunk(
+      pendingTasks.add(_chunkCrypto.encryptChunk(
         chunkData: Uint8List.sublistView(buffer, 0, bufferOffset),
         fileId: fileId,
         chunkIndex: chunkIndex++,
-      );
+      ));
+    }
+    
+    for (final task in pendingTasks) {
+      yield await task;
     }
   }
 
