@@ -683,6 +683,78 @@ class _EncryptionPageState extends State<EncryptionPage> {
     }
   }
 
+  void _showAddVaultBottomSheet() {
+    final theme = Theme.of(context);
+    final isCyberpunk = theme.brightness == Brightness.dark && 
+                        theme.colorScheme.primary.value == 0xFF00E5FF;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: isCyberpunk ? theme.colorScheme.surfaceContainer : theme.colorScheme.surface,
+      shape: isCyberpunk
+          ? const RoundedRectangleBorder(
+              borderRadius: BorderRadius.zero,
+              side: BorderSide(color: Color(0xFF00E5FF), width: 1.0),
+            )
+          : const RoundedRectangleBorder(
+              borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+            ),
+      builder: (context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (isCyberpunk)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: const BoxDecoration(
+                    border: Border(bottom: BorderSide(color: Color(0xFF00E5FF), width: 1.0)),
+                  ),
+                  child: Text(
+                    '添加保险箱 (ADD VAULT)'.toUpperCase(),
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      color: const Color(0xFF00E5FF),
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1.2,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                )
+              else
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  child: Text(
+                    '添加保险箱',
+                    style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ListTile(
+                leading: Icon(Icons.create_new_folder_outlined, 
+                  color: isCyberpunk ? theme.colorScheme.secondary : theme.colorScheme.primary),
+                title: const Text('创建加密文件夹'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _pickFolderAndConfig();
+                },
+              ),
+              ListTile(
+                leading: Icon(Icons.drive_folder_upload_outlined,
+                  color: isCyberpunk ? theme.colorScheme.secondary : theme.colorScheme.primary),
+                title: const Text('导入现有保险箱'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _pickFolderAndConfig();
+                },
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -782,7 +854,7 @@ class _EncryptionPageState extends State<EncryptionPage> {
                   },
                 ),
       floatingActionButton: FloatingActionButton(
-        onPressed: _pickFolderAndConfig,
+        onPressed: _showAddVaultBottomSheet,
         backgroundColor: theme.colorScheme.primary,
         child: const Icon(Icons.add),
       ),

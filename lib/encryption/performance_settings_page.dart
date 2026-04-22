@@ -1,7 +1,12 @@
 import 'dart:io';
+import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:cryptography/cryptography.dart';
+import 'package:cryptography/dart.dart';
+import 'package:cryptography_flutter/cryptography_flutter.dart';
 import 'services/encryption_task_manager.dart';
 
 class PerformanceSettingsPage extends StatefulWidget {
@@ -71,6 +76,93 @@ class _PerformanceSettingsPageState extends State<PerformanceSettingsPage> {
     _persist(_selectedCores);
   }
 
+  Future<void> _runCompatibilityTest() async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const AlertDialog(
+        content: Row(
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(width: 16),
+            Text('正在进行兼容性测试...'),
+          ],
+        ),
+      ),
+    );
+
+    try {
+      final dataSize = 1024 * 1024; // 1MB
+      final random = Random.secure();
+      final data = Uint8List(dataSize);
+      for (int i = 0; i < dataSize; i++) {
+        data[i] = random.nextInt(256);
+      }
+
+      final secretKeyBytes = List<int>.generate(32, (_) => random.nextInt(256));
+      final secretKey = SecretKey(secretKeyBytes);
+      final nonce = List<int>.generate(12, (_) => random.nextInt(256));
+
+      // 1. FlutterCryptography
+      final flutterCrypto = FlutterCryptography.defaultInstance;
+      final flutterCipher = flutterCrypto.aesGcm(secretKeyLength: 32);
+      
+      final flutterStart = DateTime.now();
+      await flutterCipher.encrypt(data, secretKey: secretKey, nonce: nonce);
+      final flutterEnd = DateTime.now();
+      final flutterTime = flutterEnd.difference(flutterStart).inMilliseconds;
+      final flutterSpeed = flutterTime > 0 ? (1000 / flutterTime).toStringAsFixed(2) : '∞';
+
+      // 2. DartCryptography (Software)
+      final dartCrypto = DartCryptography.defaultInstance;
+      final dartCipher = dartCrypto.aesGcm(secretKeyLength: 32);
+      
+      final dartStart = DateTime.now();
+      await dartCipher.encrypt(data, secretKey: secretKey, nonce: nonce);
+      final dartEnd = DateTime.now();
+      final dartTime = dartEnd.difference(dartStart).inMilliseconds;
+      final dartSpeed = dartTime > 0 ? (1000 / dartTime).toStringAsFixed(2) : '∞';
+
+      if (mounted) {
+        Navigator.pop(context); // Close loading dialog
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('测试结果'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('测试数据: 1 MB'),
+                const SizedBox(height: 8),
+                const Text('FlutterCryptography (硬件加速):', style: TextStyle(fontWeight: FontWeight.bold)),
+                Text('耗时: $flutterTime ms'),
+                Text('速度: $flutterSpeed MB/s'),
+                const SizedBox(height: 16),
+                const Text('DartCryptography (软件实现):', style: TextStyle(fontWeight: FontWeight.bold)),
+                Text('耗时: $dartTime ms'),
+                Text('速度: $dartSpeed MB/s'),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('确定'),
+              ),
+            ],
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context); // Close loading dialog
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('测试失败: $e')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -117,6 +209,14 @@ class _PerformanceSettingsPageState extends State<PerformanceSettingsPage> {
                 ),
                 const SizedBox(height: 16),
                 const Divider(),
+                const SizedBox(height: 16),
+                ListTile(
+                  title: const Text('兼容性测试'),
+                  subtitle: const Text('测试硬件加密与软件加密在当前设备的性能差异'),
+                  trailing: const Icon(Icons.speed_rounded),
+                  contentPadding: EdgeInsets.zero,
+                  onTap: _runCompatibilityTest,
+                ),
                 const SizedBox(height: 16),
                 Text(
                   '加密CPU数量 (${_selectedCores}/${_totalCores})',

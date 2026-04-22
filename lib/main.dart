@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
@@ -23,6 +24,7 @@ import 'settings/theme_settings_page.dart';
 import 'settings/security_settings_page.dart';
 import 'encryption/performance_settings_page.dart';
 import 'security/security_check.dart';
+import 'utils/developer_mode.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -270,6 +272,48 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
+  Timer? _developerTimer;
+  bool _developerHandled = false;
+
+  @override
+  void dispose() {
+    _developerTimer?.cancel();
+    super.dispose();
+  }
+
+  void _showDeveloperWarning() {
+    if (DeveloperMode().isEnabled) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('已处于开发者模式')),
+      );
+      return;
+    }
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('进入开发者模式？', style: TextStyle(color: Colors.red)),
+        content: const Text('警告：开发者模式可能会损坏你的加密文件，并显示底层的调试信息。你确定要进入吗？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('取消'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+            onPressed: () {
+              DeveloperMode().enable();
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('已启用开发者模式')),
+              );
+            },
+            child: const Text('确定'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return ListView(
@@ -314,17 +358,38 @@ class _SettingsPageState extends State<SettingsPage> {
           },
         ),
         const Divider(),
-        ListTile(
-          leading: const Icon(Icons.info_outline_rounded),
-          title: const Text('关于'),
-          trailing: const Icon(Icons.chevron_right_rounded),
-          contentPadding: EdgeInsets.zero,
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const AboutPage()),
-            );
+        GestureDetector(
+          onTapDown: (_) {
+            _developerHandled = false;
+            _developerTimer?.cancel();
+            _developerTimer = Timer(const Duration(seconds: 5), () {
+              _developerHandled = true;
+              _showDeveloperWarning();
+            });
           },
+          onTapUp: (_) {
+            _developerTimer?.cancel();
+          },
+          onTapCancel: () {
+            _developerTimer?.cancel();
+          },
+          child: ListTile(
+            leading: const Icon(Icons.info_outline_rounded),
+            title: const Text('关于'),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            contentPadding: EdgeInsets.zero,
+            onTap: () {
+              _developerTimer?.cancel();
+              if (_developerHandled) {
+                _developerHandled = false;
+                return;
+              }
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const AboutPage()),
+              );
+            },
+          ),
         ),
       ],
     );

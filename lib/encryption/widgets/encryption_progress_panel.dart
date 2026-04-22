@@ -117,6 +117,30 @@ class _EncryptionProgressPanelState extends State<EncryptionProgressPanel> with 
     );
   }
 
+  Widget _buildModeTag(EncryptionMode mode) {
+    if (mode == EncryptionMode.unknown) return const SizedBox.shrink();
+    final isHardware = mode == EncryptionMode.hardware;
+    return Container(
+      margin: const EdgeInsets.only(left: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: isHardware ? Colors.blue.withOpacity(0.2) : Colors.orange.withOpacity(0.2),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(
+          color: isHardware ? Colors.blue : Colors.orange,
+        ),
+      ),
+      child: Text(
+        isHardware ? '硬件加速' : '普通加密',
+        style: TextStyle(
+          fontSize: 9,
+          fontWeight: FontWeight.bold,
+          color: isHardware ? Colors.blue : Colors.orange,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
@@ -308,6 +332,7 @@ class _EncryptionTaskCard extends StatelessWidget {
     int pendingSize = 0;
     int pausedErrorSize = 0;
     int totalSize = 0;
+    Set<EncryptionMode> activeEncryptionModes = {};
 
     void traverse(EncryptionNode node) {
       if (node is FolderNode) {
@@ -316,6 +341,9 @@ class _EncryptionTaskCard extends StatelessWidget {
         }
       } else if (node is FileNode) {
         totalSize += node.rawSize;
+        if (node.status == NodeStatus.encrypting && node.encryptionMode != EncryptionMode.unknown) {
+          activeEncryptionModes.add(node.encryptionMode);
+        }
         switch (node.status) {
           case NodeStatus.completed:
             completedSize += node.rawSize;
@@ -433,32 +461,10 @@ class _EncryptionTaskCard extends StatelessWidget {
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
-                                if (task is FileNode && task.status == NodeStatus.encrypting)
-                                  Container(
-                                    margin: const EdgeInsets.only(left: 8),
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: task.encryptionMode == EncryptionMode.hardware
-                                          ? Colors.blue.withOpacity(0.2)
-                                          : Colors.orange.withOpacity(0.2),
-                                      borderRadius: BorderRadius.circular(4),
-                                      border: Border.all(
-                                        color: task.encryptionMode == EncryptionMode.hardware
-                                            ? Colors.blue
-                                            : Colors.orange,
-                                      ),
-                                    ),
-                                    child: Text(
-                                      task.encryptionMode == EncryptionMode.hardware ? '硬件加速' : '普通加密',
-                                      style: TextStyle(
-                                        fontSize: 9,
-                                        fontWeight: FontWeight.bold,
-                                        color: task.encryptionMode == EncryptionMode.hardware
-                                            ? Colors.blue
-                                            : Colors.orange,
-                                      ),
-                                    ),
-                                  ),
+                                if (task is FileNode && task.status == NodeStatus.encrypting && task.encryptionMode != EncryptionMode.unknown)
+                                  _buildModeTag(task.encryptionMode),
+                                if (task is FolderNode && activeEncryptionModes.isNotEmpty)
+                                  ...activeEncryptionModes.map((mode) => _buildModeTag(mode)),
                               ],
                             ),
                             if (isError && task.errorMessage != null)
