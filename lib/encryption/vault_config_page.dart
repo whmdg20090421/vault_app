@@ -737,7 +737,7 @@ void _benchmarkEncryptWorker(Map<String, dynamic> args) async {
       );
 
       // 真实加密的产物
-      final outLen = secretBox.cipherText.length + secretBox.mac.macBytes.length;
+      final outLen = secretBox.cipherText.length + secretBox.mac.bytes.length;
 
       bytesSinceLastReport += data.length;
       if (bytesSinceLastReport >= 4 * 1024 * 1024) {

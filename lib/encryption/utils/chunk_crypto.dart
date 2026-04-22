@@ -46,9 +46,9 @@ class ChunkCrypto {
       nonce: chunkNonce,
     );
     
-    final out = Uint8List(secretBox.cipherText.length + secretBox.mac.macBytes.length);
+    final out = Uint8List(secretBox.cipherText.length + secretBox.mac.bytes.length);
     out.setAll(0, secretBox.cipherText);
-    out.setAll(secretBox.cipherText.length, secretBox.mac.macBytes);
+    out.setAll(secretBox.cipherText.length, secretBox.mac.bytes);
     return out;
   }
 

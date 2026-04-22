@@ -386,7 +386,7 @@ class _EncryptionTaskCard extends StatelessWidget {
                       ? null
                       : () {
                           if (isError) {
-                            EncryptionTaskManager().markTaskAsFixed(task);
+                            EncryptionTaskManager().markTaskAsFixed(task); // Retry on error
                           } else if (isPaused) {
                             EncryptionTaskManager().resumeTask(task);
                           } else {
@@ -409,7 +409,23 @@ class _EncryptionTaskCard extends StatelessWidget {
                       ),
                       if (isError && task.errorMessage != null)
                         GestureDetector(
-                          onTap: () => _showErrorDialog(context, task.errorMessage!),
+                          onTap: () {
+                            showDialog(
+                              context: context,
+                              builder: (context) => AlertDialog(
+                                title: const Text('解析失败', style: TextStyle(color: Colors.red)),
+                                content: SingleChildScrollView(
+                                  child: Text(task.errorMessage!, style: const TextStyle(fontSize: 12)),
+                                ),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(context),
+                                    child: const Text('关闭'),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
                           child: Text(
                             task.errorMessage!,
                             style: const TextStyle(color: Colors.red, fontSize: 12),
