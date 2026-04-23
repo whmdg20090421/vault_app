@@ -99,7 +99,7 @@ class LocalIndexService {
           
           // 兼容最新的 DFS 目录格式
           if (decoded.containsKey('目录')) {
-            final Map<String, dynamic> directory = decoded['目录'];
+            final Map<String, dynamic> directory = decoded['目录'] as Map<String, dynamic>;
             // 过滤掉仅仅为了补齐文件夹而创建的 {isDirectory: true} 项，因为平铺格式通常只存文件
             // 不过这里其实也可以不过滤，只过滤出含有文件信息的
             final flat = <String, dynamic>{};
@@ -130,7 +130,7 @@ class LocalIndexService {
       final indexFile = File(p.join(vaultDirectoryPath, 'local_index.json'));
       
       // 构建其他内容
-      final otherContent = {
+      final Map<String, dynamic> otherContent = {
         'metadata': {
           'version': 3, // 版本号升级
           'updatedAt': DateTime.now().toIso8601String(),

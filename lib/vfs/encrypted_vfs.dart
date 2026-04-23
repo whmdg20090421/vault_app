@@ -146,7 +146,7 @@ class EncryptedVfs implements VirtualFileSystem {
 
   Future<void> _saveManifest() async {
     try {
-      final otherContent = {
+      final Map<String, dynamic> otherContent = {
         'version': 2,
         'description': 'Vault manifest',
       };
