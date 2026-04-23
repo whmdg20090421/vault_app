@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../vfs/virtual_file_system.dart';
+import '../cloud_drive/webdav_new/webdav_logger.dart';
+import 'error_dialog.dart';
 
 class VfsFolderPickerDialog extends StatefulWidget {
   final VirtualFileSystem vfs;
@@ -47,7 +49,8 @@ class _VfsFolderPickerDialogState extends State<VfsFolderPickerDialog> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('加载失败: $e')));
+        WebDavLogger.writeErrorLog('加载文件夹失败: $e');
+        showVfsErrorDialog(context, '加载文件夹失败: $e');
         setState(() => _isLoading = false);
       }
     }

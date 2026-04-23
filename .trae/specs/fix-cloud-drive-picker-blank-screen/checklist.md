@@ -1,0 +1,4 @@
+- [x] The `_CloudDrivePickerPage` successfully lists the configured WebDAV drives without showing a blank white screen.
+- [x] Selecting a WebDAV drive opens `WebDavBrowserPage` in folder picking mode (`isPickingFolder: true`), aligning perfectly with normal file browsing logic.
+- [x] Network or parsing errors trigger a dialog with a red background and white text, matching the requested visual style.
+- [x] Errors encountered during the cloud drive picker connection phase are written to `/storage/emulated/0/Android/data/com.tianyanmczj.vault/files/webdav_error_log.txt`.

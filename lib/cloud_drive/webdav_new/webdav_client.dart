@@ -1,23 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:dio/dio.dart';
+import 'webdav_logger.dart';
 
 class WebDavErrorLoggerInterceptor extends Interceptor {
-  final String logFilePath = '/storage/emulated/0/Android/data/com.tianyanmczj.vault/files/webdav_error_log.txt';
-
-  void _writeLog(String message) {
-    try {
-      final file = File(logFilePath);
-      if (!file.existsSync()) {
-        file.createSync(recursive: true);
-      }
-      final timestamp = DateTime.now().toIso8601String();
-      file.writeAsStringSync('[$timestamp] $message\n', mode: FileMode.append);
-    } catch (e) {
-      print('Failed to write WebDAV error log: $e');
-    }
-  }
-
   @override
   void onError(DioException err, ErrorInterceptorHandler handler) {
     final buffer = StringBuffer();
@@ -74,7 +60,7 @@ class WebDavErrorLoggerInterceptor extends Interceptor {
     }
     
     buffer.writeln('==================================================');
-    _writeLog(buffer.toString());
+    WebDavLogger.writeErrorLog(buffer.toString());
     
     super.onError(err, handler);
   }

@@ -1,0 +1,12 @@
+# Tasks
+- [x] Task 1: Create a reusable Error Dialog utility and Logging utility
+  - [x] Extract the specific error dialog UI (red box, white text, Cancel button) from `lib/encryption/widgets/encryption_progress_panel.dart` into a reusable `showVfsErrorDialog(BuildContext context, String errorMessage, {String title = '解析失败'})` in `lib/widgets/error_dialog.dart`.
+  - [x] Implement `WebDavLogger` in `lib/cloud_drive/webdav_new/webdav_logger.dart` with a static method `writeErrorLog(String message)` that writes to `/storage/emulated/0/Android/data/com.tianyanmczj.vault/files/webdav_error_log.txt`. (Can reuse `WebDavErrorLoggerInterceptor`'s path logic).
+- [x] Task 2: Fix blank Cloud Drive Picker list
+  - [x] Modify `_CloudDrivePickerPageState._loadConfigs()` in `lib/cloud_drive/sync_settings_dialog.dart` to load from `WebDavConfigRepository().listConfigs()` instead of using `SharedPreferences`.
+- [x] Task 3: Align Folder Picker logic with File Browser
+  - [x] In `_CloudDrivePickerPageState._onConfigSelected()`, navigate to `WebDavBrowserPage(config: config, isPickingFolder: true)` instead of using `VfsFolderPickerDialog`.
+  - [x] Wrap connection checks with `try-catch`. On error, use `WebDavLogger.writeErrorLog` and display `showVfsErrorDialog`.
+- [x] Task 4: Improve `VfsFolderPickerDialog` for local folder picking
+  - [x] Update `lib/widgets/vfs_folder_picker_dialog.dart` to catch exceptions in `_loadCurrentPath` and display them using `showVfsErrorDialog`.
+  - [x] Also log to `WebDavLogger.writeErrorLog` just in case.

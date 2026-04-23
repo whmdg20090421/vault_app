@@ -5,6 +5,7 @@ import 'webdav_config.dart';
 import 'webdav_storage.dart';
 import 'webdav_new/webdav_client.dart';
 import 'webdav_new/webdav_service.dart';
+import 'webdav_new/webdav_logger.dart';
 
 import '../vfs/virtual_file_system.dart';
 import '../vfs/standard_vfs.dart';
@@ -12,6 +13,7 @@ import '../services/sync_storage_service.dart';
 import '../models/sync_task.dart';
 import '../utils/format_utils.dart';
 import '../widgets/vfs_folder_picker_dialog.dart';
+import '../widgets/error_dialog.dart';
 
 class WebDavBrowserPage extends StatefulWidget {
   const WebDavBrowserPage({
@@ -97,6 +99,8 @@ class _WebDavBrowserPageState extends State<WebDavBrowserPage> {
           _isLoading = false;
           _error = '初始化客户端失败：${e.toString()}';
         });
+        WebDavLogger.writeErrorLog(_error);
+        showVfsErrorDialog(context, _error);
       }
     }
   }
@@ -135,6 +139,8 @@ class _WebDavBrowserPageState extends State<WebDavBrowserPage> {
           _isLoading = false;
           _error = '加载目录失败：${e.toString()}';
         });
+        WebDavLogger.writeErrorLog(_error);
+        showVfsErrorDialog(context, _error);
       }
     }
   }
