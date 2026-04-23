@@ -106,7 +106,7 @@ class _EncryptionPageState extends State<EncryptionPage> {
     return true;
   }
 
-  Future<void> _pickFolderAndConfig() async {
+  Future<void> _pickFolderAndConfig({bool isImport = false}) async {
     final hasPermission = await _requestPermissions();
     if (!hasPermission) {
       if (mounted) {
@@ -119,14 +119,47 @@ class _EncryptionPageState extends State<EncryptionPage> {
 
     try {
       final result = await FilePicker.platform.getDirectoryPath();
-      
+
       if (result != null && mounted) {
-        // 跳转到配置页面
-        await Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (context) => VaultConfigPage(vaultDirectoryPath: result),
-          ),
-        );
+        if (isImport) {
+          final configFile = File('$result/vault_config.json');
+          if (await configFile.exists()) {
+            final prefs = await SharedPreferences.getInstance();
+            final vaultPaths = prefs.getStringList('vault_paths') ?? [];
+            if (!vaultPaths.contains(result)) {
+              vaultPaths.add(result);
+              await prefs.setStringList('vault_paths', vaultPaths);
+            }
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('成功导入现有保险箱')),
+              );
+            }
+          } else {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('未识别到加密配置文件，请选择添加不加密文件夹，而不是导入')),
+              );
+            }
+            return;
+          }
+        } else {
+          final configFile = File('$result/vault_config.json');
+          if (await configFile.exists()) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('该文件夹已经是加密保险箱，请使用“导入现有保险箱”功能')),
+              );
+            }
+            return;
+          }
+          // 跳转到配置页面
+          await Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (context) => VaultConfigPage(vaultDirectoryPath: result),
+            ),
+          );
+        }
         // 返回后重新加载
         _loadVaults();
       }
@@ -744,7 +777,7 @@ class _EncryptionPageState extends State<EncryptionPage> {
                 title: const Text('创建加密文件夹'),
                 onTap: () {
                   Navigator.pop(context);
-                  _pickFolderAndConfig();
+                  _pickFolderAndConfig(isImport: false);
                 },
               ),
               ListTile(
@@ -753,7 +786,7 @@ class _EncryptionPageState extends State<EncryptionPage> {
                 title: const Text('导入现有保险箱'),
                 onTap: () {
                   Navigator.pop(context);
-                  _pickFolderAndConfig();
+                  _pickFolderAndConfig(isImport: true);
                 },
               ),
               const SizedBox(height: 8),
