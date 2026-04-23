@@ -1,0 +1,8 @@
+- [ ] VaultConfigPage: Benchmark Dropdown is visible, has a surface background color, and does not overlap or appear transparent.
+- [ ] VaultConfigPage: AES-256-GCM benchmark reaches hardware-accelerated speeds (e.g., >80MB/s) by correctly passing `RootIsolateToken` and initializing `FlutterCryptography` in the background isolate.
+- [ ] VfsFolderPickerDialog: Extracted successfully as a public widget and displays both files (non-navigable) and folders, preventing blank screens when no folders exist.
+- [ ] WebDavBrowserPage: List items contain a `PopupMenuButton` providing Move, Copy, and Delete options.
+- [ ] WebDavBrowserPage: Move and Copy actions successfully open the `VfsFolderPickerDialog` to pick a destination, executing the respective `WebDavService` method and refreshing the view.
+- [ ] SyncEngine: `_saveLocalIndex` utilizes the cached `localIndex` to skip expensive `sha256` hashing for unmodified local files.
+- [ ] SyncEngine: `_syncRecursiveDir` recursively explores newly created local directories, ensuring files inside them are synced.
+- [ ] SyncEngine: `remoteDir` is correctly normalized to include a leading `/`, ensuring `WebDavParser` properly filters out the requested directory and avoids recursive loops.

@@ -17,6 +17,8 @@ import 'webdav_config.dart';
 import 'webdav_storage.dart';
 import 'webdav_new/webdav_client.dart';
 import 'webdav_new/webdav_service.dart';
+import '../widgets/vfs_folder_picker_dialog.dart';
+
 
 class SyncConfigPage extends StatefulWidget {
   const SyncConfigPage({super.key});
@@ -43,8 +45,6 @@ class _SyncConfigPageState extends State<SyncConfigPage> {
   // Step 2: Local Folder
   VirtualFileSystem? _localVfs;
   String _localPath = '/';
-  List<VfsNode> _localDirs = [];
-  bool _loadingLocalDirs = false;
   String _selectedLocalFolder = '/';
 
   // Step 3: WebDAV
@@ -53,8 +53,6 @@ class _SyncConfigPageState extends State<SyncConfigPage> {
   WebDavConfig? _selectedWebDav;
   VirtualFileSystem? _cloudVfs;
   String _cloudPath = '/';
-  List<VfsNode> _cloudDirs = [];
-  bool _loadingCloudDirs = false;
   String _selectedCloudFolder = '/';
 
   // Step 4: Options
@@ -226,7 +224,6 @@ class _SyncConfigPageState extends State<SyncConfigPage> {
     
     _localPath = '/';
     _selectedLocalFolder = '/';
-    await _loadLocalDirs();
     
     if (mounted) {
       setState(() {
@@ -236,46 +233,11 @@ class _SyncConfigPageState extends State<SyncConfigPage> {
   }
 
   // --- Step 2 Actions ---
-  Future<void> _loadLocalDirs() async {
-    if (_localVfs == null) return;
-    if (mounted) setState(() => _loadingLocalDirs = true);
-    try {
-      final files = await _localVfs!.list(_localPath);
-      final dirs = files.where((f) => f.isDirectory).toList();
-      dirs.sort((a, b) => a.name.compareTo(b.name));
-      if (mounted) setState(() => _localDirs = dirs);
-    } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('加载目录失败: \$e')));
-    } finally {
-      if (mounted) setState(() => _loadingLocalDirs = false);
-    }
-  }
-
-  void _navigateLocal(String name) {
-    setState(() {
-      String newPath = '\$_localPath\$name/'.replaceAll('//', '/');
-      _localPath = newPath;
-      _selectedLocalFolder = newPath;
-    });
-    _loadLocalDirs();
-  }
-
-  void _navigateLocalUp() {
-    if (_localPath == '/') return;
-    setState(() {
-      String p = _localPath.substring(0, _localPath.length - 1);
-      int lastSlash = p.lastIndexOf('/');
-      _localPath = lastSlash >= 0 ? p.substring(0, lastSlash + 1) : '/';
-      _selectedLocalFolder = _localPath;
-    });
-    _loadLocalDirs();
-  }
 
   // --- Step 3 Actions ---
   Future<void> _initCloudVfs(WebDavConfig config) async {
     setState(() {
       _selectedWebDav = config;
-      _loadingCloudDirs = true;
     });
     try {
       final repo = WebDavConfigRepository();
@@ -291,52 +253,13 @@ class _SyncConfigPageState extends State<SyncConfigPage> {
 
       _cloudPath = '/';
       _selectedCloudFolder = '/';
-      await _loadCloudDirs();
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('连接WebDAV失败：${e.toString()}')));
-    } finally {
-      if (mounted) setState(() => _loadingCloudDirs = false);
     }
-  }
-
-  Future<void> _loadCloudDirs() async {
-    if (_cloudVfs == null) return;
-    if (mounted) setState(() => _loadingCloudDirs = true);
-    try {
-      final files = await _cloudVfs!.list(_cloudPath);
-      final dirs = files.where((f) => f.isDirectory).toList();
-      dirs.sort((a, b) => a.name.compareTo(b.name));
-      if (mounted) setState(() => _cloudDirs = dirs);
-    } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('加载云端目录失败：${e.toString()}')));
-    } finally {
-      if (mounted) setState(() => _loadingCloudDirs = false);
-    }
-  }
-
-  void _navigateCloud(String name) {
-    setState(() {
-      String newPath = '\$_cloudPath\$name/'.replaceAll('//', '/');
-      _cloudPath = newPath;
-      _selectedCloudFolder = newPath;
-    });
-    _loadCloudDirs();
-  }
-
-  void _navigateCloudUp() {
-    if (_cloudPath == '/') return;
-    setState(() {
-      String p = _cloudPath.substring(0, _cloudPath.length - 1);
-      int lastSlash = p.lastIndexOf('/');
-      _cloudPath = lastSlash >= 0 ? p.substring(0, lastSlash + 1) : '/';
-      _selectedCloudFolder = _cloudPath;
-    });
-    _loadCloudDirs();
   }
 
   Future<void> _autoMatchCloudFolder() async {
     if (_cloudVfs == null) return;
-    if (mounted) setState(() => _loadingCloudDirs = true);
     try {
       // 尝试访问与本地相同的路径
       String targetPath = _selectedLocalFolder;
@@ -356,13 +279,10 @@ class _SyncConfigPageState extends State<SyncConfigPage> {
           _cloudPath = targetPath;
           _selectedCloudFolder = targetPath;
         });
-        await _loadCloudDirs();
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('自动匹配/创建成功')));
       }
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('自动匹配失败：${e.toString()}')));
-    } finally {
-      if (mounted) setState(() => _loadingCloudDirs = false);
     }
   }
 
@@ -417,35 +337,34 @@ class _SyncConfigPageState extends State<SyncConfigPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('当前路径: \$_localPath', style: const TextStyle(fontWeight: FontWeight.bold)),
-        const SizedBox(height: 8),
-        Container(
-          height: 200,
-          decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300)),
-          child: _loadingLocalDirs
-            ? const Center(child: CircularProgressIndicator())
-            : ListView(
-                children: [
-                  if (_localPath != '/')
-                    ListTile(
-                      leading: const Icon(Icons.arrow_upward),
-                      title: const Text('.. (返回上级)'),
-                      onTap: _navigateLocalUp,
-                    ),
-                  ..._localDirs.map((dir) => ListTile(
-                    leading: const Icon(Icons.folder, color: Colors.blue),
-                    title: Text(dir.name),
-                    onTap: () => _navigateLocal(dir.name),
-                  )),
-                ],
+        Text('已选路径: $_selectedLocalFolder', style: const TextStyle(fontWeight: FontWeight.bold)),
+        const SizedBox(height: 16),
+        ElevatedButton.icon(
+          icon: const Icon(Icons.folder_open),
+          label: const Text('选择本地文件夹'),
+          onPressed: () async {
+            if (_localVfs == null) return;
+            final folder = await Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => VfsFolderPickerDialog(
+                  vfs: _localVfs!,
+                  title: '选择本地文件夹',
+                ),
               ),
+            );
+            if (folder != null && folder is String) {
+              setState(() {
+                _selectedLocalFolder = folder;
+              });
+            }
+          },
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 16),
         ElevatedButton(
           onPressed: () {
             setState(() => _currentStep = 2);
           },
-          child: const Text('确认选择该本地文件夹'),
+          child: const Text('确认并下一步'),
         ),
       ],
     );
@@ -471,7 +390,7 @@ class _SyncConfigPageState extends State<SyncConfigPage> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Expanded(child: Text('云端路径: \$_cloudPath', style: const TextStyle(fontWeight: FontWeight.bold))),
+              Expanded(child: Text('已选云端路径: $_selectedCloudFolder', style: const TextStyle(fontWeight: FontWeight.bold))),
               TextButton.icon(
                 icon: const Icon(Icons.auto_awesome),
                 label: const Text('自动匹配'),
@@ -479,34 +398,33 @@ class _SyncConfigPageState extends State<SyncConfigPage> {
               ),
             ],
           ),
-          const SizedBox(height: 8),
-          Container(
-            height: 200,
-            decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300)),
-            child: _loadingCloudDirs
-              ? const Center(child: CircularProgressIndicator())
-              : ListView(
-                  children: [
-                    if (_cloudPath != '/')
-                      ListTile(
-                        leading: const Icon(Icons.arrow_upward),
-                        title: const Text('.. (返回上级)'),
-                        onTap: _navigateCloudUp,
-                      ),
-                    ..._cloudDirs.map((dir) => ListTile(
-                      leading: const Icon(Icons.folder, color: Colors.orange),
-                      title: Text(dir.name),
-                      onTap: () => _navigateCloud(dir.name),
-                    )),
-                  ],
+          const SizedBox(height: 16),
+          ElevatedButton.icon(
+            icon: const Icon(Icons.cloud_queue),
+            label: const Text('选择云端文件夹'),
+            onPressed: () async {
+              final folder = await Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => VfsFolderPickerDialog(
+                    vfs: _cloudVfs!,
+                    title: '选择云端文件夹',
+                  ),
                 ),
+              );
+              if (folder != null && folder is String) {
+                setState(() {
+                  _selectedCloudFolder = folder;
+                  _cloudPath = folder;
+                });
+              }
+            },
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 16),
           ElevatedButton(
             onPressed: () {
               setState(() => _currentStep = 3);
             },
-            child: const Text('确认选择该云端文件夹'),
+            child: const Text('确认并下一步'),
           ),
         ],
       ],

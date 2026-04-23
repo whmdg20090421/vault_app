@@ -18,6 +18,7 @@ import '../vfs/local_vfs.dart';
 import '../vfs/encrypted_vfs.dart';
 import '../vfs/standard_vfs.dart';
 import '../encryption/utils/crypto_utils.dart';
+import '../widgets/vfs_folder_picker_dialog.dart';
 
 enum SyncDirection {
   cloudToLocal,
@@ -444,7 +445,7 @@ class _LocalVaultPickerPageState extends State<_LocalVaultPickerPage> {
       if (!mounted) return;
       final folder = await Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (_) => _VfsFolderPickerPage(
+          builder: (_) => VfsFolderPickerDialog(
             vfs: encryptedVfs,
             title: '选择 ${config.name} 中的子文件夹',
           ),
@@ -540,7 +541,7 @@ class _CloudDrivePickerPageState extends State<_CloudDrivePickerPage> {
       
       final folder = await Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (_) => _VfsFolderPickerPage(
+          builder: (_) => VfsFolderPickerDialog(
             vfs: cloudVfs,
             title: '选择 ${config.name} 中的文件夹',
           ),
@@ -595,162 +596,5 @@ class _CloudDrivePickerPageState extends State<_CloudDrivePickerPage> {
   }
 }
 
-// --- General VFS Folder Picker ---
+// --- General VFS Folder Picker removed, now using VfsFolderPickerDialog ---
 
-class _VfsFolderPickerPage extends StatefulWidget {
-  final VirtualFileSystem vfs;
-  final String title;
-
-  const _VfsFolderPickerPage({Key? key, required this.vfs, required this.title}) : super(key: key);
-
-  @override
-  State<_VfsFolderPickerPage> createState() => _VfsFolderPickerPageState();
-}
-
-class _VfsFolderPickerPageState extends State<_VfsFolderPickerPage> {
-  List<String> _pathSegments = [];
-  List<VfsNode> _folders = [];
-  bool _isLoading = true;
-
-  String get _currentPath {
-    if (_pathSegments.isEmpty) return '/';
-    return '/${_pathSegments.join('/')}/';
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    _loadCurrentPath();
-  }
-
-  Future<void> _loadCurrentPath() async {
-    if (mounted) setState(() => _isLoading = true);
-    try {
-      final list = await widget.vfs.list(_currentPath);
-      final folders = list.where((f) => f.isDirectory).toList();
-      folders.sort((a, b) => a.name.compareTo(b.name));
-      if (mounted) {
-        setState(() {
-          _folders = folders;
-          _isLoading = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('加载失败: $e')));
-        setState(() => _isLoading = false);
-      }
-    }
-  }
-
-  void _navigateTo(String folderName) {
-    setState(() {
-      _pathSegments.add(folderName.replaceAll('/', ''));
-    });
-    _loadCurrentPath();
-  }
-
-  void _navigateUpTo(int index) {
-    if (index < -1 || index >= _pathSegments.length) return;
-    setState(() {
-      if (index == -1) {
-        _pathSegments.clear();
-      } else {
-        _pathSegments = _pathSegments.sublist(0, index + 1);
-      }
-    });
-    _loadCurrentPath();
-  }
-
-  Widget _buildBreadcrumbs() {
-    final List<Widget> crumbs = [];
-    
-    crumbs.add(
-      InkWell(
-        onTap: () => _navigateUpTo(-1),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 8.0),
-          child: Text(
-            'Root',
-            style: TextStyle(
-              color: _pathSegments.isEmpty ? Colors.black : Colors.blue,
-              fontWeight: _pathSegments.isEmpty ? FontWeight.bold : FontWeight.normal,
-            ),
-          ),
-        ),
-      ),
-    );
-
-    for (int i = 0; i < _pathSegments.length; i++) {
-      crumbs.add(const Text('/'));
-      crumbs.add(
-        InkWell(
-          onTap: () => _navigateUpTo(i),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 8.0),
-            child: Text(
-              _pathSegments[i],
-              style: TextStyle(
-                color: i == _pathSegments.length - 1 ? Colors.black : Colors.blue,
-                fontWeight: i == _pathSegments.length - 1 ? FontWeight.bold : FontWeight.normal,
-              ),
-            ),
-          ),
-        ),
-      );
-    }
-
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Row(children: crumbs),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(widget.title)),
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildBreadcrumbs(),
-          const Divider(height: 1),
-          Expanded(
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : RefreshIndicator(
-                    onRefresh: _loadCurrentPath,
-                    child: _folders.isEmpty
-                        ? ListView(
-                            children: const [
-                              SizedBox(height: 100),
-                              Center(child: Text('没有子文件夹')),
-                            ],
-                          )
-                        : ListView.builder(
-                            itemCount: _folders.length,
-                            itemBuilder: (context, index) {
-                              final folder = _folders[index];
-                              return ListTile(
-                                leading: const Icon(Icons.folder, color: Colors.orange),
-                                title: Text(folder.name),
-                                trailing: const Icon(Icons.chevron_right),
-                                onTap: () => _navigateTo(folder.name),
-                              );
-                            },
-                          ),
-                  ),
-          ),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          Navigator.of(context).pop(_currentPath);
-        },
-        icon: const Icon(Icons.check),
-        label: const Text('选择当前目录'),
-      ),
-    );
-  }
-}

@@ -48,6 +48,7 @@ class SyncEngine {
 
   /// 启动同步流程
   Future<void> sync(String remoteDir, {bool forceSync = false, SyncTask? task}) async {
+    if (!remoteDir.startsWith('/')) remoteDir = '/' + remoteDir;
     print('Starting sync from remote: $remoteDir to local: $localDirPath with direction: $direction');
 
     // 1. 读取本地历史状态 (local_index.json)
@@ -186,7 +187,7 @@ class SyncEngine {
     await _executeConcurrently(syncTasks, maxConcurrency, task);
 
     // 6. 更新并保存规范的本地索引
-    await _saveLocalIndex(currentLocalFiles, localIndexService);
+    await _saveLocalIndex(currentLocalFiles, localIndexService, localIndex);
 
     if (task != null) {
       bool allSuccess = task.items.every((i) => i.status == SyncStatus.completed);
@@ -342,7 +343,7 @@ class SyncEngine {
             } catch (e) {
               // Ignore if exists
             }
-            subDirFutures.add(_syncRecursiveDir(remotePath, localEntity.path, localAdded, localDeleted, localModified, currentLocalFiles, syncTasks));
+            subDirFutures.add(_syncRecursiveDir(remotePath, localEntityPath, localAdded, localDeleted, localModified, currentLocalFiles, syncTasks));
           }
         }
       }
@@ -350,7 +351,7 @@ class SyncEngine {
     }
   }
 
-  Future<void> _saveLocalIndex(Map<String, File> currentLocalFiles, LocalIndexService localIndexService) async {
+  Future<void> _saveLocalIndex(Map<String, File> currentLocalFiles, LocalIndexService localIndexService, Map<String, dynamic> localIndex) async {
     // Need to re-scan to get the actual sizes and modified times after sync (downloads might have changed them)
     Map<String, File> finalFiles = {};
     await _scanLocalFiles(Directory(localDirPath), finalFiles);
@@ -360,6 +361,15 @@ class SyncEngine {
       final path = entry.key;
       final file = entry.value;
       final stat = await file.stat();
+      
+      final existingInfo = localIndex[path];
+      if (existingInfo != null && existingInfo is Map) {
+        if (existingInfo['size'] == stat.size && existingInfo['updatedAt'] == stat.modified.toIso8601String()) {
+          newIndexData[path] = existingInfo;
+          continue;
+        }
+      }
+      
       final hash = await _calculateFileHash(file);
       
       newIndexData[path] = {

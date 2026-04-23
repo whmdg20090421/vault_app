@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:path/path.dart' as p;
 
 import 'webdav_config.dart';
 import 'webdav_storage.dart';
@@ -10,6 +11,7 @@ import '../vfs/standard_vfs.dart';
 import '../services/sync_storage_service.dart';
 import '../models/sync_task.dart';
 import '../utils/format_utils.dart';
+import '../widgets/vfs_folder_picker_dialog.dart';
 
 class WebDavBrowserPage extends StatefulWidget {
   const WebDavBrowserPage({
@@ -26,6 +28,7 @@ class WebDavBrowserPage extends StatefulWidget {
 }
 
 class _WebDavBrowserPageState extends State<WebDavBrowserPage> {
+  WebDavService? _service;
   VirtualFileSystem? _vfs;
   bool _isLoading = true;
   String _error = '';
@@ -82,6 +85,7 @@ class _WebDavBrowserPageState extends State<WebDavBrowserPage> {
         password: password,
       );
       final service = WebDavService(client);
+      _service = service;
       _vfs = StandardVfs(service);
 
       await _loadCurrentPath();
@@ -275,6 +279,72 @@ class _WebDavBrowserPageState extends State<WebDavBrowserPage> {
                                     ],
                                   ),
                                   onTap: isDir ? () => _navigateTo(file.name) : null,
+                                  trailing: PopupMenuButton<String>(
+                                    onSelected: (value) async {
+                                      if (value == 'delete') {
+                                        final confirm = await showDialog<bool>(
+                                          context: context,
+                                          builder: (context) => AlertDialog(
+                                            title: const Text('确认删除'),
+                                            content: Text('确定要删除 ${file.name} 吗？'),
+                                            actions: [
+                                              TextButton(
+                                                onPressed: () => Navigator.pop(context, false),
+                                                child: const Text('取消'),
+                                              ),
+                                              TextButton(
+                                                onPressed: () => Navigator.pop(context, true),
+                                                child: const Text('删除', style: TextStyle(color: Colors.red)),
+                                              ),
+                                            ],
+                                          ),
+                                        );
+                                        if (confirm == true && _service != null) {
+                                          try {
+                                            await _service!.remove(file.path);
+                                            _loadCurrentPath();
+                                          } catch (e) {
+                                            if (mounted) {
+                                              ScaffoldMessenger.of(context).showSnackBar(
+                                                SnackBar(content: Text('删除失败: $e')),
+                                              );
+                                            }
+                                          }
+                                        }
+                                      } else if (value == 'move' || value == 'copy') {
+                                        if (_service == null) return;
+                                        final result = await showDialog<String>(
+                                          context: context,
+                                          builder: (_) => VfsFolderPickerDialog(
+                                            vfs: StandardVfs(_service!),
+                                            initialPath: '/',
+                                          ),
+                                        );
+                                        if (result != null) {
+                                          try {
+                                            final targetPath = p.join(result, file.name).replaceAll('\\', '/');
+                                            if (value == 'move') {
+                                              await _service!.move(file.path, targetPath);
+                                            } else {
+                                              await _service!.copy(file.path, targetPath);
+                                            }
+                                            _loadCurrentPath();
+                                          } catch (e) {
+                                            if (mounted) {
+                                              ScaffoldMessenger.of(context).showSnackBar(
+                                                SnackBar(content: Text('${value == 'move' ? '移动' : '复制'}失败: $e')),
+                                              );
+                                            }
+                                          }
+                                        }
+                                      }
+                                    },
+                                    itemBuilder: (context) => const [
+                                      PopupMenuItem(value: 'move', child: Text('移动')),
+                                      PopupMenuItem(value: 'copy', child: Text('复制')),
+                                      PopupMenuItem(value: 'delete', child: Text('删除', style: TextStyle(color: Colors.red))),
+                                    ],
+                                  ),
                                 );
 
                                 return listTile;

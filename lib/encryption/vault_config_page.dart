@@ -6,6 +6,8 @@ import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:cryptography_flutter/cryptography_flutter.dart';
 import '../main.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cryptography/cryptography.dart' as crypto;
@@ -297,6 +299,8 @@ class _VaultConfigPageState extends State<VaultConfigPage> {
               const SizedBox(height: 16),
               DropdownButtonFormField<String>(
                 value: _selectedAlgorithm,
+                dropdownColor: Theme.of(context).colorScheme.surface,
+                isExpanded: true,
                 decoration: const InputDecoration(labelText: '加密算法 (Algorithm)'),
                 items: _algorithms.map((algo) {
                   return DropdownMenuItem(value: algo, child: Text(algo));
@@ -538,6 +542,8 @@ class _BenchmarkDialogState extends State<BenchmarkDialog> {
             const SizedBox(height: 16),
             DropdownButtonFormField<String>(
               value: _selectedAlgorithm,
+              dropdownColor: Theme.of(context).colorScheme.surface,
+              isExpanded: true,
               decoration: const InputDecoration(labelText: '加密算法 (Algorithm)'),
               items: _algorithms.map((algo) {
                 return DropdownMenuItem(value: algo, child: Text(algo));
@@ -672,6 +678,7 @@ class BenchmarkTask {
         'algorithm': algorithm,
         'key': key,
         'baseNonce': baseNonce,
+        'rootToken': RootIsolateToken.instance,
       };
 
       final isolate = await Isolate.spawn(_benchmarkEncryptWorker, args);
@@ -695,8 +702,11 @@ Uint8List _nonceWithCounter(Uint8List base, int counter) {
   return nonce;
 }
 
-dynamic _createCipher(String algorithm) {
+dynamic _createCipher(String algorithm, {bool useFlutterCryptography = false}) {
   if (algorithm == 'AES-256-GCM') {
+    if (useFlutterCryptography) {
+      return FlutterCryptography.defaultInstance.aesGcm(secretKeyLength: 32);
+    }
     return crypto.AesGcm.with256bits();
   }
   if (algorithm == 'ChaCha20-Poly1305') {
@@ -714,13 +724,21 @@ void _benchmarkEncryptWorker(Map<String, dynamic> args) async {
   final algorithm = args['algorithm'] as String;
   final keyBytes = Uint8List.fromList(args['key'] as Uint8List);
   final baseNonce = Uint8List.fromList(args['baseNonce'] as Uint8List);
+  final rootToken = args['rootToken'] as RootIsolateToken?;
+
+  bool useFlutterCryptography = false;
+  if (rootToken != null && algorithm == 'AES-256-GCM') {
+    BackgroundIsolateBinaryMessenger.ensureInitialized(rootToken);
+    FlutterCryptography.enable();
+    useFlutterCryptography = true;
+  }
 
   RandomAccessFile? raf;
   try {
     raf = await File(filePath).open();
     await raf.setPosition(startChunk * chunkSize);
 
-    final cipher = _createCipher(algorithm) as crypto.Cipher;
+    final cipher = _createCipher(algorithm, useFlutterCryptography: useFlutterCryptography) as crypto.Cipher;
     final secretKey = crypto.SecretKey(keyBytes);
     var bytesSinceLastReport = 0;
 
