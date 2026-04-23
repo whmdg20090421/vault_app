@@ -884,6 +884,7 @@ class _VaultExplorerPageState extends State<VaultExplorerPage> {
                         if (!_isMultiSelectMode) {
                           showModalBottomSheet(
                             context: context,
+                            backgroundColor: Theme.of(context).colorScheme.surface,
                             builder: (context) {
                               return SafeArea(
                                 child: Column(

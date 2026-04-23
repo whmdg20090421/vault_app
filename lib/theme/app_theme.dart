@@ -73,8 +73,11 @@ ThemeData buildTheme(AppTheme theme, bool bgEnabled, double uiOpacity) {
         textColor: scheme.onSurface,
       ),
       dialogTheme: DialogThemeData(
-        backgroundColor: applyUiOpacity(scheme.surfaceContainer),
+        backgroundColor: scheme.surfaceContainer,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      ),
+      popupMenuTheme: PopupMenuThemeData(
+        color: scheme.surfaceContainer,
       ),
       bottomSheetTheme: const BottomSheetThemeData(
         backgroundColor: Colors.transparent,
@@ -147,11 +150,14 @@ ThemeData buildTheme(AppTheme theme, bool bgEnabled, double uiOpacity) {
         textColor: scheme.onSurface,
       ),
       dialogTheme: DialogThemeData(
-        backgroundColor: applyUiOpacity(scheme.surfaceContainer),
+        backgroundColor: scheme.surfaceContainer,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(8),
           side: const BorderSide(color: Color(0xFF00E5FF), width: 1),
         ),
+      ),
+      popupMenuTheme: PopupMenuThemeData(
+        color: scheme.surfaceContainer,
       ),
       bottomSheetTheme: const BottomSheetThemeData(
         backgroundColor: Colors.transparent,
@@ -236,9 +242,12 @@ ThemeData buildTheme(AppTheme theme, bool bgEnabled, double uiOpacity) {
       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
     ),
     dialogTheme: DialogThemeData(
-      backgroundColor: applyUiOpacity(scheme.surface),
+      backgroundColor: scheme.surface,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       elevation: 8,
+    ),
+    popupMenuTheme: PopupMenuThemeData(
+      color: scheme.surface,
     ),
     bottomSheetTheme: const BottomSheetThemeData(
       backgroundColor: Colors.transparent,

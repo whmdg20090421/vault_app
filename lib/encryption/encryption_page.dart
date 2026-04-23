@@ -424,6 +424,7 @@ class _EncryptionPageState extends State<EncryptionPage> {
     if (!mounted) return;
     await showModalBottomSheet(
       context: context,
+      backgroundColor: Theme.of(context).colorScheme.surface,
       builder: (context) {
         return SafeArea(
           child: Column(

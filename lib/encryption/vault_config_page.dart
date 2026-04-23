@@ -312,6 +312,7 @@ class _VaultConfigPageState extends State<VaultConfigPage> {
               const SizedBox(height: 16),
               DropdownButtonFormField<String>(
                 value: _selectedKDF,
+                dropdownColor: Theme.of(context).colorScheme.surface,
                 decoration: const InputDecoration(labelText: '密钥派生函数 (KDF)'),
                 items: _kdfs.map((kdf) {
                   return DropdownMenuItem(value: kdf, child: Text(kdf));

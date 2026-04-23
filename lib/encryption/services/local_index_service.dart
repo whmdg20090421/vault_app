@@ -7,6 +7,54 @@ class LocalIndexService {
   factory LocalIndexService() => _instance;
   LocalIndexService._internal();
 
+  /// 将平铺的文件路径 Map 转换为嵌套的文件树结构
+  Map<String, dynamic> _flatToTree(Map<String, dynamic> flat) {
+    final tree = <String, dynamic>{};
+    // 按字母顺序排序路径，使其能够按深度优先（DFS）的顺序生成和保存
+    final sortedKeys = flat.keys.toList()..sort();
+    
+    for (final path in sortedKeys) {
+      final parts = path.split('/').where((p) => p.isNotEmpty).toList();
+      Map<String, dynamic> current = tree;
+      for (int i = 0; i < parts.length - 1; i++) {
+        final part = parts[i];
+        if (!current.containsKey(part) || current[part] is! Map) {
+          current[part] = <String, dynamic>{};
+        }
+        current = current[part] as Map<String, dynamic>;
+      }
+      if (parts.isNotEmpty) {
+        current[parts.last] = flat[path];
+      }
+    }
+    return tree;
+  }
+
+  /// 将嵌套的文件树结构还原为平铺的文件路径 Map
+  Map<String, dynamic> _treeToFlat(Map<String, dynamic> tree) {
+    final flat = <String, dynamic>{};
+    
+    void traverse(Map<String, dynamic> current, String currentPath) {
+      for (final entry in current.entries) {
+        final key = entry.key;
+        final value = entry.value;
+        final newPath = '$currentPath/$key';
+        
+        if (value is Map<String, dynamic>) {
+          // 判断是文件信息还是目录，如果有 'cipherSize' 或 'size' 则是文件
+          if (value.containsKey('cipherSize') || value.containsKey('size') || value.containsKey('hash')) {
+            flat[newPath] = value;
+          } else {
+            traverse(value, newPath);
+          }
+        }
+      }
+    }
+    
+    traverse(tree, '');
+    return flat;
+  }
+
   /// Updates or adds a file entry in local_index.json for the specified vault.
   Future<void> updateFileIndex({
     required String vaultDirectoryPath,
@@ -20,18 +68,9 @@ class LocalIndexService {
     required Map<String, String> sourceAbsolutePathEnc,
   }) async {
     try {
-      final indexFile = File(p.join(vaultDirectoryPath, 'local_index.json'));
-      Map<String, dynamic> indexData = {};
-      
-      if (await indexFile.exists()) {
-        final content = await indexFile.readAsString();
-        if (content.isNotEmpty) {
-          indexData = jsonDecode(content) as Map<String, dynamic>;
-        }
-      }
-
+      final indexData = await getLocalIndex(vaultDirectoryPath);
       final normalizedPath = remotePath.startsWith('/') ? remotePath : '/$remotePath';
-      
+
       indexData[normalizedPath] = {
         'cipherSize': cipherSize,
         'cipherUpdatedAt': cipherUpdatedAt.toIso8601String(),
@@ -42,7 +81,7 @@ class LocalIndexService {
         'sourceAbsolutePathEnc': sourceAbsolutePathEnc,
       };
 
-      await indexFile.writeAsString(jsonEncode(indexData));
+      await saveLocalIndex(vaultDirectoryPath, indexData);
     } catch (e) {
       print('Failed to update local_index.json: $e');
     }
@@ -55,7 +94,14 @@ class LocalIndexService {
       if (await indexFile.exists()) {
         final content = await indexFile.readAsString();
         if (content.isNotEmpty) {
-          return jsonDecode(content) as Map<String, dynamic>;
+          final decoded = jsonDecode(content) as Map<String, dynamic>;
+          
+          // 兼容新版文件树格式与旧版平铺格式
+          if (decoded.containsKey('metadata') && decoded.containsKey('files')) {
+            return _treeToFlat(decoded['files'] as Map<String, dynamic>);
+          } else {
+            return decoded;
+          }
         }
       }
     } catch (e) {
@@ -68,11 +114,29 @@ class LocalIndexService {
   Future<void> saveLocalIndex(String vaultDirectoryPath, Map<String, dynamic> indexData) async {
     try {
       final indexFile = File(p.join(vaultDirectoryPath, 'local_index.json'));
-      await indexFile.writeAsString(jsonEncode(indexData));
+      
+      // 构建符合要求的新格式：顶部其他内容，中间数据目录树，底部其他内容
+      final formattedData = {
+        'metadata': {
+          'version': 2,
+          'updatedAt': DateTime.now().toIso8601String(),
+          'description': 'Vault local index cache'
+        },
+        'files': _flatToTree(indexData),
+        'footer': {
+          'fileCount': indexData.length,
+          'endOfIndex': true
+        }
+      };
+
+      // 使用带缩进的 JSON 编码器，实现规范的换行和层级格式
+      final encoder = JsonEncoder.withIndent('  ');
+      await indexFile.writeAsString(encoder.convert(formattedData));
     } catch (e) {
       print('Failed to save local_index.json: $e');
     }
   }
+
   Future<Map<String, int>> getFileStatistics(String vaultDirectoryPath) async {
     int localEncryptedCount = 0;
     int cloudEncryptedCount = 0;
@@ -122,7 +186,7 @@ class LocalIndexService {
           }
         }
       }
-      
+
       // Calculate deleted files
       for (final key in localIndex.keys) {
         if (!localFilePaths.contains(key)) {

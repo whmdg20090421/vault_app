@@ -379,6 +379,7 @@ class _SyncConfigPageState extends State<SyncConfigPage> {
           DropdownButton<WebDavConfig>(
             value: _selectedWebDav,
             hint: const Text('选择 WebDAV 云盘'),
+            dropdownColor: Theme.of(context).colorScheme.surface,
             isExpanded: true,
             items: _webDavConfigs.map((c) => DropdownMenuItem(value: c, child: Text(c.name))).toList(),
             onChanged: (val) {

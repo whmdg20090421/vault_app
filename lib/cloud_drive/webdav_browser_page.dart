@@ -280,6 +280,7 @@ class _WebDavBrowserPageState extends State<WebDavBrowserPage> {
                                   ),
                                   onTap: isDir ? () => _navigateTo(file.name) : null,
                                   trailing: PopupMenuButton<String>(
+                                    color: Theme.of(context).colorScheme.surface,
                                     onSelected: (value) async {
                                       if (value == 'delete') {
                                         final confirm = await showDialog<bool>(
