@@ -5,10 +5,10 @@
 ## 最新版本概览
 
 <!-- RELEASE_SUMMARY_START -->
-- 当前版本：1.5.10
+- 当前版本：1.5.11
 - **云盘同步目录选择**：进一步重构同步配置页面，现在选择“云端文件夹”时会全屏弹出与正常云盘浏览完全一致的界面，隐藏了底部的操作菜单并新增“选择此文件夹”悬浮按钮，提供更加统一、沉浸的目录选择体验。
 - **存储格式优化**：将 `local_index.json` 和 `.vault_manifest` 升级为自定义的单行平铺格式（DFS深度优先排序），每个文件/文件夹独占一行，极大提升了配置文件的可读性；同时 `.vault_manifest` 现已支持在文件列表中可见，并在物理磁盘上被安全加密，点击时将在内存中临时解密以供预览。
-- 完整更新：https://github.com/whmdg20090421/vault_app/releases/tag/v1.5.10
+- 完整更新：https://github.com/whmdg20090421/vault_app/releases/tag/v1.5.11
 <!-- RELEASE_SUMMARY_END -->
 
 ## 更新历史 (Changelog)
