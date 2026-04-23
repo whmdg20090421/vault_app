@@ -320,7 +320,7 @@ class _WebDavBrowserPageState extends State<WebDavBrowserPage> {
                                           context: context,
                                           builder: (_) => VfsFolderPickerDialog(
                                             vfs: StandardVfs(_service!),
-                                            initialPath: '/',
+                                            title: '选择目标文件夹',
                                           ),
                                         );
                                         if (result != null) {

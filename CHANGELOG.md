@@ -1,3 +1,8 @@
+# 版本 1.5.12 (2026-04-23)
+
+### 🐛 Bug Fixes
+- **云盘同步目录选择**：修复了编译 Release 包时由于缺少命名参数 `initialPath` 导致的 Flutter 编译失败问题，现已使用正确的 `title` 参数调用 `VfsFolderPickerDialog`。
+
 # 版本 1.5.11 (2026-04-23)
 
 ### 🚀 Cloud Drive Sync Enhancements
