@@ -105,7 +105,7 @@ class _PerformanceSettingsPageState extends State<PerformanceSettingsPage> {
     );
 
     try {
-      final dataSize = 1024 * 1024; // 1MB
+      final dataSize = 10 * 1024 * 1024;
       final random = Random.secure();
       final data = Uint8List(dataSize);
       for (int i = 0; i < dataSize; i++) {
@@ -124,7 +124,9 @@ class _PerformanceSettingsPageState extends State<PerformanceSettingsPage> {
       await flutterCipher.encrypt(data, secretKey: secretKey, nonce: nonce);
       final flutterEnd = DateTime.now();
       final flutterTime = flutterEnd.difference(flutterStart).inMilliseconds;
-      final flutterSpeed = flutterTime > 0 ? (1000 / flutterTime).toStringAsFixed(2) : '∞';
+      final flutterSpeed = flutterTime > 0
+          ? ((dataSize / 1024 / 1024) / (flutterTime / 1000)).toStringAsFixed(2)
+          : '∞';
 
       // 2. DartCryptography (Software)
       final dartCrypto = DartCryptography.defaultInstance;
@@ -134,7 +136,18 @@ class _PerformanceSettingsPageState extends State<PerformanceSettingsPage> {
       await dartCipher.encrypt(data, secretKey: secretKey, nonce: nonce);
       final dartEnd = DateTime.now();
       final dartTime = dartEnd.difference(dartStart).inMilliseconds;
-      final dartSpeed = dartTime > 0 ? (1000 / dartTime).toStringAsFixed(2) : '∞';
+      final dartSpeed = dartTime > 0
+          ? ((dataSize / 1024 / 1024) / (dartTime / 1000)).toStringAsFixed(2)
+          : '∞';
+
+      final chachaCipher = Chacha20.poly1305Aead();
+      final chachaStart = DateTime.now();
+      await chachaCipher.encrypt(data, secretKey: secretKey, nonce: nonce);
+      final chachaEnd = DateTime.now();
+      final chachaTime = chachaEnd.difference(chachaStart).inMilliseconds;
+      final chachaSpeed = chachaTime > 0
+          ? ((dataSize / 1024 / 1024) / (chachaTime / 1000)).toStringAsFixed(2)
+          : '∞';
 
       if (mounted) {
         Navigator.pop(context); // Close loading dialog
@@ -146,15 +159,26 @@ class _PerformanceSettingsPageState extends State<PerformanceSettingsPage> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('测试数据: 1 MB'),
+                const Text('测试数据: 10 MB'),
                 const SizedBox(height: 8),
-                const Text('FlutterCryptography (硬件加速):', style: TextStyle(fontWeight: FontWeight.bold)),
-                Text('耗时: $flutterTime ms'),
+                const Text('AES-256-GCM', style: TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 4),
+                const Text('硬件加速 (FlutterCryptography):', style: TextStyle(fontWeight: FontWeight.bold)),
+                Text('延迟: $flutterTime ms'),
                 Text('速度: $flutterSpeed MB/s'),
                 const SizedBox(height: 16),
-                const Text('DartCryptography (软件实现):', style: TextStyle(fontWeight: FontWeight.bold)),
-                Text('耗时: $dartTime ms'),
+                const Text('软件实现 (DartCryptography):', style: TextStyle(fontWeight: FontWeight.bold)),
+                Text('延迟: $dartTime ms'),
                 Text('速度: $dartSpeed MB/s'),
+                const SizedBox(height: 16),
+                const Text('ChaCha20-Poly1305', style: TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 4),
+                const Text('硬件加速:', style: TextStyle(fontWeight: FontWeight.bold)),
+                const Text('当前实现不支持'),
+                const SizedBox(height: 16),
+                const Text('软件实现 (DartCryptography):', style: TextStyle(fontWeight: FontWeight.bold)),
+                Text('延迟: $chachaTime ms'),
+                Text('速度: $chachaSpeed MB/s'),
               ],
             ),
             actions: [
@@ -225,7 +249,7 @@ class _PerformanceSettingsPageState extends State<PerformanceSettingsPage> {
                 const SizedBox(height: 16),
                 ListTile(
                   title: const Text('兼容性测试'),
-                  subtitle: const Text('测试硬件加密与软件加密在当前设备的性能差异'),
+                  subtitle: const Text('测试硬件加密与软件加密在当前设备的性能差异 (10MB)'),
                   trailing: const Icon(Icons.speed_rounded),
                   contentPadding: EdgeInsets.zero,
                   onTap: _runCompatibilityTest,
@@ -314,4 +338,3 @@ class _PerformanceSettingsPageState extends State<PerformanceSettingsPage> {
     );
   }
 }
-
