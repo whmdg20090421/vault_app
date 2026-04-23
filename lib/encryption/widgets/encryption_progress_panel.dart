@@ -251,27 +251,53 @@ class _EncryptionTaskCard extends StatelessWidget {
     this.onTap,
   });
 
-  Widget _buildModeTag(EncryptionMode mode) {
-    if (mode == EncryptionMode.unknown) return const SizedBox.shrink();
-    final isHardware = mode == EncryptionMode.hardware;
-    return Container(
-      margin: const EdgeInsets.only(left: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(
-        color: isHardware ? Colors.blue.withOpacity(0.2) : Colors.orange.withOpacity(0.2),
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(
-          color: isHardware ? Colors.blue : Colors.orange,
+  Widget _buildModeTags(Set<EncryptionMode> modes) {
+    if (modes.isEmpty) return const SizedBox.shrink();
+    final hasHardware = modes.contains(EncryptionMode.hardware);
+    final hasSoftware = modes.contains(EncryptionMode.software);
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          margin: const EdgeInsets.only(left: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          decoration: BoxDecoration(
+            color: hasHardware ? Colors.blue.withOpacity(0.2) : Colors.grey.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(
+              color: hasHardware ? Colors.blue : Colors.grey.withOpacity(0.3),
+            ),
+          ),
+          child: Text(
+            '硬件加密',
+            style: TextStyle(
+              fontSize: 9,
+              fontWeight: FontWeight.bold,
+              color: hasHardware ? Colors.blue : Colors.grey.withOpacity(0.5),
+            ),
+          ),
         ),
-      ),
-      child: Text(
-        isHardware ? '硬件加速' : '普通加密',
-        style: TextStyle(
-          fontSize: 9,
-          fontWeight: FontWeight.bold,
-          color: isHardware ? Colors.blue : Colors.orange,
+        Container(
+          margin: const EdgeInsets.only(left: 4),
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          decoration: BoxDecoration(
+            color: hasSoftware ? Colors.orange.withOpacity(0.2) : Colors.grey.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(
+              color: hasSoftware ? Colors.orange : Colors.grey.withOpacity(0.3),
+            ),
+          ),
+          child: Text(
+            '普通加密',
+            style: TextStyle(
+              fontSize: 9,
+              fontWeight: FontWeight.bold,
+              color: hasSoftware ? Colors.orange : Colors.grey.withOpacity(0.5),
+            ),
+          ),
         ),
-      ),
+      ],
     );
   }
 
@@ -464,9 +490,9 @@ class _EncryptionTaskCard extends StatelessWidget {
                                   ),
                                 ),
                                 if (task is FileNode && task.status == NodeStatus.encrypting && task.encryptionMode != EncryptionMode.unknown)
-                                  _buildModeTag(task.encryptionMode),
+                                  _buildModeTags({task.encryptionMode}),
                                 if (task is FolderNode && activeEncryptionModes.isNotEmpty)
-                                  ...activeEncryptionModes.map<Widget>((mode) => _buildModeTag(mode)),
+                                  _buildModeTags(activeEncryptionModes),
                               ],
                             ),
                             if (isError && task.errorMessage != null)

@@ -1,0 +1,6 @@
+- [x] EncryptedVfs: Filename encryption utilizes hex encoding rather than Base64Url, and falls back to Base64Url when hex decoding fails for older files.
+- [x] EncryptedVfs: `mkdir` explicitly saves the new virtual directory path to `_manifestEntries` to enable LFN mapping for empty directories.
+- [x] LocalIndexService: `getFileStatistics` calculates actual local encrypted file count, cloud count (based on local_index.json length), and calculates diffCount (added, modified, deleted).
+- [x] SettingsPage: The "About" button successfully uses a `Listener` to correctly trigger Developer Mode after 5 seconds without being canceled by scroll inertia.
+- [x] EncryptedVfs: The `open` method successfully inspects the physical file header to reliably extract `headerLength`, `fileId`, and `chunkSize` before opening the payload stream, preventing MAC verification errors.
+- [x] EncryptionProgressPanel: The task item correctly renders both "Hardware Encryption" and "Software Encryption" indicators side-by-side, toggling their opacity according to the task's current encryption mode.

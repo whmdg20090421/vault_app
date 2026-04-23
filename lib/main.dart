@@ -361,8 +361,8 @@ class _SettingsPageState extends State<SettingsPage> {
           },
         ),
         const Divider(),
-        GestureDetector(
-          onTapDown: (_) {
+        Listener(
+          onPointerDown: (_) {
             _developerHandled = false;
             _developerTimer?.cancel();
             _developerTimer = Timer(const Duration(seconds: 5), () {
@@ -370,10 +370,10 @@ class _SettingsPageState extends State<SettingsPage> {
               _showDeveloperWarning();
             });
           },
-          onTapUp: (_) {
+          onPointerUp: (_) {
             _developerTimer?.cancel();
           },
-          onTapCancel: () {
+          onPointerCancel: (_) {
             _developerTimer?.cancel();
           },
           child: ListTile(

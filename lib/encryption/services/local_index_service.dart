@@ -79,7 +79,59 @@ class LocalIndexService {
     int diffCount = 0;
 
     final localIndex = await getLocalIndex(vaultDirectoryPath);
-    localEncryptedCount = localIndex.length;
+    cloudEncryptedCount = localIndex.length;
+
+    final Set<String> localFilePaths = {};
+    try {
+      final dir = Directory(vaultDirectoryPath);
+      if (await dir.exists()) {
+        await for (final entity in dir.list(recursive: true)) {
+          if (entity is File) {
+            final fileName = p.basename(entity.path);
+            if (fileName == 'local_index.json' || fileName.endsWith('.marker') || fileName == '.vault_manifest' || fileName == 'vault_config.json') {
+              continue;
+            }
+
+            localEncryptedCount++;
+
+            final relativePath = '/${p.relative(entity.path, from: vaultDirectoryPath).replaceAll('\\', '/')}';
+            localFilePaths.add(relativePath);
+            final indexEntry = localIndex[relativePath];
+
+            if (indexEntry == null) {
+              diffCount++;
+            } else {
+              final stat = await entity.stat();
+              final indexSize = indexEntry['cipherSize'] ?? indexEntry['size'];
+              final indexUpdatedAtStr = indexEntry['cipherUpdatedAt'] ?? indexEntry['updatedAt'];
+
+              bool isDiff = false;
+              if (indexSize != null && stat.size != indexSize) {
+                isDiff = true;
+              } else if (indexUpdatedAtStr != null) {
+                final indexUpdatedAt = DateTime.tryParse(indexUpdatedAtStr.toString());
+                if (indexUpdatedAt != null && stat.modified.difference(indexUpdatedAt).inSeconds.abs() > 1) {
+                  isDiff = true;
+                }
+              }
+
+              if (isDiff) {
+                diffCount++;
+              }
+            }
+          }
+        }
+      }
+      
+      // Calculate deleted files
+      for (final key in localIndex.keys) {
+        if (!localFilePaths.contains(key)) {
+          diffCount++;
+        }
+      }
+    } catch (e) {
+      print('Failed to get file statistics: $e');
+    }
 
     return {
       'localEncryptedCount': localEncryptedCount,

@@ -170,6 +170,21 @@ class EncryptedVfs implements VirtualFileSystem {
     return bytes;
   }
 
+  String _hexEncode(List<int> bytes) {
+    return bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+  }
+
+  List<int> _hexDecode(String hex) {
+    if (hex.length % 2 != 0) {
+      throw FormatException('Invalid hex string');
+    }
+    final bytes = <int>[];
+    for (int i = 0; i < hex.length; i += 2) {
+      bytes.add(int.parse(hex.substring(i, i + 2), radix: 16));
+    }
+    return bytes;
+  }
+
   /// 确定性加密文件名：Fixed IV (12 bytes) + AES-GCM Ciphertext -> Base64Url
   String _encryptName(String plainName) {
     final fixedNonce = Uint8List(12); // Deterministic encryption
@@ -182,10 +197,10 @@ class EncryptedVfs implements VirtualFileSystem {
       algorithm: _algorithm,
     );
 
-    final b64 = Base64UrlUtils.encode(ciphertext);
+    final b64 = _hexEncode(ciphertext);
     if (b64.length > 200) {
       final digest = sha256.convert(utf8.encode(b64)).bytes;
-      return 'LFN_' + Base64UrlUtils.encode(Uint8List.fromList(digest)).substring(0, 32);
+      return 'LFN_' + _hexEncode(digest).substring(0, 32);
     }
     return b64;
   }
@@ -193,7 +208,12 @@ class EncryptedVfs implements VirtualFileSystem {
   /// 确定性解密文件名：Base64Url -> AES-GCM Ciphertext -> Plaintext
   String _decryptName(String cipherName) {
     try {
-      final ciphertext = Base64UrlUtils.decode(cipherName);
+      Uint8List ciphertext;
+      try {
+        ciphertext = Uint8List.fromList(_hexDecode(cipherName));
+      } catch (_) {
+        ciphertext = Base64UrlUtils.decode(cipherName);
+      }
       final fixedNonce = Uint8List(12);
 
       final plaintext = CryptoUtils.decrypt(
@@ -343,24 +363,39 @@ class EncryptedVfs implements VirtualFileSystem {
       return baseVfs.open(realPath, start: start, end: end);
     }
 
-    int chunkSize = _defaultChunkSize;
-    if (_manifestEntries.containsKey(virtualPath)) {
-      chunkSize = _manifestEntries[virtualPath]['chunkSize'] ?? _defaultChunkSize;
+    final headerStream = await baseVfs.open(realPath, start: 0, end: 25);
+    final headerBytes = <int>[];
+    await for (final chunk in headerStream) {
+      headerBytes.addAll(chunk);
     }
-    
-    // Check if it has a magic header (V2) or old format (V1)
+    final headerData = Uint8List.fromList(headerBytes);
+
+    int chunkSize = _defaultChunkSize;
+    Uint8List fileId;
     bool isNewFormat = false;
-    if (_manifestEntries.containsKey(virtualPath) && _manifestEntries[virtualPath]['chunkSize'] != null) {
-      isNewFormat = true;
+
+    if (headerData.length >= 6) {
+      final magic = headerData.sublist(0, 6);
+      bool magicMatch = true;
+      for (int i = 0; i < 6; i++) {
+        if (magic[i] != _magicHeader[i]) magicMatch = false;
+      }
+      if (magicMatch && headerData.length >= _v2HeaderLength) {
+        isNewFormat = true;
+        final bd = ByteData.sublistView(headerData, 6, 10);
+        chunkSize = bd.getUint32(0, Endian.big);
+        fileId = headerData.sublist(10, 26);
+      } else {
+        fileId = headerData.sublist(0, min(16, headerData.length));
+      }
     } else {
-      // If we don't have manifest, we can't reliably seek randomly without reading the header first.
-      // But we always load manifest now. If it's not in manifest, we assume it's V1.
+      fileId = headerData.sublist(0, min(16, headerData.length));
     }
 
     int headerLength = isNewFormat ? _v2HeaderLength : _fileIdLength;
     int chunkCipherSize = chunkSize + _chunkMacLength;
 
-    int cipherStart = 0;
+    int cipherStart = headerLength;
     int? cipherEnd;
     int startChunkIndex = 0;
 
@@ -375,103 +410,7 @@ class EncryptedVfs implements VirtualFileSystem {
 
     final cipherStream = await baseVfs.open(realPath, start: cipherStart, end: cipherEnd);
 
-    Uint8List fileId;
-    Stream<List<int>> dataStream;
-
-    if (cipherStart == 0) {
-      final firstBytes = await _readFirstBytes(cipherStream, headerLength);
-      final headerData = firstBytes.keys.first;
-      dataStream = firstBytes.values.first;
-      
-      if (isNewFormat && headerData.length == _v2HeaderLength) {
-        // Verify magic
-        final magic = headerData.sublist(0, 6);
-        bool magicMatch = true;
-        for (int i = 0; i < 6; i++) {
-          if (magic[i] != _magicHeader[i]) magicMatch = false;
-        }
-        if (magicMatch) {
-          final bd = ByteData.sublistView(headerData, 6, 10);
-          chunkSize = bd.getUint32(0, Endian.big);
-          fileId = headerData.sublist(10, 26);
-        } else {
-          // Fallback if marked as new format but magic mismatch (shouldn't happen)
-          fileId = headerData.sublist(0, 16);
-        }
-      } else {
-        fileId = headerData.sublist(0, 16);
-      }
-    } else {
-      final idStream = await baseVfs.open(realPath, start: 0, end: headerLength - 1);
-      final idBytes = <int>[];
-      await for (final chunk in idStream) {
-        idBytes.addAll(chunk);
-      }
-      final headerData = Uint8List.fromList(idBytes);
-      
-      if (isNewFormat && headerData.length == _v2HeaderLength) {
-        final bd = ByteData.sublistView(headerData, 6, 10);
-        chunkSize = bd.getUint32(0, Endian.big);
-        fileId = headerData.sublist(10, 26);
-      } else {
-        fileId = headerData.sublist(0, 16);
-      }
-      dataStream = cipherStream;
-    }
-
-    return _decryptStream(dataStream, fileId, startChunkIndex, start ?? 0, end, chunkSize);
-  }
-
-  Future<Map<Uint8List, Stream<List<int>>>> _readFirstBytes(Stream<List<int>> stream, int length) async {
-    final buffer = <int>[];
-    StreamController<List<int>>? controller;
-    final completer = Completer<Map<Uint8List, Stream<List<int>>>>();
-    StreamSubscription<List<int>>? subscription;
-
-    subscription = stream.listen(
-      (chunk) {
-        if (controller == null) {
-          buffer.addAll(chunk);
-          if (buffer.length >= length) {
-            final header = Uint8List.fromList(buffer.sublist(0, length));
-            controller = StreamController<List<int>>();
-            controller!.onCancel = () {
-              subscription?.cancel();
-            };
-            if (buffer.length > length) {
-              controller!.add(buffer.sublist(length));
-            }
-            completer.complete({header: controller!.stream});
-          }
-        } else {
-          controller!.add(chunk);
-        }
-      },
-      onError: (e) {
-        if (controller == null) {
-          completer.completeError(e);
-        } else {
-          controller!.addError(e);
-        }
-      },
-      onDone: () {
-        if (controller == null) {
-          if (buffer.length >= length) {
-            final header = Uint8List.fromList(buffer.sublist(0, length));
-            controller = StreamController<List<int>>();
-            controller!.onCancel = () {
-              subscription?.cancel();
-            };
-            completer.complete({header: controller!.stream});
-          } else {
-            completer.completeError(Exception('Encrypted file is too short'));
-          }
-        }
-        controller?.close();
-      },
-    );
-
-    return completer.future;
+    return _decryptStream(cipherStream, fileId, startChunkIndex, start ?? 0, end, chunkSize);
   }
 
   Stream<List<int>> _decryptStream(Stream<List<int>> cipherStream, Uint8List fileId, int startChunkIndex, int plainStart, int? plainEnd, int chunkSize) async* {
@@ -834,12 +773,17 @@ class EncryptedVfs implements VirtualFileSystem {
 
   @override
   Future<void> mkdir(String path) async {
+    await _loadManifest();
     String virtualPath = _normalizePath(path);
     String realPath = getRealPath(virtualPath);
     if (path.endsWith('/') && realPath != '/') {
       realPath += '/';
     }
     await baseVfs.mkdir(realPath);
+    if (encryptFilename) {
+      _manifestEntries[virtualPath] = {'isDirectory': true};
+      await _saveManifest();
+    }
   }
 
   /// 初始化一个加密目录：即在目录下创建一个空标记文件
