@@ -1,3 +1,8 @@
+# 版本 1.5.9 (2026-04-23)
+
+### 🐛 Bug Fixes & CI/CD
+- **自动构建修复**：修复了 GitHub Actions 发版流水线中，因分支保护规则导致 `git push` 失败从而中断 APK 构建的严重问题。现已优化流程，确保即使 README 更新推送失败也能继续完成最终的安装包构建。
+
 # 版本 1.5.8 (2026-04-23)
 
 ### 🚀 Performance & Cloud Drive Enhancements
