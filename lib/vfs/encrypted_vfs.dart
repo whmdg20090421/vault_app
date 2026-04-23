@@ -8,6 +8,7 @@ import 'package:crypto/crypto.dart';
 import '../encryption/utils/base64url_utils.dart';
 import '../encryption/utils/crypto_utils.dart';
 import '../encryption/utils/chunk_crypto.dart';
+import '../utils/dfs_format_utils.dart';
 import 'virtual_file_system.dart';
 
 /// 加密版 VFS 实现
@@ -91,16 +92,51 @@ class EncryptedVfs implements VirtualFileSystem {
     _manifestLoaded = true;
     try {
       final realManifestPath = getRealPath(_manifestPath);
-      final stream = await baseVfs.open(realManifestPath);
+      final rawStream = await baseVfs.open(realManifestPath, start: 0, end: 25);
+      final headerBytes = <int>[];
+      await for (final chunk in rawStream) {
+        headerBytes.addAll(chunk);
+      }
+      
+      bool isEncrypted = false;
+      if (headerBytes.length >= 6) {
+        bool magicMatch = true;
+        for (int i = 0; i < 6; i++) {
+          if (headerBytes[i] != _magicHeader[i]) magicMatch = false;
+        }
+        isEncrypted = magicMatch;
+      }
+      
+      Stream<List<int>> stream;
+      if (isEncrypted) {
+        stream = await this.open(_manifestPath);
+      } else {
+        stream = await baseVfs.open(realManifestPath);
+      }
+      
       final chunks = <int>[];
       await for (final chunk in stream) {
         chunks.addAll(chunk);
       }
       if (chunks.isNotEmpty) {
         final jsonMap = jsonDecode(utf8.decode(chunks)) as Map<String, dynamic>;
-        final entriesRaw = jsonMap['entries'];
+        
+        // 兼容新旧格式
+        Map? entriesRaw;
+        if (jsonMap.containsKey('目录')) {
+           entriesRaw = jsonMap['目录'];
+        } else if (jsonMap.containsKey('entries')) {
+           entriesRaw = jsonMap['entries'];
+        }
+        
         if (entriesRaw is Map) {
           _manifestEntries = Map<String, dynamic>.from(entriesRaw);
+        }
+        
+        // 如果读取成功且是明文旧版，且当前是在加密域，则触发保存以转换为加密新版
+        if (!isEncrypted && _isEncryptedDomain('/')) {
+           // 延迟执行避免阻塞
+           Future.microtask(() => _saveManifest());
         }
       }
     } catch (_) {
@@ -110,13 +146,30 @@ class EncryptedVfs implements VirtualFileSystem {
 
   Future<void> _saveManifest() async {
     try {
-      final jsonMap = {
-        'version': 1,
-        'entries': _manifestEntries,
+      final otherContent = {
+        'version': 2,
+        'description': 'Vault manifest',
       };
-      final bytes = utf8.encode(jsonEncode(jsonMap));
+      
+      final sortedDirectory = DfsFormatUtils.sortAndFillDFS(_manifestEntries);
+      final jsonString = DfsFormatUtils.customJsonEncode(otherContent, sortedDirectory);
+      final bytes = utf8.encode(jsonString);
+      
       final realManifestPath = getRealPath(_manifestPath);
-      await baseVfs.uploadStream(Stream.value(bytes), bytes.length, realManifestPath);
+      
+      bool isEncrypted = _isEncryptedDomain('/');
+      if (isEncrypted) {
+        final chunkSize = _determineChunkSize(bytes.length);
+        final cipherSize = _getCiphertextSize(bytes.length, chunkSize);
+        final fileId = _generateRandomBytes(_fileIdLength);
+        
+        final plainStream = Stream.value(bytes);
+        final encStream = _encryptStream(plainStream, fileId, chunkSize);
+        
+        await baseVfs.uploadStream(encStream, cipherSize, realManifestPath);
+      } else {
+        await baseVfs.uploadStream(Stream.value(bytes), bytes.length, realManifestPath);
+      }
     } catch (e) {
       print('Failed to save manifest: $e');
     }
@@ -296,10 +349,9 @@ class EncryptedVfs implements VirtualFileSystem {
 
     for (var realNode in realNodes) {
       if (realNode.name == _markerFileName ||
-          realNode.name == '.vault_manifest' ||
           realNode.name == 'local_index.json' ||
           realNode.name == 'vault_config.json') {
-        continue; // 过滤并隐藏标记文件和配置文件
+        continue; // 过滤并隐藏标记文件和配置文件（取消对 .vault_manifest 的隐藏）
       }
 
       String decryptedName = realNode.name;
@@ -325,6 +377,15 @@ class EncryptedVfs implements VirtualFileSystem {
         }
       }
 
+      // 处理明文根目录下的 .vault_manifest（如果它存在，且未加密，直接用原名）
+      // 如果已加密，它本身也是以加密后的名字存在？
+      // 不，根据代码，.vault_manifest 不会被加密名字！
+      // Wait, getRealPath 会对新文件加密名字。
+      // _saveManifest 中，上传的路径是 getRealPath(_manifestPath)
+      // 如果它是加密域，getRealPath(_manifestPath) 会把 '.vault_manifest' 这个名字加密！
+      // 那么我们在 list 的时候，解密出来会是 '.vault_manifest'。
+      // 所以对于 list，如果它是 '.vault_manifest'，就不隐藏了，这已经解决了。
+      
       String childVirtualPath = virtualPath == '/'
           ? '/$decryptedName'
           : '$virtualPath/$decryptedName';
@@ -354,7 +415,9 @@ class EncryptedVfs implements VirtualFileSystem {
 
   @override
   Future<Stream<List<int>>> open(String path, {int? start, int? end}) async {
-    await _loadManifest();
+    if (path != _manifestPath) {
+      await _loadManifest();
+    }
     String virtualPath = _normalizePath(path);
     String realPath = getRealPath(virtualPath);
 

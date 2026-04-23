@@ -18,6 +18,7 @@ import 'webdav_storage.dart';
 import 'webdav_new/webdav_client.dart';
 import 'webdav_new/webdav_service.dart';
 import '../widgets/vfs_folder_picker_dialog.dart';
+import 'webdav_browser_page.dart';
 
 
 class SyncConfigPage extends StatefulWidget {
@@ -406,9 +407,9 @@ class _SyncConfigPageState extends State<SyncConfigPage> {
             onPressed: () async {
               final folder = await Navigator.of(context).push(
                 MaterialPageRoute(
-                  builder: (_) => VfsFolderPickerDialog(
-                    vfs: _cloudVfs!,
-                    title: '选择云端文件夹',
+                  builder: (_) => WebDavBrowserPage(
+                    config: _selectedWebDav!,
+                    isPickingFolder: true,
                   ),
                 ),
               );

@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:path/path.dart' as p;
+import '../../utils/dfs_format_utils.dart';
 
 class LocalIndexService {
   static final LocalIndexService _instance = LocalIndexService._internal();
@@ -96,8 +97,21 @@ class LocalIndexService {
         if (content.isNotEmpty) {
           final decoded = jsonDecode(content) as Map<String, dynamic>;
           
-          // 兼容新版文件树格式与旧版平铺格式
-          if (decoded.containsKey('metadata') && decoded.containsKey('files')) {
+          // 兼容最新的 DFS 目录格式
+          if (decoded.containsKey('目录')) {
+            final Map<String, dynamic> directory = decoded['目录'];
+            // 过滤掉仅仅为了补齐文件夹而创建的 {isDirectory: true} 项，因为平铺格式通常只存文件
+            // 不过这里其实也可以不过滤，只过滤出含有文件信息的
+            final flat = <String, dynamic>{};
+            for (final entry in directory.entries) {
+              final value = entry.value;
+              if (value is Map && (value.containsKey('cipherSize') || value.containsKey('size') || value.containsKey('hash'))) {
+                flat[entry.key] = value;
+              }
+            }
+            return flat;
+          } else if (decoded.containsKey('metadata') && decoded.containsKey('files')) {
+            // 兼容旧版树状格式
             return _treeToFlat(decoded['files'] as Map<String, dynamic>);
           } else {
             return decoded;
@@ -115,23 +129,26 @@ class LocalIndexService {
     try {
       final indexFile = File(p.join(vaultDirectoryPath, 'local_index.json'));
       
-      // 构建符合要求的新格式：顶部其他内容，中间数据目录树，底部其他内容
-      final formattedData = {
+      // 构建其他内容
+      final otherContent = {
         'metadata': {
-          'version': 2,
+          'version': 3, // 版本号升级
           'updatedAt': DateTime.now().toIso8601String(),
           'description': 'Vault local index cache'
         },
-        'files': _flatToTree(indexData),
         'footer': {
           'fileCount': indexData.length,
           'endOfIndex': true
         }
       };
 
-      // 使用带缩进的 JSON 编码器，实现规范的换行和层级格式
-      final encoder = JsonEncoder.withIndent('  ');
-      await indexFile.writeAsString(encoder.convert(formattedData));
+      // 使用自定义 DFS 排序算法处理文件目录
+      final sortedDirectory = DfsFormatUtils.sortAndFillDFS(indexData);
+
+      // 使用自定义单行编码器生成 JSON 字符串
+      final jsonString = DfsFormatUtils.customJsonEncode(otherContent, sortedDirectory);
+      
+      await indexFile.writeAsString(jsonString);
     } catch (e) {
       print('Failed to save local_index.json: $e');
     }

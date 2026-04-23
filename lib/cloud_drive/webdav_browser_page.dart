@@ -18,10 +18,12 @@ class WebDavBrowserPage extends StatefulWidget {
     super.key,
     required this.config,
     this.isEmbedded = false,
+    this.isPickingFolder = false,
   });
 
   final WebDavConfig config;
   final bool isEmbedded;
+  final bool isPickingFolder;
 
   @override
   State<WebDavBrowserPage> createState() => _WebDavBrowserPageState();
@@ -279,7 +281,7 @@ class _WebDavBrowserPageState extends State<WebDavBrowserPage> {
                                     ],
                                   ),
                                   onTap: isDir ? () => _navigateTo(file.name) : null,
-                                  trailing: PopupMenuButton<String>(
+                                  trailing: widget.isPickingFolder ? null : PopupMenuButton<String>(
                                     color: Theme.of(context).colorScheme.surface,
                                     onSelected: (value) async {
                                       if (value == 'delete') {
@@ -364,10 +366,19 @@ class _WebDavBrowserPageState extends State<WebDavBrowserPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.config.name),
+        title: Text(widget.isPickingFolder ? '选择目录' : widget.config.name),
         centerTitle: true,
       ),
       body: body,
+      floatingActionButton: widget.isPickingFolder
+          ? FloatingActionButton.extended(
+              onPressed: () {
+                Navigator.pop(context, _currentPath);
+              },
+              icon: const Icon(Icons.check),
+              label: const Text('选择此文件夹'),
+            )
+          : null,
     );
   }
 }
