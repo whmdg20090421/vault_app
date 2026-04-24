@@ -64,15 +64,15 @@ jobs:
       - name: Write Android signing files
         shell: bash
         env:
-          KEY_STORE_BASE64: ${{ secrets.KEY_STORE_BASE64 || secrets.KEYSTORE_B64 }}
-          KEY_STORE_TYPE: ${{ secrets.KEY_STORE_TYPE }}
+          KEY_STORE_BASE64: ${{ secrets.KEYSTORE_B64 }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD || secrets.KEYSTORE_PASSWORD }}
+          STORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_STORE_TYPE: ""
         run: |
           set -euo pipefail
           if [ -z "$KEY_STORE_BASE64" ] || [ -z "$KEY_ALIAS" ] || [ -z "$KEY_PASSWORD" ] || [ -z "$STORE_PASSWORD" ]; then
-            echo "Signing secrets not configured. Please configure one of KEY_STORE_BASE64/KEYSTORE_B64, KEY_ALIAS, KEY_PASSWORD, and one of STORE_PASSWORD/KEYSTORE_PASSWORD in repository secrets."
+            echo "Signing secrets not configured."
             exit 1
           fi
 
