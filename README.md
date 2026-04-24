@@ -5,19 +5,19 @@
 ## 最新版本概览
 
 <!-- RELEASE_SUMMARY_START -->
-- 当前版本：1.6.0
+- 当前版本：1.7.0
 - **云端文件一致性深度比对**：全面废弃依赖 `Modified Time` 这一不准确的判断机制（易受跨时区或上传/下载操作篡改），改用 WebDAV `PROPFIND` 提取服务器真实的 `ETag` 哈希与精确 `Content-Length` 进行严格的二进制一致性校验，从根本上杜绝“已同步”文件被反复传输。
 - **配置持久化中枢 (SettingsManager)**：将原先分散在 `SharedPreferences` 中的杂乱配置全部抽离并聚合至统一的 `app_settings.json` 私有文件。现在不论是主题颜色、自定义背景图片透明度、还是加密核心分配与分配策略，修改后立即落盘，应用重启配置不再失效。
 - **任务断点续传与持久化恢复**：修复了重启应用后任务进度条死锁和数据丢失的重大 Bug。所有未完成的任务队列被实时序列化存储，在重启后自动拦截接管，利用底层 `WebDavConfigRepository` 重建凭据链路，实现真正的断点恢复。已完成任务自动归档至专属的 `history` 列表，告别内存泄露。
 - **云端防冲突并发锁 (LOCK/UNLOCK)**：首次完整实现 WebDAV `LOCK` 标准，在文件上传/下载前执行强制远端锁定，传输完毕或异常中断后可靠地执行 `UNLOCK` 释放资源，阻止多端同时修改造成的云端脏数据。
-- 完整更新：https://github.com/whmdg20090421/vault_app/releases/tag/v1.6.0
+- 完整更新：https://github.com/whmdg20090421/vault_app/releases/tag/v1.7.0
 <!-- RELEASE_SUMMARY_END -->
 
 ## 更新历史 (Changelog)
 
 为了保持页面整洁，以下仅展示版本号与简要更新说明。点击版本号蓝色链接可查看极度详细的更新内容：
 
-- [1.6.0](docs/changelogs/v1.6.0.md) - 重构文件一致性校验机制（ETag），加入并发锁 (LOCK/UNLOCK) 控制，并引入基于 JSON 的全局配置与同步任务断点续传持久化管理。
+- [1.7.0](docs/changelogs/v1.7.0.md) - 重构文件一致性校验机制（ETag），加入并发锁 (LOCK/UNLOCK) 控制，并引入基于 JSON 的全局配置与同步任务断点续传持久化管理。
 
 - [1.2.3](docs/changelogs/v1.2.3.md) - 引入专业的 WebDAV 同步管理仪表盘（Dashboard），集成真实删除与同步差异比对引擎，清理冗余缓存。
 - [1.2.2](docs/changelogs/v1.2.2.md) - 重构赛博朋克与纯黑主题，新增全局自定义图片背景，全面真实化数据概览与原生 WebDAV 底层通信。
