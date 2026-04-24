@@ -1,3 +1,8 @@
+# 版本 1.6.5 (2026-04-24)
+
+### 🐛 Bug Fixes
+- **编译修复**：修复了在 `CloudDriveProgressManager` 中调用了不存在的 `_storageService.deleteTask` 导致 CI 打包流水线 (flutter build apk) 崩溃的问题。
+
 # 版本 1.6.4 (2026-04-24)
 
 ### 🐛 Bug Fixes

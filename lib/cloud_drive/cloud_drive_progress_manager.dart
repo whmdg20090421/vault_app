@@ -200,7 +200,7 @@ class CloudDriveProgressManager extends ChangeNotifier with WidgetsBindingObserv
     task.status = SyncStatus.failed;
     task.errorMessage = '用户已取消/删除该任务';
     _tasks.removeWhere((t) => t.id == taskId);
-    _storageService.deleteTask(taskId);
+    _storageService.removeTask(taskId);
     notifyListeners();
   }
 
