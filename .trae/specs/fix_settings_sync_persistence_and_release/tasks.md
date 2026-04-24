@@ -10,6 +10,6 @@
   - [ ] SubTask 3.1: 检查 `SyncTask` 和 `SyncFileItem` 的 `toJson` / `fromJson`，确保所有状态（如 `transferredBytes`, `totalBytes`, `speed` 等）都被正确序列化。
   - [ ] SubTask 3.2: 在 `CloudDriveProgressManager` 和 `SyncStorageService` 中，确保同步完成的任务被标记并从内存中移除，同时追加写入到历史记录的 JSON (`sync_history_key`) 中。
   - [ ] SubTask 3.3: 确保重启后读取活跃的 `SyncTask` 时，能够被“继续/恢复”按钮正确接管（需要获取 WebDAV 凭据再次启动 `syncEngine.sync()`），而不是仅仅停留在 `pending` 状态卡死。
-- [ ] Task 4: 编译并发布为下一个小版本
-  - [ ] SubTask 4.1: 更新 `pubspec.yaml` 和 `CHANGELOG.md`，记录本次修复。
-  - [ ] SubTask 4.2: 按照 `Trae/rules.Md`，执行 `git commit`、打上 tag 并 `git push` 以触发 GitHub Actions 编译。
+- [x] Task 4: 编译并发布为下一个小版本
+  - [x] SubTask 4.1: 更新 `pubspec.yaml` 和 `CHANGELOG.md`，记录本次修复。
+  - [x] SubTask 4.2: 按照 `Trae/rules.Md`，执行 `git commit`、打上 tag 并 `git push` 以触发 GitHub Actions 编译。
