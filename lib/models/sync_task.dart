@@ -81,6 +81,11 @@ class SyncTask {
   int retryCount;
   String? errorMessage;
   
+  double? speed; // Bytes per second
+  Duration? remainingTime;
+  int transferredBytes;
+  int totalBytes;
+
   final String localVaultPath;
   final String cloudWebDavId;
   final String localFolderPath;
@@ -99,6 +104,10 @@ class SyncTask {
     this.completedAt,
     this.retryCount = 0,
     this.errorMessage,
+    this.speed,
+    this.remainingTime,
+    this.transferredBytes = 0,
+    this.totalBytes = 0,
     this.localVaultPath = '',
     this.cloudWebDavId = '',
     this.localFolderPath = '/',
@@ -117,6 +126,10 @@ class SyncTask {
       'completedAt': completedAt?.toIso8601String(),
       'retryCount': retryCount,
       'errorMessage': errorMessage,
+      'speed': speed,
+      'remainingTime': remainingTime?.inMilliseconds,
+      'transferredBytes': transferredBytes,
+      'totalBytes': totalBytes,
       'localVaultPath': localVaultPath,
       'cloudWebDavId': cloudWebDavId,
       'localFolderPath': localFolderPath,
@@ -152,6 +165,12 @@ class SyncTask {
           : null,
       retryCount: json['retryCount'] as int? ?? 0,
       errorMessage: json['errorMessage'] as String?,
+      speed: (json['speed'] as num?)?.toDouble(),
+      remainingTime: json['remainingTime'] != null
+          ? Duration(milliseconds: json['remainingTime'] as int)
+          : null,
+      transferredBytes: json['transferredBytes'] as int? ?? 0,
+      totalBytes: json['totalBytes'] as int? ?? 0,
       localVaultPath: json['localVaultPath'] as String? ?? '',
       cloudWebDavId: json['cloudWebDavId'] as String? ?? '',
       localFolderPath: json['localFolderPath'] as String? ?? '/',
@@ -170,6 +189,10 @@ class SyncTask {
     DateTime? completedAt,
     int? retryCount,
     String? errorMessage,
+    double? speed,
+    Duration? remainingTime,
+    int? transferredBytes,
+    int? totalBytes,
     String? localVaultPath,
     String? cloudWebDavId,
     String? localFolderPath,
@@ -186,6 +209,10 @@ class SyncTask {
       completedAt: completedAt ?? this.completedAt,
       retryCount: retryCount ?? this.retryCount,
       errorMessage: errorMessage ?? this.errorMessage,
+      speed: speed ?? this.speed,
+      remainingTime: remainingTime ?? this.remainingTime,
+      transferredBytes: transferredBytes ?? this.transferredBytes,
+      totalBytes: totalBytes ?? this.totalBytes,
       localVaultPath: localVaultPath ?? this.localVaultPath,
       cloudWebDavId: cloudWebDavId ?? this.cloudWebDavId,
       localFolderPath: localFolderPath ?? this.localFolderPath,

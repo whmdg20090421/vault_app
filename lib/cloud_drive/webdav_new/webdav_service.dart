@@ -46,7 +46,7 @@ class WebDavService {
   /// 上传本地文件到远端 (PUT)
   /// [localPath] 本地文件路径
   /// [remotePath] 远端目标路径
-  Future<void> upload(String localPath, String remotePath) async {
+  Future<void> upload(String localPath, String remotePath, {void Function(int count, int total)? onProgress}) async {
     final file = File(localPath);
     if (!await file.exists()) {
       throw Exception('Local file does not exist: $localPath');
@@ -62,6 +62,7 @@ class WebDavService {
         HttpHeaders.contentLengthHeader: length.toString(),
         HttpHeaders.contentTypeHeader: 'application/octet-stream',
       },
+      onSendProgress: onProgress,
     );
 
     // 200 OK, 201 Created, 204 No Content 都表示上传成功
@@ -73,7 +74,7 @@ class WebDavService {
   /// 从远端下载文件到本地 (GET)
   /// [remotePath] 远端文件路径
   /// [localPath] 本地目标路径
-  Future<void> download(String remotePath, String localPath) async {
+  Future<void> download(String remotePath, String localPath, {void Function(int count, int total)? onProgress}) async {
     final response = await client.request<ResponseBody>(
       remotePath,
       method: 'GET',
@@ -86,8 +87,14 @@ class WebDavService {
       await file.parent.create(recursive: true);
 
       final sink = file.openWrite();
+      final total = int.tryParse(response.headers.value(HttpHeaders.contentLengthHeader) ?? '-1') ?? -1;
+      int received = 0;
       await for (final chunk in response.data!.stream) {
         sink.add(chunk);
+        received += chunk.length;
+        if (onProgress != null) {
+          onProgress(received, total);
+        }
       }
       await sink.flush();
       await sink.close();

@@ -9,7 +9,7 @@ import '../cloud_drive_progress_manager.dart';
 
 class _SyncJob {
   final SyncFileItem item;
-  final Future<void> Function() execute;
+  final Future<void> Function(void Function(int count, int total)? onProgress) execute;
 
   _SyncJob(this.item, this.execute);
 }
@@ -42,6 +42,27 @@ class SyncEngine {
         String relativePath = p.relative(entity.path, from: localDirPath).replaceAll(r'\', '/');
         if (!relativePath.startsWith('/')) relativePath = '/' + relativePath;
         files[relativePath] = entity;
+      }
+    }
+  }
+
+  Future<void> _withLock(String remotePath, Future<void> Function() action) async {
+    String? token;
+    try {
+      token = await service.client.lock(remotePath);
+    } catch (e) {
+      print('Lock not supported or failed for $remotePath: $e');
+    }
+
+    try {
+      await action();
+    } finally {
+      if (token != null && token.isNotEmpty) {
+        try {
+          await service.client.unlock(remotePath, token);
+        } catch (e) {
+          print('Unlock failed for $remotePath: $e');
+        }
       }
     }
   }
@@ -148,7 +169,9 @@ class SyncEngine {
         String oldRemote = _buildRemotePath(remoteDir, entry.value);
         print('Moving remote: $oldRemote -> $newRemote');
         try {
-          await service.move(oldRemote, newRemote);
+          await _withLock(oldRemote, () async {
+            await service.move(oldRemote, newRemote);
+          });
         } catch (e) {
           print('Move failed: $e');
         }
@@ -158,7 +181,9 @@ class SyncEngine {
         String oldRemote = _buildRemotePath(remoteDir, entry.value);
         print('Copying remote: $oldRemote -> $newRemote');
         try {
-          await service.copy(oldRemote, newRemote);
+          await _withLock(oldRemote, () async {
+            await service.copy(oldRemote, newRemote);
+          });
         } catch (e) {
           print('Copy failed: $e');
         }
@@ -174,7 +199,18 @@ class SyncEngine {
 
     // 4. PROPFIND 获取云端状态并进行精准差异比对
     final syncTasks = <_SyncJob>[];
-    await _syncRecursiveDir(remoteDir, localDirPath, localAdded, localDeleted, localModified, currentLocalFiles, syncTasks);
+    final Map<String, WebDavFile> syncedRemoteFiles = {};
+    await _syncRecursiveDir(
+      remoteDir, 
+      localDirPath, 
+      localAdded, 
+      localDeleted, 
+      localModified, 
+      currentLocalFiles, 
+      syncTasks,
+      localIndex,
+      syncedRemoteFiles
+    );
 
     // 更新任务包含的具体子任务
     if (task != null) {
@@ -184,19 +220,20 @@ class SyncEngine {
     }
 
     // 5. 控制并发执行任务
-    await _executeConcurrently(syncTasks, maxConcurrency, task);
+    // Do not await this, run it in background so UI doesn't block
+    _executeConcurrently(syncTasks, maxConcurrency, task).then((_) async {
+      // 6. 更新并保存规范的本地索引
+      await _saveLocalIndex(currentLocalFiles, localIndexService, localIndex, syncedRemoteFiles);
 
-    // 6. 更新并保存规范的本地索引
-    await _saveLocalIndex(currentLocalFiles, localIndexService, localIndex);
-
-    if (task != null) {
-      bool allSuccess = task.items.every((i) => i.status == SyncStatus.completed);
-      task.status = allSuccess ? SyncStatus.completed : SyncStatus.failed;
-      task.completedAt = DateTime.now();
-      CloudDriveProgressManager.instance.updateTask(task);
-    }
-    
-    print('Sync completed.');
+      if (task != null) {
+        bool allSuccess = task.items.every((i) => i.status == SyncStatus.completed);
+        task.status = allSuccess ? SyncStatus.completed : SyncStatus.failed;
+        task.completedAt = DateTime.now();
+        CloudDriveProgressManager.instance.updateTask(task);
+      }
+      
+      print('Sync completed.');
+    });
   }
 
   String _buildRemotePath(String baseRemote, String relativePath) {
@@ -216,7 +253,9 @@ class SyncEngine {
     Set<String> localDeleted, 
     Set<String> localModified, 
     Map<String, File> currentLocalFiles, 
-    List<_SyncJob> syncTasks
+    List<_SyncJob> syncTasks,
+    Map<String, dynamic> localIndex,
+    Map<String, WebDavFile> syncedRemoteFiles,
   ) async {
     List<WebDavFile> remoteFiles;
     try {
@@ -244,8 +283,10 @@ class SyncEngine {
       String relativePath = p.relative(localEntityPath, from: localDirPath).replaceAll(r'\', '/');
       if (!relativePath.startsWith('/')) relativePath = '/' + relativePath;
 
+      syncedRemoteFiles[relativePath] = remoteFile;
+
       if (remoteFile.isDirectory) {
-        subDirFutures.add(_syncRecursiveDir(remoteFile.path, localEntityPath, localAdded, localDeleted, localModified, currentLocalFiles, syncTasks));
+        subDirFutures.add(_syncRecursiveDir(remoteFile.path, localEntityPath, localAdded, localDeleted, localModified, currentLocalFiles, syncTasks, localIndex, syncedRemoteFiles));
       } else {
         if (localFileMap.containsKey(remoteFile.name)) {
           // Both exist
@@ -256,11 +297,35 @@ class SyncEngine {
             final remoteMod = remoteFile.lastModified;
 
             bool isDifferent = false;
+            
+            String? lastETag;
+            String? lastRemoteModStr;
+            if (localIndex.containsKey(relativePath)) {
+              final indexInfo = localIndex[relativePath];
+              if (indexInfo is Map) {
+                lastETag = indexInfo['eTag'];
+                lastRemoteModStr = indexInfo['remoteMod'];
+              }
+            }
+
             if (localStat.size != remoteFile.size) {
               isDifferent = true;
-            } else if (remoteMod != null && localMod.toIso8601String() != remoteMod.toIso8601String()) {
-              // In a real scenario we might not have remote hash, so we assume different if time differs
-              isDifferent = true; 
+            } else {
+              if (remoteFile.eTag != null && lastETag != null) {
+                if (remoteFile.eTag != lastETag) {
+                  isDifferent = true;
+                }
+              } else if (remoteMod != null && lastRemoteModStr != null) {
+                if (remoteMod.toIso8601String() != lastRemoteModStr) {
+                  isDifferent = true;
+                }
+              } else {
+                if (localModified.contains(relativePath)) {
+                  isDifferent = true;
+                } else {
+                  isDifferent = false;
+                }
+              }
             }
 
             if (isDifferent) {
@@ -268,17 +333,21 @@ class SyncEngine {
                  (direction == SyncDirection.twoWay && remoteMod != null && remoteMod.isAfter(localMod))) {
                 syncTasks.add(_SyncJob(
                   SyncFileItem(path: localEntityPath, name: remoteFile.name, size: remoteFile.size ?? 0),
-                  () async {
+                  (onProgress) async {
                     print('Downloading updated file: ${remoteFile.name}');
-                    await service.download(remoteFile.path, localEntityPath);
+                    await _withLock(remoteFile.path, () async {
+                      await service.download(remoteFile.path, localEntityPath, onProgress: onProgress);
+                    });
                   }
                 ));
               } else if (direction == SyncDirection.localToCloud || direction == SyncDirection.twoWay) {
                 syncTasks.add(_SyncJob(
                   SyncFileItem(path: localEntityPath, name: remoteFile.name, size: localStat.size),
-                  () async {
+                  (onProgress) async {
                     print('Uploading updated file: ${remoteFile.name}');
-                    await service.upload(localEntityPath, remoteFile.path);
+                    await _withLock(remoteFile.path, () async {
+                      await service.upload(localEntityPath, remoteFile.path, onProgress: onProgress);
+                    });
                   }
                 ));
               }
@@ -291,9 +360,12 @@ class SyncEngine {
             if (direction == SyncDirection.localToCloud || direction == SyncDirection.twoWay) {
               syncTasks.add(_SyncJob(
                 SyncFileItem(path: remoteFile.path, name: remoteFile.name, size: remoteFile.size ?? 0),
-                () async {
+                (onProgress) async {
                   print('Deleting remote file: ${remoteFile.name}');
-                  await service.remove(remoteFile.path);
+                  await _withLock(remoteFile.path, () async {
+                    await service.remove(remoteFile.path);
+                  });
+                  if (onProgress != null) onProgress(remoteFile.size ?? 0, remoteFile.size ?? 0);
                 }
               ));
             }
@@ -302,9 +374,11 @@ class SyncEngine {
             if (direction == SyncDirection.cloudToLocal || direction == SyncDirection.twoWay) {
               syncTasks.add(_SyncJob(
                 SyncFileItem(path: localEntityPath, name: remoteFile.name, size: remoteFile.size ?? 0),
-                () async {
+                (onProgress) async {
                   print('Downloading new file: ${remoteFile.name}');
-                  await service.download(remoteFile.path, localEntityPath);
+                  await _withLock(remoteFile.path, () async {
+                    await service.download(remoteFile.path, localEntityPath, onProgress: onProgress);
+                  });
                 }
               ));
             }
@@ -329,10 +403,12 @@ class SyncEngine {
             final stat = await localEntity.stat();
             syncTasks.add(_SyncJob(
               SyncFileItem(path: localEntityPath, name: name, size: stat.size),
-              () async {
+              (onProgress) async {
                 print('Uploading new file: $name');
                 String remotePath = _buildRemotePath(remoteDir, name);
-                await service.upload(localEntityPath, remotePath);
+                await _withLock(remotePath, () async {
+                  await service.upload(localEntityPath, remotePath, onProgress: onProgress);
+                });
               }
             ));
             localAdded.remove(relativePath);
@@ -343,7 +419,7 @@ class SyncEngine {
             } catch (e) {
               // Ignore if exists
             }
-            subDirFutures.add(_syncRecursiveDir(remotePath, localEntityPath, localAdded, localDeleted, localModified, currentLocalFiles, syncTasks));
+            subDirFutures.add(_syncRecursiveDir(remotePath, localEntityPath, localAdded, localDeleted, localModified, currentLocalFiles, syncTasks, localIndex, syncedRemoteFiles));
           }
         }
       }
@@ -351,7 +427,7 @@ class SyncEngine {
     }
   }
 
-  Future<void> _saveLocalIndex(Map<String, File> currentLocalFiles, LocalIndexService localIndexService, Map<String, dynamic> localIndex) async {
+  Future<void> _saveLocalIndex(Map<String, File> currentLocalFiles, LocalIndexService localIndexService, Map<String, dynamic> localIndex, Map<String, WebDavFile> syncedRemoteFiles) async {
     // Need to re-scan to get the actual sizes and modified times after sync (downloads might have changed them)
     Map<String, File> finalFiles = {};
     await _scanLocalFiles(Directory(localDirPath), finalFiles);
@@ -363,9 +439,25 @@ class SyncEngine {
       final stat = await file.stat();
       
       final existingInfo = localIndex[path];
+      final remoteFile = syncedRemoteFiles[path];
+
+      String? eTagToSave;
+      String? remoteModToSave;
+
+      if (remoteFile != null) {
+        eTagToSave = remoteFile.eTag;
+        remoteModToSave = remoteFile.lastModified?.toIso8601String();
+      } else if (existingInfo != null && existingInfo is Map) {
+        eTagToSave = existingInfo['eTag'];
+        remoteModToSave = existingInfo['remoteMod'];
+      }
+
       if (existingInfo != null && existingInfo is Map) {
         if (existingInfo['size'] == stat.size && existingInfo['updatedAt'] == stat.modified.toIso8601String()) {
-          newIndexData[path] = existingInfo;
+          // Keep existing info but update eTag/remoteMod if we got new ones from PROPFIND
+          newIndexData[path] = Map<String, dynamic>.from(existingInfo);
+          if (eTagToSave != null) newIndexData[path]['eTag'] = eTagToSave;
+          if (remoteModToSave != null) newIndexData[path]['remoteMod'] = remoteModToSave;
           continue;
         }
       }
@@ -376,6 +468,8 @@ class SyncEngine {
         'size': stat.size,
         'updatedAt': stat.modified.toIso8601String(),
         'hash': hash,
+        if (eTagToSave != null) 'eTag': eTagToSave,
+        if (remoteModToSave != null) 'remoteMod': remoteModToSave,
       };
     }
 
@@ -384,6 +478,48 @@ class SyncEngine {
 
   Future<void> _executeConcurrently(List<_SyncJob> tasks, int concurrency, SyncTask? parentTask) async {
     if (tasks.isEmpty) return;
+    
+    int totalBytes = tasks.fold(0, (sum, job) => sum + job.item.size);
+    if (parentTask != null) {
+      parentTask.totalBytes = totalBytes;
+      parentTask.transferredBytes = 0;
+      CloudDriveProgressManager.instance.updateTask(parentTask);
+    }
+
+    Map<int, int> taskTransferredBytes = {};
+    int completedBytes = 0;
+
+    int lastUpdateMs = DateTime.now().millisecondsSinceEpoch;
+    int lastTransferred = 0;
+
+    void updateGlobalProgress() {
+      if (parentTask == null) return;
+      int currentTransferred = completedBytes;
+      for (var val in taskTransferredBytes.values) {
+        currentTransferred += val;
+      }
+      
+      parentTask.transferredBytes = currentTransferred;
+
+      int nowMs = DateTime.now().millisecondsSinceEpoch;
+      int dtMs = nowMs - lastUpdateMs;
+      if (dtMs > 1000) { // Update speed every 1 second
+        int diffBytes = currentTransferred - lastTransferred;
+        double speed = diffBytes / (dtMs / 1000.0);
+        parentTask.speed = speed;
+        
+        if (speed > 0) {
+          int remainingBytes = totalBytes - currentTransferred;
+          double remainingSeconds = remainingBytes / speed;
+          parentTask.remainingTime = Duration(seconds: remainingSeconds.toInt());
+        }
+
+        lastUpdateMs = nowMs;
+        lastTransferred = currentTransferred;
+        CloudDriveProgressManager.instance.updateTask(parentTask);
+      }
+    }
+
     int index = 0;
     Future<void> worker() async {
       while (index < tasks.length) {
@@ -396,12 +532,19 @@ class SyncEngine {
         }
 
         try {
-          await job.execute();
+          await job.execute((count, total) {
+            taskTransferredBytes[taskIndex] = count;
+            updateGlobalProgress();
+          });
           job.item.status = SyncStatus.completed;
+          completedBytes += job.item.size;
+          taskTransferredBytes.remove(taskIndex);
+          updateGlobalProgress();
         } catch (e) {
           print('Task failed: $e');
           job.item.status = SyncStatus.failed;
           job.item.errorMessage = e.toString();
+          taskTransferredBytes.remove(taskIndex);
         }
 
         if (parentTask != null) {
@@ -411,5 +554,11 @@ class SyncEngine {
     }
     final workers = List.generate(concurrency, (_) => worker());
     await Future.wait(workers);
+    
+    if (parentTask != null) {
+      parentTask.transferredBytes = totalBytes;
+      parentTask.speed = 0;
+      parentTask.remainingTime = Duration.zero;
+    }
   }
 }

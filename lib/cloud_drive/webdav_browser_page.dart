@@ -14,6 +14,7 @@ import '../models/sync_task.dart';
 import '../utils/format_utils.dart';
 import '../widgets/vfs_folder_picker_dialog.dart';
 import '../widgets/error_dialog.dart';
+import '../encryption/services/local_index_service.dart';
 
 class WebDavBrowserPage extends StatefulWidget {
   const WebDavBrowserPage({
@@ -39,7 +40,8 @@ class _WebDavBrowserPageState extends State<WebDavBrowserPage> {
 
   List<String> _pathSegments = [];
   List<VfsNode> _files = [];
-  Set<String> _syncedPaths = {};
+  List<SyncTask> _relevantTasks = [];
+  Map<String, Map<String, dynamic>> _cloudPathToLocalIndex = {};
 
   String get _currentPath {
     if (_pathSegments.isEmpty) return '/';
@@ -56,21 +58,21 @@ class _WebDavBrowserPageState extends State<WebDavBrowserPage> {
     try {
       final syncStorage = SyncStorageService();
       final tasks = await syncStorage.loadTasks();
-      final syncedPaths = <String>{};
       
-      for (final task in tasks) {
-        if (task.cloudWebDavId == widget.config.id) {
-          for (final item in task.items) {
-            if (item.status == SyncStatus.completed) {
-              syncedPaths.add(item.path);
-            }
-          }
+      final relevantTasks = tasks.where((t) => t.cloudWebDavId == widget.config.id).toList();
+      final cloudPathToLocalIndex = <String, Map<String, dynamic>>{};
+
+      for (final task in relevantTasks) {
+        if (task.localVaultPath.isNotEmpty) {
+           final localIndex = await LocalIndexService().getLocalIndex(task.localVaultPath);
+           cloudPathToLocalIndex[task.cloudFolderPath] = localIndex;
         }
       }
       
       if (mounted) {
         setState(() {
-          _syncedPaths = syncedPaths;
+          _relevantTasks = relevantTasks;
+          _cloudPathToLocalIndex = cloudPathToLocalIndex;
         });
       }
     } catch (e) {
@@ -247,11 +249,39 @@ class _WebDavBrowserPageState extends State<WebDavBrowserPage> {
                                 // 检查同步状态
                                 bool isSynced = false;
                                 if (!isDir) {
-                                  String cleanPath = file.path;
-                                  if (cleanPath.startsWith('/')) {
-                                    cleanPath = cleanPath.substring(1);
+                                  for (final task in _relevantTasks) {
+                                    if (file.path.startsWith(task.cloudFolderPath)) {
+                                      String relativePath = file.path;
+                                      if (relativePath.startsWith(task.cloudFolderPath)) {
+                                         relativePath = relativePath.substring(task.cloudFolderPath.length);
+                                      }
+                                      if (!relativePath.startsWith('/')) relativePath = '/' + relativePath;
+
+                                      final localIndex = _cloudPathToLocalIndex[task.cloudFolderPath];
+                                      if (localIndex != null) {
+                                        final indexEntry = localIndex[relativePath];
+                                        if (indexEntry != null) {
+                                          bool isDiff = false;
+                                          final indexSize = indexEntry['cipherSize'] ?? indexEntry['size'];
+                                          final indexETag = indexEntry['eTag'];
+                                          final indexRemoteMod = indexEntry['remoteMod'];
+                                          
+                                          if (indexSize != null && file.size != indexSize) {
+                                            isDiff = true;
+                                          } else if (file.eTag != null && indexETag != null) {
+                                             if (file.eTag != indexETag) isDiff = true;
+                                          } else if (file.lastModified != null && indexRemoteMod != null) {
+                                             if (file.lastModified!.toIso8601String() != indexRemoteMod) isDiff = true;
+                                          }
+                                          
+                                          if (!isDiff) {
+                                            isSynced = true;
+                                            break;
+                                          }
+                                        }
+                                      }
+                                    }
                                   }
-                                  isSynced = _syncedPaths.contains(cleanPath) || _syncedPaths.contains(file.path);
                                 }
 
                                 final listTile = ListTile(

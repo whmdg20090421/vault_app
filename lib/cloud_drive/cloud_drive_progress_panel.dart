@@ -150,8 +150,38 @@ class _CloudDriveProgressPanelState extends State<CloudDriveProgressPanel> with 
     );
   }
 
+  String _formatBytes(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+    if (bytes < 1024 * 1024 * 1024) return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+    return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
+  }
+
+  String _formatSpeed(double speedBps) {
+    if (speedBps < 1024) return '${speedBps.toStringAsFixed(1)} B/s';
+    if (speedBps < 1024 * 1024) return '${(speedBps / 1024).toStringAsFixed(1)} KB/s';
+    return '${(speedBps / (1024 * 1024)).toStringAsFixed(1)} MB/s';
+  }
+
+  String _formatDuration(Duration? duration) {
+    if (duration == null) return '--:--';
+    if (duration.inSeconds == 0) return '即将完成';
+    final hours = duration.inHours;
+    final minutes = duration.inMinutes.remainder(60);
+    final seconds = duration.inSeconds.remainder(60);
+    if (hours > 0) {
+      return '${hours}h ${minutes}m ${seconds}s';
+    } else if (minutes > 0) {
+      return '${minutes}m ${seconds}s';
+    } else {
+      return '${seconds}s';
+    }
+  }
+
   Widget _buildSyncTaskCard(SyncTask task, ThemeData theme, bool isCyberpunk) {
-    final progress = task.status == SyncStatus.completed ? 1.0 : (task.items.isEmpty ? 0.0 : task.items.where((i) => i.status == SyncStatus.completed).length / task.items.length);
+    final progress = task.status == SyncStatus.completed 
+        ? 1.0 
+        : (task.totalBytes > 0 ? task.transferredBytes / task.totalBytes : 0.0);
     
     String statusText;
     Color statusColor;
@@ -211,10 +241,37 @@ class _CloudDriveProgressPanelState extends State<CloudDriveProgressPanel> with 
             borderRadius: BorderRadius.circular(4),
           ),
           const SizedBox(height: 8),
-          Text(
-            task.status == SyncStatus.pending ? '正在扫描文件差异...' : '${(progress * 100).toStringAsFixed(1)}%',
-            style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurface.withOpacity(0.7)),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                task.status == SyncStatus.pending ? '正在扫描文件差异...' : '${(progress * 100).toStringAsFixed(1)}%',
+                style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurface.withOpacity(0.7)),
+              ),
+              if (task.status == SyncStatus.syncing)
+                Text(
+                  '${_formatBytes(task.transferredBytes)} / ${_formatBytes(task.totalBytes)}',
+                  style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurface.withOpacity(0.7)),
+                ),
+            ],
           ),
+          if (task.status == SyncStatus.syncing)
+            Padding(
+              padding: const EdgeInsets.only(top: 4.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    '速度: ${_formatSpeed(task.speed ?? 0)}',
+                    style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurface.withOpacity(0.7)),
+                  ),
+                  Text(
+                    '剩余: ${_formatDuration(task.remainingTime)}',
+                    style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurface.withOpacity(0.7)),
+                  ),
+                ],
+              ),
+            ),
         ],
       ),
     );

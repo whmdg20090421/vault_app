@@ -61,6 +61,7 @@ class _SyncSettingsDialogState extends State<SyncSettingsDialog> {
 
   SyncDirection _syncDirection = SyncDirection.twoWay;
   SyncOverrideMethod _overrideMethod = SyncOverrideMethod.timePriority;
+  bool _isStartingSync = false;
 
   @override
   void initState() {
@@ -208,19 +209,28 @@ class _SyncSettingsDialogState extends State<SyncSettingsDialog> {
             backgroundColor: theme.colorScheme.primary,
             foregroundColor: Colors.white,
           ),
-          onPressed: _selectedLocalVaultPath == null || _selectedCloudConfig == null
+          onPressed: _selectedLocalVaultPath == null || _selectedCloudConfig == null || _isStartingSync
               ? null
-              : () {
-                  // Actually start sync with these settings
-                  WebDAVStateManager.instance.startSync(
-                    context,
-                    _selectedCloudConfig!,
-                    _selectedLocalVaultPath!,
-                    _selectedCloudFolder ?? '/',
-                  );
-                  Navigator.of(context).pop();
+              : () async {
+                  setState(() => _isStartingSync = true);
+                  try {
+                    // Actually start sync with these settings
+                    await WebDAVStateManager.instance.startSync(
+                      context,
+                      _selectedCloudConfig!,
+                      _selectedLocalVaultPath!,
+                      _selectedCloudFolder ?? '/',
+                    );
+                  } finally {
+                    if (mounted) {
+                      setState(() => _isStartingSync = false);
+                      Navigator.of(context).pop();
+                    }
+                  }
                 },
-          child: const Text('开始同步'),
+          child: _isStartingSync 
+              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+              : const Text('开始同步'),
         ),
       ],
     );

@@ -21,6 +21,7 @@ class StandardVfs implements VirtualFileSystem {
       isDirectory: f.isDirectory,
       size: f.size,
       lastModified: f.lastModified,
+      eTag: f.eTag,
     )).toList();
   }
 
@@ -66,6 +67,7 @@ class StandardVfs implements VirtualFileSystem {
           isDirectory: f.isDirectory,
           size: f.size,
           lastModified: f.lastModified,
+          eTag: f.eTag,
         );
       }
     }

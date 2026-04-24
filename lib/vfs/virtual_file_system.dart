@@ -5,6 +5,7 @@ class VfsNode {
   final bool isDirectory;
   final int size;
   final DateTime? lastModified;
+  final String? eTag;
 
   VfsNode({
     required this.name,
@@ -12,6 +13,7 @@ class VfsNode {
     required this.isDirectory,
     required this.size,
     this.lastModified,
+    this.eTag,
   });
 }
 

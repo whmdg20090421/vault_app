@@ -95,6 +95,8 @@ class WebDavClient {
     dynamic data,
     Map<String, dynamic>? headers,
     ResponseType responseType = ResponseType.plain,
+    ProgressCallback? onSendProgress,
+    ProgressCallback? onReceiveProgress,
   }) async {
     return await dio.request<T>(
       path,
@@ -104,6 +106,62 @@ class WebDavClient {
         headers: headers,
         responseType: responseType,
       ),
+      onSendProgress: onSendProgress,
+      onReceiveProgress: onReceiveProgress,
+    );
+  }
+
+  /// 锁定文件或目录
+  /// 返回 lockToken
+  Future<String> lock(String path, {int timeout = 3600}) async {
+    final lockBody = '''
+<?xml version="1.0" encoding="utf-8" ?>
+<D:lockinfo xmlns:D="DAV:">
+  <D:lockscope><D:exclusive/></D:lockscope>
+  <D:locktype><D:write/></D:locktype>
+  <D:owner>soloclouddrive</D:owner>
+</D:lockinfo>
+''';
+
+    final response = await request(
+      path,
+      method: 'LOCK',
+      data: lockBody,
+      headers: {
+        'Timeout': 'Second-$timeout',
+        'Content-Type': 'application/xml; charset=utf-8',
+      },
+    );
+
+    final lockTokenHeader = response.headers.value('lock-token');
+    if (lockTokenHeader != null) {
+      return lockTokenHeader.replaceAll('<', '').replaceAll('>', '');
+    }
+    
+    // 如果 Header 中没有，尝试从 XML 响应中解析
+    if (response.data != null && response.data.toString().isNotEmpty) {
+      final dataStr = response.data.toString();
+      final regex = RegExp(r'<[a-zA-Z0-9:]*href>([^<]+)</[a-zA-Z0-9:]*href>');
+      final match = regex.firstMatch(dataStr);
+      if (match != null) {
+        final token = match.group(1);
+        if (token != null && token.startsWith('opaquelocktoken:')) {
+          return token;
+        }
+      }
+    }
+
+    throw Exception('Failed to acquire lock for $path');
+  }
+
+  /// 解锁文件或目录
+  Future<void> unlock(String path, String token) async {
+    await request(
+      path,
+      method: 'UNLOCK',
+      headers: {
+        'Lock-Token': '<$token>',
+      },
     );
   }
 }

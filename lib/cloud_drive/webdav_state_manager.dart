@@ -83,9 +83,9 @@ class WebDAVStateManager extends ChangeNotifier {
       );
       await CloudDriveProgressManager.instance.addTask(task);
 
-      addLog('正在同步...');
+      addLog('正在计算同步差异...');
       await syncEngine.sync(remoteDir, forceSync: forceSync, task: task);
-      addLog('同步完成');
+      addLog('同步准备完成，后台执行中...');
       _lastSyncTime = DateTime.now();
     } catch (e) {
       addLog('同步失败: $e', isError: true);
