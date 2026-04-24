@@ -1,3 +1,8 @@
+# 版本 1.6.4 (2026-04-24)
+
+### 🐛 Bug Fixes
+- **编译修复**：修复了在 `webdav_state_manager.dart` 和 `cloud_drive_progress_panel.dart` 中的缺少导入与路径错误导致 CI 打包流水线 (flutter build apk) 崩溃的问题。
+
 # 版本 1.6.3 (2026-04-24)
 
 ### 🐛 Bug Fixes

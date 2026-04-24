@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'cloud_drive_progress_manager.dart';
 import '../models/sync_task.dart';
-import '../../utils/format_utils.dart';
+import '../utils/format_utils.dart';
 
 void showCloudDriveProgressPanel(BuildContext context) {
   final theme = Theme.of(context);
