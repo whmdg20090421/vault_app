@@ -19,6 +19,9 @@ import '../vfs/encrypted_vfs.dart';
 import '../vfs/standard_vfs.dart';
 import '../encryption/utils/crypto_utils.dart';
 import '../widgets/vfs_folder_picker_dialog.dart';
+import '../widgets/error_dialog.dart';
+import 'webdav_new/webdav_logger.dart';
+import 'webdav_browser_page.dart';
 
 enum SyncDirection {
   cloudToLocal,
@@ -507,9 +510,8 @@ class _CloudDrivePickerPageState extends State<_CloudDrivePickerPage> {
   }
 
   Future<void> _loadConfigs() async {
-    final prefs = await SharedPreferences.getInstance();
-    final configsJson = prefs.getStringList('webdav_configs') ?? [];
-    final loaded = configsJson.map((str) => WebDavConfig.fromJson(jsonDecode(str))).toList();
+    final repository = WebDavConfigRepository();
+    final loaded = await repository.listConfigs();
     
     if (mounted) {
       setState(() {
@@ -541,9 +543,9 @@ class _CloudDrivePickerPageState extends State<_CloudDrivePickerPage> {
       
       final folder = await Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (_) => VfsFolderPickerDialog(
-            vfs: cloudVfs,
-            title: '选择 ${config.name} 中的文件夹',
+          builder: (_) => WebDavBrowserPage(
+            config: config,
+            isPickingFolder: true,
           ),
         ),
       );
@@ -554,12 +556,12 @@ class _CloudDrivePickerPageState extends State<_CloudDrivePickerPage> {
           'folder': folder,
         });
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
       if (mounted) {
         setState(() => _isConnecting = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('连接 WebDAV 失败: $e')),
-        );
+        final errorMessage = 'Failed to connect WebDAV: $e\n$stackTrace';
+        WebDavLogger.writeErrorLog(errorMessage);
+        showVfsErrorDialog(context, e.toString());
       }
     }
   }
