@@ -1,3 +1,8 @@
+# 版本 1.6.2 (2026-04-24)
+
+### 🚀 CI Pipeline Updates
+- **Fix**: 修复了 GitHub Actions release 工作流中推送自动生成的 README.md 时因权限或网络问题导致的崩溃。
+
 # 版本 1.6.1 (2026-04-24)
 
 ### 🚀 Sync UI & Performance Enhancements
