@@ -20,6 +20,7 @@ class SyncEngine {
   final String localDirPath;
   final int maxUploadConcurrency;
   final int maxDownloadConcurrency;
+  final SyncDirection direction;
 
   SyncEngine({
     required this.service,

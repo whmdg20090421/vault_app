@@ -1,3 +1,8 @@
+# 版本 1.6.3 (2026-04-24)
+
+### 🐛 Bug Fixes
+- **编译修复**：修复了在 `SyncEngine` 中引入同步方向控制参数时遗漏字段声明，导致 CI 打包流水线 (flutter build apk) 崩溃退出的严重问题。
+
 # 版本 1.6.2 (2026-04-24)
 
 ### 🚀 CI Pipeline Updates
