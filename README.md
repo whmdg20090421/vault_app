@@ -5,9 +5,11 @@
 ## 最新版本概览
 
 <!-- RELEASE_SUMMARY_START -->
-- 当前版本：1.5.12
-- **云盘同步目录选择**：修复了编译 Release 包时由于缺少命名参数 `initialPath` 导致的 Flutter 编译失败问题，现已使用正确的 `title` 参数调用 `VfsFolderPickerDialog`。
-- 完整更新：https://github.com/whmdg20090421/vault_app/releases/tag/v1.5.12
+- 当前版本：1.6.0
+- **云盘同步目录选择**：废除过时的云端文件夹选择器，直接复用文件浏览组件 (`WebDavBrowserPage`)，统一底层查询机制，完美解决同步目录无法显示文件夹及白屏问题。
+- **异常捕获与日志**：全面升级 WebDAV 连接的错误处理，新增规范化的红色报错对话框（复刻旧有UI），并将网络与解析异常统一写入到指定目录 (`webdav_error_log.txt`)，极大提升了排错体验。
+- **本地保险箱导入逻辑优化**：重新梳理“导入现有保险箱”功能，智能识别已加密文件夹的 `vault_config.json` 配置文件。如果识别到配置则直接添加并防误覆盖；如未识别到，则提示用户使用“添加不加密文件夹”功能，保障数据结构严谨性。
+- 完整更新：https://github.com/whmdg20090421/vault_app/releases/tag/v1.6.0
 <!-- RELEASE_SUMMARY_END -->
 
 ## 更新历史 (Changelog)
