@@ -5,9 +5,9 @@
 ## 最新版本概览
 
 <!-- RELEASE_SUMMARY_START -->
-- 当前版本：1.6.3
-- **编译修复**：修复了在 `SyncEngine` 中引入同步方向控制参数时遗漏字段声明，导致 CI 打包流水线 (flutter build apk) 崩溃退出的严重问题。
-- 完整更新：https://github.com/whmdg20090421/vault_app/releases/tag/v1.6.3
+- 当前版本：1.6.4
+- **编译修复**：修复了在 `webdav_state_manager.dart` 和 `cloud_drive_progress_panel.dart` 中的缺少导入与路径错误导致 CI 打包流水线 (flutter build apk) 崩溃的问题。
+- 完整更新：https://github.com/whmdg20090421/vault_app/releases/tag/v1.6.4
 <!-- RELEASE_SUMMARY_END -->
 
 ## 更新历史 (Changelog)
