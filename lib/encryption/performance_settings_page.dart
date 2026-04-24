@@ -19,24 +19,36 @@ class PerformanceSettingsPage extends StatefulWidget {
 class _PerformanceSettingsPageState extends State<PerformanceSettingsPage> {
   static const _prefsKeyEncryptionCores = 'encryption_cores';
   static const _prefsKeyAllocationStrategy = 'encryption_allocation_strategy';
+  static const _prefsKeyMaxUploads = 'sync_max_uploads';
+  static const _prefsKeyMaxDownloads = 'sync_max_downloads';
 
   late final TextEditingController _coresController;
+  late final TextEditingController _maxUploadsController;
+  late final TextEditingController _maxDownloadsController;
+  
   int _totalCores = 1;
   int _maxUsableCores = 1;
   int _selectedCores = 1;
   bool _autoRefreshOnStartup = false;
   String _allocationStrategy = 'smart';
+  
+  int _maxUploads = 3;
+  int _maxDownloads = 3;
 
   @override
   void initState() {
     super.initState();
     _coresController = TextEditingController();
+    _maxUploadsController = TextEditingController();
+    _maxDownloadsController = TextEditingController();
     _load();
   }
 
   @override
   void dispose() {
     _coresController.dispose();
+    _maxUploadsController.dispose();
+    _maxDownloadsController.dispose();
     super.dispose();
   }
 
@@ -51,6 +63,11 @@ class _PerformanceSettingsPageState extends State<PerformanceSettingsPage> {
 
     _autoRefreshOnStartup = prefs.getBool('auto_refresh_on_startup') ?? false;
     _allocationStrategy = prefs.getString(_prefsKeyAllocationStrategy) ?? 'smart';
+
+    _maxUploads = prefs.getInt(_prefsKeyMaxUploads) ?? 3;
+    _maxDownloads = prefs.getInt(_prefsKeyMaxDownloads) ?? 3;
+    _maxUploadsController.text = _maxUploads.toString();
+    _maxDownloadsController.text = _maxDownloads.toString();
 
     if (mounted) setState(() {});
   }
@@ -77,6 +94,16 @@ class _PerformanceSettingsPageState extends State<PerformanceSettingsPage> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(_prefsKeyEncryptionCores, value);
     EncryptionTaskManager().pumpQueue();
+  }
+
+  Future<void> _persistSyncMaxUploads(int value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_prefsKeyMaxUploads, value);
+  }
+
+  Future<void> _persistSyncMaxDownloads(int value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_prefsKeyMaxDownloads, value);
   }
 
   void _setCores(int value) {
@@ -329,6 +356,69 @@ class _PerformanceSettingsPageState extends State<PerformanceSettingsPage> {
                   onChanged: (v) => v != null ? _setAllocationStrategy(v) : null,
                   contentPadding: EdgeInsets.zero,
                   activeColor: theme.colorScheme.primary,
+                ),
+                const SizedBox(height: 24),
+                const Divider(),
+                const SizedBox(height: 16),
+                Text(
+                  '同步设置',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  '最大同时上传数量 ($_maxUploads)',
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+                const SizedBox(height: 8),
+                SliderTheme(
+                  data: SliderTheme.of(context).copyWith(
+                    activeTrackColor: theme.colorScheme.primary,
+                    inactiveTrackColor: theme.colorScheme.primary.withOpacity(0.2),
+                    thumbColor: theme.colorScheme.primary,
+                    overlayColor: theme.colorScheme.primary.withOpacity(0.1),
+                  ),
+                  child: Slider(
+                    value: _maxUploads.toDouble(),
+                    min: 1,
+                    max: 10,
+                    divisions: 9,
+                    label: _maxUploads.toString(),
+                    onChanged: (v) {
+                      setState(() {
+                        _maxUploads = v.round();
+                        _maxUploadsController.text = _maxUploads.toString();
+                      });
+                      _persistSyncMaxUploads(_maxUploads);
+                    },
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  '最大同时下载数量 ($_maxDownloads)',
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+                const SizedBox(height: 8),
+                SliderTheme(
+                  data: SliderTheme.of(context).copyWith(
+                    activeTrackColor: theme.colorScheme.primary,
+                    inactiveTrackColor: theme.colorScheme.primary.withOpacity(0.2),
+                    thumbColor: theme.colorScheme.primary,
+                    overlayColor: theme.colorScheme.primary.withOpacity(0.1),
+                  ),
+                  child: Slider(
+                    value: _maxDownloads.toDouble(),
+                    min: 1,
+                    max: 10,
+                    divisions: 9,
+                    label: _maxDownloads.toString(),
+                    onChanged: (v) {
+                      setState(() {
+                        _maxDownloads = v.round();
+                        _maxDownloadsController.text = _maxDownloads.toString();
+                      });
+                      _persistSyncMaxDownloads(_maxDownloads);
+                    },
+                  ),
                 ),
               ],
             ),

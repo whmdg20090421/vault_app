@@ -18,13 +18,14 @@ class _SyncJob {
 class SyncEngine {
   final WebDavService service;
   final String localDirPath;
-  final int maxConcurrency;
-  final SyncDirection direction;
+  final int maxUploadConcurrency;
+  final int maxDownloadConcurrency;
 
   SyncEngine({
     required this.service,
     required this.localDirPath,
-    this.maxConcurrency = 3,
+    this.maxUploadConcurrency = 3,
+    this.maxDownloadConcurrency = 3,
     this.direction = SyncDirection.twoWay,
   });
 
@@ -184,7 +185,15 @@ class SyncEngine {
     }
 
     // 5. 控制并发执行任务
-    await _executeConcurrently(syncTasks, maxConcurrency, task);
+    final uploadTasks = syncTasks.where((t) => t.item.action == SyncItemAction.upload).toList();
+    final downloadTasks = syncTasks.where((t) => t.item.action == SyncItemAction.download).toList();
+    final deleteTasks = syncTasks.where((t) => t.item.action == SyncItemAction.delete).toList();
+
+    await Future.wait([
+      _executeConcurrently(uploadTasks, maxUploadConcurrency, task),
+      _executeConcurrently(downloadTasks, maxDownloadConcurrency, task),
+      _executeConcurrently(deleteTasks, 3, task), // Fixed concurrency for deletes
+    ]);
 
     // 6. 更新并保存规范的本地索引
     await _saveLocalIndex(currentLocalFiles, localIndexService, localIndex);
@@ -267,7 +276,7 @@ class SyncEngine {
               if (direction == SyncDirection.cloudToLocal || 
                  (direction == SyncDirection.twoWay && remoteMod != null && remoteMod.isAfter(localMod))) {
                 syncTasks.add(_SyncJob(
-                  SyncFileItem(path: localEntityPath, name: remoteFile.name, size: remoteFile.size ?? 0),
+                  SyncFileItem(path: localEntityPath, name: remoteFile.name, size: remoteFile.size ?? 0, action: SyncItemAction.download),
                   () async {
                     print('Downloading updated file: ${remoteFile.name}');
                     await service.download(remoteFile.path, localEntityPath);
@@ -275,7 +284,7 @@ class SyncEngine {
                 ));
               } else if (direction == SyncDirection.localToCloud || direction == SyncDirection.twoWay) {
                 syncTasks.add(_SyncJob(
-                  SyncFileItem(path: localEntityPath, name: remoteFile.name, size: localStat.size),
+                  SyncFileItem(path: localEntityPath, name: remoteFile.name, size: localStat.size, action: SyncItemAction.upload),
                   () async {
                     print('Uploading updated file: ${remoteFile.name}');
                     await service.upload(localEntityPath, remoteFile.path);
@@ -290,7 +299,7 @@ class SyncEngine {
           if (localDeleted.contains(relativePath)) {
             if (direction == SyncDirection.localToCloud || direction == SyncDirection.twoWay) {
               syncTasks.add(_SyncJob(
-                SyncFileItem(path: remoteFile.path, name: remoteFile.name, size: remoteFile.size ?? 0),
+                SyncFileItem(path: remoteFile.path, name: remoteFile.name, size: remoteFile.size ?? 0, action: SyncItemAction.delete),
                 () async {
                   print('Deleting remote file: ${remoteFile.name}');
                   await service.remove(remoteFile.path);
@@ -301,7 +310,7 @@ class SyncEngine {
           } else {
             if (direction == SyncDirection.cloudToLocal || direction == SyncDirection.twoWay) {
               syncTasks.add(_SyncJob(
-                SyncFileItem(path: localEntityPath, name: remoteFile.name, size: remoteFile.size ?? 0),
+                SyncFileItem(path: localEntityPath, name: remoteFile.name, size: remoteFile.size ?? 0, action: SyncItemAction.download),
                 () async {
                   print('Downloading new file: ${remoteFile.name}');
                   await service.download(remoteFile.path, localEntityPath);
@@ -328,7 +337,7 @@ class SyncEngine {
           if (localEntity is File && localAdded.contains(relativePath)) {
             final stat = await localEntity.stat();
             syncTasks.add(_SyncJob(
-              SyncFileItem(path: localEntityPath, name: name, size: stat.size),
+              SyncFileItem(path: localEntityPath, name: name, size: stat.size, action: SyncItemAction.upload),
               () async {
                 print('Uploading new file: $name');
                 String remotePath = _buildRemotePath(remoteDir, name);
@@ -387,9 +396,25 @@ class SyncEngine {
     int index = 0;
     Future<void> worker() async {
       while (index < tasks.length) {
+        if (parentTask != null && parentTask.status == SyncStatus.failed && parentTask.errorMessage == '用户已取消/删除该任务') {
+          return; // Abort if cancelled
+        }
+
         final taskIndex = index++;
         final job = tasks[taskIndex];
         
+        while (parentTask != null) {
+          if (parentTask.status == SyncStatus.failed && parentTask.errorMessage == '用户已取消/删除该任务') {
+            return;
+          }
+          if ((job.item.action == SyncItemAction.upload && parentTask.isUploadPaused) ||
+              (job.item.action == SyncItemAction.download && parentTask.isDownloadPaused)) {
+            await Future.delayed(const Duration(milliseconds: 500));
+          } else {
+            break;
+          }
+        }
+
         job.item.status = SyncStatus.syncing;
         if (parentTask != null) {
           CloudDriveProgressManager.instance.updateTask(parentTask);
