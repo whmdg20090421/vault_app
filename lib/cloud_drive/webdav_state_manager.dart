@@ -65,9 +65,15 @@ class WebDAVStateManager extends ChangeNotifier {
         password: password,
       );
       final service = WebDavService(client);
+      final prefs = await SharedPreferences.getInstance();
+      final maxUploads = prefs.getInt('sync_max_uploads') ?? 3;
+      final maxDownloads = prefs.getInt('sync_max_downloads') ?? 3;
+
       final syncEngine = SyncEngine(
         service: service,
         localDirPath: localDirPath,
+        maxUploadConcurrency: maxUploads,
+        maxDownloadConcurrency: maxDownloads,
       );
 
       final task = SyncTask(

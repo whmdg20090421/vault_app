@@ -171,6 +171,39 @@ class CloudDriveProgressManager extends ChangeNotifier with WidgetsBindingObserv
     _startTimerIfNeeded();
   }
 
+  void pauseUpload(String taskId) {
+    final task = _tasks.firstWhere((t) => t.id == taskId);
+    task.isUploadPaused = true;
+    updateTask(task);
+  }
+
+  void resumeUpload(String taskId) {
+    final task = _tasks.firstWhere((t) => t.id == taskId);
+    task.isUploadPaused = false;
+    updateTask(task);
+  }
+
+  void pauseDownload(String taskId) {
+    final task = _tasks.firstWhere((t) => t.id == taskId);
+    task.isDownloadPaused = true;
+    updateTask(task);
+  }
+
+  void resumeDownload(String taskId) {
+    final task = _tasks.firstWhere((t) => t.id == taskId);
+    task.isDownloadPaused = false;
+    updateTask(task);
+  }
+
+  void deleteTask(String taskId) {
+    final task = _tasks.firstWhere((t) => t.id == taskId);
+    task.status = SyncStatus.failed;
+    task.errorMessage = '用户已取消/删除该任务';
+    _tasks.removeWhere((t) => t.id == taskId);
+    _storageService.deleteTask(taskId);
+    notifyListeners();
+  }
+
   void pauseAll() async {
     await _ensureInitialized();
     for (var t in _tasks) {

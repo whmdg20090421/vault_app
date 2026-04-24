@@ -6,11 +6,14 @@ enum SyncStrategy { overwrite, merge, skip }
 
 enum SyncStatus { pending, syncing, failed, paused, completed }
 
+enum SyncItemAction { upload, download, delete }
+
 class SyncFileItem {
   final String path;
   final String name;
   final int size;
   SyncStatus status;
+  SyncItemAction action;
   int retryCount;
   String? errorMessage;
 
@@ -21,6 +24,7 @@ class SyncFileItem {
     required this.name,
     required this.size,
     this.status = SyncStatus.pending,
+    this.action = SyncItemAction.upload,
     this.retryCount = 0,
     this.errorMessage,
   });
@@ -31,6 +35,7 @@ class SyncFileItem {
       'name': name,
       'size': size,
       'status': status.name,
+      'action': action.name,
       'retryCount': retryCount,
       'errorMessage': errorMessage,
     };
@@ -45,6 +50,10 @@ class SyncFileItem {
         (e) => e.name == json['status'],
         orElse: () => SyncStatus.pending,
       ),
+      action: SyncItemAction.values.firstWhere(
+        (e) => e.name == (json['action'] ?? 'upload'),
+        orElse: () => SyncItemAction.upload,
+      ),
       retryCount: json['retryCount'] as int? ?? 0,
       errorMessage: json['errorMessage'] as String?,
     );
@@ -55,6 +64,7 @@ class SyncFileItem {
     String? name,
     int? size,
     SyncStatus? status,
+    SyncItemAction? action,
     int? retryCount,
     String? errorMessage,
   }) {
@@ -63,6 +73,7 @@ class SyncFileItem {
       name: name ?? this.name,
       size: size ?? this.size,
       status: status ?? this.status,
+      action: action ?? this.action,
       retryCount: retryCount ?? this.retryCount,
       errorMessage: errorMessage ?? this.errorMessage,
     );
@@ -74,6 +85,8 @@ class SyncTask {
   final SyncDirection direction;
   final SyncStrategy strategy;
   SyncStatus status;
+  bool isUploadPaused;
+  bool isDownloadPaused;
   final List<SyncFileItem> items;
   final DateTime createdAt;
   DateTime? startedAt;
@@ -93,6 +106,8 @@ class SyncTask {
     required this.direction,
     required this.strategy,
     this.status = SyncStatus.pending,
+    this.isUploadPaused = false,
+    this.isDownloadPaused = false,
     required this.items,
     required this.createdAt,
     this.startedAt,
@@ -111,6 +126,8 @@ class SyncTask {
       'direction': direction.name,
       'strategy': strategy.name,
       'status': status.name,
+      'isUploadPaused': isUploadPaused,
+      'isDownloadPaused': isDownloadPaused,
       'items': items.map((item) => item.toJson()).toList(),
       'createdAt': createdAt.toIso8601String(),
       'startedAt': startedAt?.toIso8601String(),
@@ -139,6 +156,8 @@ class SyncTask {
         (e) => e.name == json['status'],
         orElse: () => SyncStatus.pending,
       ),
+      isUploadPaused: json['isUploadPaused'] as bool? ?? false,
+      isDownloadPaused: json['isDownloadPaused'] as bool? ?? false,
       items: (json['items'] as List<dynamic>?)
               ?.map((e) => SyncFileItem.fromJson(e as Map<String, dynamic>))
               .toList() ??
@@ -164,6 +183,8 @@ class SyncTask {
     SyncDirection? direction,
     SyncStrategy? strategy,
     SyncStatus? status,
+    bool? isUploadPaused,
+    bool? isDownloadPaused,
     List<SyncFileItem>? items,
     DateTime? createdAt,
     DateTime? startedAt,
@@ -180,6 +201,8 @@ class SyncTask {
       direction: direction ?? this.direction,
       strategy: strategy ?? this.strategy,
       status: status ?? this.status,
+      isUploadPaused: isUploadPaused ?? this.isUploadPaused,
+      isDownloadPaused: isDownloadPaused ?? this.isDownloadPaused,
       items: items ?? this.items,
       createdAt: createdAt ?? this.createdAt,
       startedAt: startedAt ?? this.startedAt,
