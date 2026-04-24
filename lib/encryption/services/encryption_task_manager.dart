@@ -441,18 +441,6 @@ class EncryptionTaskManager extends ChangeNotifier {
         final masterKey = Uint8List.fromList(masterKeyList);
         final encryptFilename = (root.taskArgs?['encryptFilename'] as bool?) ?? false;
 
-        await LocalIndexService().updateFileIndex(
-          vaultDirectoryPath: vaultDirectoryPath,
-          remotePath: remotePath,
-          cipherHashSha256: message['cipherHashSha256'] as String,
-          cipherSize: message['cipherSize'] as int,
-          cipherUpdatedAt: DateTime.parse(message['cipherUpdatedAt'] as String),
-          plainHashSha256: message['plainHashSha256'] as String,
-          plainSize: message['plainSize'] as int,
-          plainUpdatedAt: DateTime.parse(message['plainUpdatedAt'] as String),
-          sourceAbsolutePathEnc: Map<String, String>.from(message['sourceAbsolutePathEnc'] as Map),
-        );
-
         final manifestService = VaultManifestService();
         final manifest = await manifestService.load(
           vaultDirectoryPath: vaultDirectoryPath,

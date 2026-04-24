@@ -197,7 +197,7 @@ class SyncEngine {
     ]);
 
     // 6. 更新并保存规范的本地索引
-    await _saveLocalIndex(currentLocalFiles, localIndexService, localIndex);
+    await _saveLocalIndex(currentLocalFiles, localIndexService, localIndex, syncTasks);
 
     if (task != null) {
       bool allSuccess = task.items.every((i) => i.status == SyncStatus.completed);
@@ -265,25 +265,19 @@ class SyncEngine {
             final localMod = localStat.modified;
             final remoteMod = remoteFile.lastModified;
 
-            bool isDifferent = false;
-            if (localStat.size != remoteFile.size) {
-              isDifferent = true;
-            } else if (remoteMod != null && localMod.toIso8601String() != remoteMod.toIso8601String()) {
-              // In a real scenario we might not have remote hash, so we assume different if time differs
-              isDifferent = true; 
+            bool changedLocally = localModified.contains(relativePath);
+            bool changedRemotely = false;
+            
+            if (!changedLocally) {
+              // 依靠文件大小来判断远端是否发生了变化
+              // 因为上传操作会更新远端时间，如果用时间戳比对会导致刚上传的文件在下次同步时被重复下载
+              if (remoteFile.size != null && localStat.size != remoteFile.size) {
+                changedRemotely = true;
+              }
             }
 
-            if (isDifferent) {
-              if (direction == SyncDirection.cloudToLocal || 
-                 (direction == SyncDirection.twoWay && remoteMod != null && remoteMod.isAfter(localMod))) {
-                syncTasks.add(_SyncJob(
-                  SyncFileItem(path: localEntityPath, name: remoteFile.name, size: remoteFile.size ?? 0, action: SyncItemAction.download),
-                  () async {
-                    print('Downloading updated file: ${remoteFile.name}');
-                    await service.download(remoteFile.path, localEntityPath);
-                  }
-                ));
-              } else if (direction == SyncDirection.localToCloud || direction == SyncDirection.twoWay) {
+            if (changedLocally) {
+              if (direction == SyncDirection.localToCloud || direction == SyncDirection.twoWay) {
                 syncTasks.add(_SyncJob(
                   SyncFileItem(path: localEntityPath, name: remoteFile.name, size: localStat.size, action: SyncItemAction.upload),
                   () async {
@@ -292,8 +286,18 @@ class SyncEngine {
                   }
                 ));
               }
+              localModified.remove(relativePath);
+            } else if (changedRemotely) {
+              if (direction == SyncDirection.cloudToLocal || direction == SyncDirection.twoWay) {
+                syncTasks.add(_SyncJob(
+                  SyncFileItem(path: localEntityPath, name: remoteFile.name, size: remoteFile.size ?? 0, action: SyncItemAction.download),
+                  () async {
+                    print('Downloading updated file: ${remoteFile.name}');
+                    await service.download(remoteFile.path, localEntityPath);
+                  }
+                ));
+              }
             }
-            localModified.remove(relativePath);
           }
         } else {
           // On remote, not locally
@@ -361,32 +365,48 @@ class SyncEngine {
     }
   }
 
-  Future<void> _saveLocalIndex(Map<String, File> currentLocalFiles, LocalIndexService localIndexService, Map<String, dynamic> localIndex) async {
-    // Need to re-scan to get the actual sizes and modified times after sync (downloads might have changed them)
-    Map<String, File> finalFiles = {};
-    await _scanLocalFiles(Directory(localDirPath), finalFiles);
-    
-    Map<String, dynamic> newIndexData = {};
-    for (var entry in finalFiles.entries) {
-      final path = entry.key;
+  Future<void> _saveLocalIndex(Map<String, File> currentLocalFiles, LocalIndexService localIndexService, Map<String, dynamic> oldIndex, List<_SyncJob> tasks) async {
+    Map<String, dynamic> newIndexData = Map<String, dynamic>.from(oldIndex);
+
+    // 首先，保留那些没有发生变更的本地文件
+    // 如果一个文件在 currentLocalFiles 中且没有对应的 upload/delete/download task，说明它在本次同步中是 unchanged
+    final taskPaths = tasks.map((t) => t.item.path).toSet();
+    for (var entry in currentLocalFiles.entries) {
+      final relativePath = entry.key;
       final file = entry.value;
-      final stat = await file.stat();
-      
-      final existingInfo = localIndex[path];
-      if (existingInfo != null && existingInfo is Map) {
-        if (existingInfo['size'] == stat.size && existingInfo['updatedAt'] == stat.modified.toIso8601String()) {
-          newIndexData[path] = existingInfo;
-          continue;
+      if (!taskPaths.contains(file.path) && oldIndex.containsKey(relativePath)) {
+        // unchanged file, already in newIndexData from oldIndex, but we can verify it exists
+        // (Actually, since we copied oldIndex, we just need to ensure deleted files are removed)
+      }
+    }
+
+    // 移除在本地已经不存在且没有在本次任务中处理（或已经被处理）的文件
+    final localPaths = currentLocalFiles.keys.toSet();
+    newIndexData.removeWhere((key, value) => !localPaths.contains(key) && !taskPaths.any((p) => p.replaceAll(r'\', '/').endsWith(key)));
+
+    // 针对本次成功执行的任务，更新索引
+    for (final job in tasks) {
+      if (job.item.status == SyncStatus.completed) {
+        final path = job.item.path;
+        String relativePath = p.relative(path, from: localDirPath).replaceAll(r'\', '/');
+        if (!relativePath.startsWith('/')) relativePath = '/' + relativePath;
+
+        if (job.item.action == SyncItemAction.delete) {
+          newIndexData.remove(relativePath);
+        } else {
+          // upload or download success
+          final file = File(path);
+          if (await file.exists()) {
+            final stat = await file.stat();
+            final hash = await _calculateFileHash(file);
+            newIndexData[relativePath] = {
+              'size': stat.size,
+              'updatedAt': stat.modified.toIso8601String(),
+              'hash': hash,
+            };
+          }
         }
       }
-      
-      final hash = await _calculateFileHash(file);
-      
-      newIndexData[path] = {
-        'size': stat.size,
-        'updatedAt': stat.modified.toIso8601String(),
-        'hash': hash,
-      };
     }
 
     await localIndexService.saveLocalIndex(localDirPath, newIndexData);
