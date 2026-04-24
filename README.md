@@ -5,9 +5,9 @@
 ## 最新版本概览
 
 <!-- RELEASE_SUMMARY_START -->
-- 当前版本：1.6.2
-- **Fix**: 修复了 GitHub Actions release 工作流中推送自动生成的 README.md 时因权限或网络问题导致的崩溃。
-- 完整更新：https://github.com/whmdg20090421/vault_app/releases/tag/v1.6.2
+- 当前版本：1.6.3
+- **编译修复**：修复了在 `SyncEngine` 中引入同步方向控制参数时遗漏字段声明，导致 CI 打包流水线 (flutter build apk) 崩溃退出的严重问题。
+- 完整更新：https://github.com/whmdg20090421/vault_app/releases/tag/v1.6.3
 <!-- RELEASE_SUMMARY_END -->
 
 ## 更新历史 (Changelog)
