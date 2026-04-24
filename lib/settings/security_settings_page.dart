@@ -1,6 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import '../services/settings_manager.dart';
 
 class SecuritySettingsPage extends StatefulWidget {
   const SecuritySettingsPage({super.key});
@@ -33,10 +33,10 @@ class _SecuritySettingsPageState extends State<SecuritySettingsPage> {
   }
 
   Future<void> _loadSettings() async {
-    final prefs = await SharedPreferences.getInstance();
+    final settings = SettingsManager.instance;
     setState(() {
-      _savedMode = PermissionMode.values[prefs.getInt('security_permission_mode') ?? 0];
-      _savedBehavior = RootBehavior.values[prefs.getInt('security_root_behavior') ?? 0];
+      _savedMode = PermissionMode.values[settings.securityPermissionMode];
+      _savedBehavior = RootBehavior.values[settings.securityRootBehavior];
       
       _currentMode = _savedMode;
       _currentBehavior = _savedBehavior;
@@ -49,9 +49,9 @@ class _SecuritySettingsPageState extends State<SecuritySettingsPage> {
   }
 
   Future<void> _saveSettings() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt('security_permission_mode', _currentMode.index);
-    await prefs.setInt('security_root_behavior', _currentBehavior.index);
+    final settings = SettingsManager.instance;
+    await settings.setSecurityPermissionMode(_currentMode.index);
+    await settings.setSecurityRootBehavior(_currentBehavior.index);
 
     setState(() {
       _savedMode = _currentMode;

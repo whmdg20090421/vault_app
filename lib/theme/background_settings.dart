@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import '../services/settings_manager.dart';
 
 class BackgroundSettings extends ChangeNotifier {
   bool _enabled = false;
@@ -15,41 +15,35 @@ class BackgroundSettings extends ChangeNotifier {
   BackgroundSettings._();
   static final instance = BackgroundSettings._();
   
-  SharedPreferences? _prefs;
-
   Future<void> init() async {
-    _prefs = await SharedPreferences.getInstance();
-    _enabled = _prefs?.getBool('bg_enabled') ?? false;
-    _imagePath = _prefs?.getString('bg_image_path');
-    _imageOpacity = _prefs?.getDouble('bg_image_opacity') ?? 1.0;
-    _uiOpacity = _prefs?.getDouble('bg_ui_opacity') ?? 0.8;
+    final settings = SettingsManager.instance;
+    _enabled = settings.bgEnabled;
+    _imagePath = settings.bgImagePath;
+    _imageOpacity = settings.bgImageOpacity;
+    _uiOpacity = settings.bgUiOpacity;
   }
 
   void setEnabled(bool val) {
     _enabled = val;
     notifyListeners();
-    _prefs?.setBool('bg_enabled', val);
+    SettingsManager.instance.setBgEnabled(val);
   }
 
   void setImagePath(String? val) {
     _imagePath = val;
     notifyListeners();
-    if (val != null) {
-      _prefs?.setString('bg_image_path', val);
-    } else {
-      _prefs?.remove('bg_image_path');
-    }
+    SettingsManager.instance.setBgImagePath(val);
   }
 
   void setImageOpacity(double val) {
     _imageOpacity = val;
     notifyListeners();
-    _prefs?.setDouble('bg_image_opacity', val);
+    SettingsManager.instance.setBgImageOpacity(val);
   }
 
   void setUiOpacity(double val) {
     _uiOpacity = val;
     notifyListeners();
-    _prefs?.setDouble('bg_ui_opacity', val);
+    SettingsManager.instance.setBgUiOpacity(val);
   }
 }

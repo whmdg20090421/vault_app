@@ -18,6 +18,7 @@ import 'home_page.dart';
 import 'encryption/widgets/encryption_progress_icon.dart';
 import 'encryption/widgets/encryption_progress_panel.dart';
 
+import 'services/settings_manager.dart';
 import 'theme/app_theme.dart';
 import 'theme/background_settings.dart';
 import 'settings/theme_settings_page.dart';
@@ -28,7 +29,15 @@ import 'utils/developer_mode.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await SettingsManager.instance.init();
   FlutterCryptography.enable();
+  
+  // Initialize theme
+  appTheme.value = AppTheme.values[SettingsManager.instance.themeIndex];
+  appTheme.addListener(() {
+    SettingsManager.instance.setThemeIndex(appTheme.value.index);
+  });
+  
   await BackgroundSettings.instance.init();
   await ErrorReporter.instance.initialize();
   await StatsService().init();

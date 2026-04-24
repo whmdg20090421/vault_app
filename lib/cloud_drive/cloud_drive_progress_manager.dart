@@ -2,7 +2,11 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../models/sync_task.dart';
 import '../services/sync_storage_service.dart';
-import '../services/sync_engine.dart';
+import '../services/sync_engine.dart' as old_sync_engine;
+import 'webdav_storage.dart';
+import 'webdav_new/webdav_client.dart';
+import 'webdav_new/webdav_service.dart';
+import 'webdav_new/sync_engine.dart' as new_sync_engine;
 
 class CloudDriveProgressManager extends ChangeNotifier with WidgetsBindingObserver {
   bool _isInitialized = false;
@@ -14,7 +18,7 @@ class CloudDriveProgressManager extends ChangeNotifier with WidgetsBindingObserv
   static final instance = CloudDriveProgressManager._();
 
   final SyncStorageService _storageService = SyncStorageService();
-  final SyncEngine syncEngine = SyncEngine();
+  final old_sync_engine.SyncEngine syncEngine = old_sync_engine.SyncEngine();
 
   List<SyncTask> _tasks = [];
   List<SyncTask> get tasks => _tasks;
@@ -33,6 +37,12 @@ class CloudDriveProgressManager extends ChangeNotifier with WidgetsBindingObserv
     _tasks = await _storageService.loadTasks();
     _isInitialized = true;
     notifyListeners();
+
+    for (var task in _tasks) {
+      if (task.status == SyncStatus.syncing || task.status == SyncStatus.pending) {
+        resumeTask(task.id);
+      }
+    }
 
     syncEngine.taskUpdates.listen((updatedTask) {
       _pendingUpdates[updatedTask.id] = updatedTask;
@@ -185,12 +195,9 @@ class CloudDriveProgressManager extends ChangeNotifier with WidgetsBindingObserv
 
   void startAll() async {
     await _ensureInitialized();
-    // To actually start tasks, credentials are required. 
-    // Here we just mark them as pending for the UI.
     for (var t in _tasks) {
-      if (t.status == SyncStatus.paused || t.status == SyncStatus.failed) {
-        t.status = SyncStatus.pending;
-        _storageService.saveTask(t);
+      if (t.status == SyncStatus.paused || t.status == SyncStatus.failed || t.status == SyncStatus.pending) {
+        resumeTask(t.id);
       }
     }
     notifyListeners();
@@ -202,10 +209,42 @@ class CloudDriveProgressManager extends ChangeNotifier with WidgetsBindingObserv
     _setTaskStatus(id, SyncStatus.paused);
   }
 
-  void resumeTask(String id) {
-    // Requires credentials to start via SyncEngine. Marking as pending for now.
+  Future<void> resumeTask(String id) async {
+    await _ensureInitialized();
+    final taskIndex = _tasks.indexWhere((t) => t.id == id);
+    if (taskIndex < 0) return;
+
+    final task = _tasks[taskIndex];
+    if (task.status == SyncStatus.syncing) return;
+
     _setTaskStatus(id, SyncStatus.pending);
     _startTimerIfNeeded();
+
+    try {
+      final repo = WebDavConfigRepository();
+      final configs = await repo.listConfigs();
+      final config = configs.firstWhere(
+        (c) => c.id == task.cloudWebDavId,
+        orElse: () => throw Exception('WebDAV config not found for id: ${task.cloudWebDavId}')
+      );
+      final password = await repo.readPassword(config.id);
+
+      final client = WebDavClient(
+        baseUrl: config.url,
+        username: config.username,
+        password: password ?? '',
+      );
+      final service = WebDavService(client);
+      final newEngine = new_sync_engine.SyncEngine(
+        service: service,
+        localDirPath: task.localVaultPath,
+      );
+
+      await newEngine.sync(task.cloudFolderPath, task: task);
+    } catch (e) {
+      task.errorMessage = 'Failed to resume: $e';
+      _setTaskStatus(id, SyncStatus.failed);
+    }
   }
   
   void cancelTask(String id) {

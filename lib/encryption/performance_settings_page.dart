@@ -3,7 +3,7 @@ import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import '../services/settings_manager.dart';
 import 'package:cryptography/cryptography.dart';
 import 'package:cryptography/dart.dart';
 import 'package:cryptography_flutter/cryptography_flutter.dart';
@@ -41,23 +41,23 @@ class _PerformanceSettingsPageState extends State<PerformanceSettingsPage> {
   }
 
   Future<void> _load() async {
-    final prefs = await SharedPreferences.getInstance();
+    final settings = SettingsManager.instance;
     _totalCores = Platform.numberOfProcessors;
     _maxUsableCores = (_totalCores - 1).clamp(1, _totalCores);
 
-    final saved = prefs.getInt(_prefsKeyEncryptionCores);
+    final saved = settings.encryptionCores;
     _selectedCores = (saved ?? (_totalCores ~/ 2)).clamp(1, _maxUsableCores);
     _coresController.text = _selectedCores.toString();
 
-    _autoRefreshOnStartup = prefs.getBool('auto_refresh_on_startup') ?? false;
-    _allocationStrategy = prefs.getString(_prefsKeyAllocationStrategy) ?? 'smart';
+    _autoRefreshOnStartup = settings.autoRefreshOnStartup;
+    _allocationStrategy = settings.encryptionAllocationStrategy;
 
     if (mounted) setState(() {});
   }
 
   Future<void> _toggleAutoRefresh(bool value) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('auto_refresh_on_startup', value);
+    final settings = SettingsManager.instance;
+    await settings.setAutoRefreshOnStartup(value);
     setState(() {
       _autoRefreshOnStartup = value;
     });
@@ -65,8 +65,8 @@ class _PerformanceSettingsPageState extends State<PerformanceSettingsPage> {
 
   Future<void> _setAllocationStrategy(String value) async {
     if (value == _allocationStrategy) return;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_prefsKeyAllocationStrategy, value);
+    final settings = SettingsManager.instance;
+    await settings.setEncryptionAllocationStrategy(value);
     setState(() {
       _allocationStrategy = value;
     });
@@ -74,8 +74,8 @@ class _PerformanceSettingsPageState extends State<PerformanceSettingsPage> {
   }
 
   Future<void> _persist(int value) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt(_prefsKeyEncryptionCores, value);
+    final settings = SettingsManager.instance;
+    await settings.setEncryptionCores(value);
     EncryptionTaskManager().pumpQueue();
   }
 
