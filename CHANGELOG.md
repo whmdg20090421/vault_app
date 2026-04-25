@@ -1,3 +1,7 @@
+# 版本 1.8.1 (2026-04-25)
+
+### 🐛 Build & Syntax Fixes
+- **修复编译与打包失败问题**：修复了在上一版本重构 `SyncEngine` 与 `VfsFolderPickerDialog` 时引入的 Dart 语法错误与参数不匹配问题，彻底解决了 Github Actions 中 `Build APK` 阶段由于代码报错导致的流水线中断，确保了应用能够被成功编译与发布。
 # 版本 1.8.0 (2026-04-25)
 
 ### 🐛 Sync Logic & Bug Fixes

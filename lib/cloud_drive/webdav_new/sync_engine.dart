@@ -296,8 +296,6 @@ class SyncEngine {
             final localMod = localStat.modified;
             final remoteMod = remoteFile.lastModified;
 
-            bool isDifferent = false;
-            
             String? lastETag;
               String? lastRemoteModStr;
               if (localIndex.containsKey(relativePath)) {
@@ -400,56 +398,58 @@ class SyncEngine {
 
               if (localAdded.contains(relativePath)) localAdded.remove(relativePath);
               localModified.remove(relativePath);
-            } else {
-              if (localDeleted.contains(relativePath)) {
-                bool isRemoteUpdated = false;
-                if (localIndex.containsKey(relativePath)) {
-                  final indexInfo = localIndex[relativePath];
-                  if (indexInfo is Map) {
-                    final lastETag = indexInfo['eTag'];
-                    final lastRemoteModStr = indexInfo['remoteMod'];
-                    
-                    String _normalizeETag(String eTag) {
-                      String normalized = eTag.trim();
-                      if (normalized.startsWith('W/')) normalized = normalized.substring(2);
-                      if (normalized.startsWith('"') && normalized.endsWith('"')) {
-                        normalized = normalized.substring(1, normalized.length - 1);
-                      }
-                      return normalized;
+            }
+          } else {
+            // On remote, not locally
+            if (localDeleted.contains(relativePath)) {
+              bool isRemoteUpdated = false;
+              if (localIndex.containsKey(relativePath)) {
+                final indexInfo = localIndex[relativePath];
+                if (indexInfo is Map) {
+                  final lastETag = indexInfo['eTag'];
+                  final lastRemoteModStr = indexInfo['remoteMod'];
+                  
+                  String _normalizeETag(String eTag) {
+                    String normalized = eTag.trim();
+                    if (normalized.startsWith('W/')) normalized = normalized.substring(2);
+                    if (normalized.startsWith('"') && normalized.endsWith('"')) {
+                      normalized = normalized.substring(1, normalized.length - 1);
                     }
+                    return normalized;
+                  }
 
-                    if (remoteFile.eTag != null && lastETag != null) {
-                      isRemoteUpdated = _normalizeETag(remoteFile.eTag!) != _normalizeETag(lastETag);
-                    } else if (remoteFile.lastModified != null && lastRemoteModStr != null) {
-                      isRemoteUpdated = remoteFile.lastModified!.toIso8601String() != lastRemoteModStr;
-                    }
+                  if (remoteFile.eTag != null && lastETag != null) {
+                    isRemoteUpdated = _normalizeETag(remoteFile.eTag!) != _normalizeETag(lastETag);
+                  } else if (remoteFile.lastModified != null && lastRemoteModStr != null) {
+                    isRemoteUpdated = remoteFile.lastModified!.toIso8601String() != lastRemoteModStr;
                   }
                 }
+              }
 
-                if (isRemoteUpdated && direction == SyncDirection.twoWay) {
-                  syncTasks.add(_SyncJob(
-                    SyncFileItem(path: localEntityPath, name: remoteFile.name, size: remoteFile.size ?? 0),
-                    (onProgress) async {
-                      print('Downloading remotely updated file instead of deleting: ${remoteFile.name}');
-                      await _withLock(remoteFile.path, () async {
-                        await service.download(remoteFile.path, localEntityPath, onProgress: onProgress);
-                      });
-                    }
-                  ));
-                } else if (direction == SyncDirection.localToCloud || direction == SyncDirection.twoWay) {
-                  syncTasks.add(_SyncJob(
-                    SyncFileItem(path: remoteFile.path, name: remoteFile.name, size: remoteFile.size ?? 0),
-                    (onProgress) async {
-                      print('Deleting remote file: ${remoteFile.name}');
-                      await _withLock(remoteFile.path, () async {
-                        await service.remove(remoteFile.path);
-                      });
-                      if (onProgress != null) onProgress(remoteFile.size ?? 0, remoteFile.size ?? 0);
-                    }
-                  ));
-                }
-                localDeleted.remove(relativePath);
-          } else {
+              if (isRemoteUpdated && direction == SyncDirection.twoWay) {
+                syncTasks.add(_SyncJob(
+                  SyncFileItem(path: localEntityPath, name: remoteFile.name, size: remoteFile.size ?? 0),
+                  (onProgress) async {
+                    print('Downloading remotely updated file instead of deleting: ${remoteFile.name}');
+                    await _withLock(remoteFile.path, () async {
+                      await service.download(remoteFile.path, localEntityPath, onProgress: onProgress);
+                    });
+                  }
+                ));
+              } else if (direction == SyncDirection.localToCloud || direction == SyncDirection.twoWay) {
+                syncTasks.add(_SyncJob(
+                  SyncFileItem(path: remoteFile.path, name: remoteFile.name, size: remoteFile.size ?? 0),
+                  (onProgress) async {
+                    print('Deleting remote file: ${remoteFile.name}');
+                    await _withLock(remoteFile.path, () async {
+                      await service.remove(remoteFile.path);
+                    });
+                    if (onProgress != null) onProgress(remoteFile.size ?? 0, remoteFile.size ?? 0);
+                  }
+                ));
+              }
+              localDeleted.remove(relativePath);
+            } else {
             if (direction == SyncDirection.cloudToLocal || direction == SyncDirection.twoWay) {
               syncTasks.add(_SyncJob(
                 SyncFileItem(path: localEntityPath, name: remoteFile.name, size: remoteFile.size ?? 0),

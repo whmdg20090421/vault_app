@@ -351,14 +351,14 @@ class _WebDavBrowserPageState extends State<WebDavBrowserPage> {
                                           }
                                         }
                                       } else if (value == 'move' || value == 'copy') {
-                                        if (_service == null) return;
-                                        final result = await showDialog<String>(
-                                          context: context,
-                                          builder: (_) => VfsFolderPickerDialog(
-                                            vfs: StandardVfs(_service!),
-                                            initialPath: '/',
-                                          ),
-                                        );
+                                          if (_service == null) return;
+                                          final result = await showDialog<String>(
+                                            context: context,
+                                            builder: (_) => VfsFolderPickerDialog(
+                                              vfs: StandardVfs(_service!),
+                                              title: value == 'move' ? '选择移动目标目录' : '选择复制目标目录',
+                                            ),
+                                          );
                                         if (result != null) {
                                           try {
                                             final targetPath = p.join(result, file.name).replaceAll('\\', '/');

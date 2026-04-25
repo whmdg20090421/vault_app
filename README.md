@@ -5,17 +5,16 @@
 ## 最新版本概览
 
 <!-- RELEASE_SUMMARY_START -->
-- 当前版本：1.8.0
-- **强化 ETag 与本地云端同步校验**：重构了 `SyncEngine` 核心逻辑，通过自动清除 `W/` 弱标签与外层引号等格式噪音，彻底解决了由于 ETag 格式不一致引发的文件重复覆盖或不断重新同步的“同步盲区”。
-- **完善并发状态管理与冲突拦截**：修复了极端情况下双向同步期间，远端已更新文件却在本地被误删的问题。现在应用能够在本地进行删除动作前，进行严格的云端版本预检测，如果有远端新版本则智能拦截并执行拉取下载操作，保障数据绝对不丢。
-- **本地/云端同名文件边界态修复**：优化了双向同步的时间戳比较和 `isDifferent` 的逻辑计算机制，修复了当云端存在与本地新增文件同名但 ETag 失效时，同步直接静默跳过的恶性死循环 Bug。
-- 完整更新：https://github.com/whmdg20090421/vault_app/releases/tag/v1.8.0
+- 当前版本：1.8.1
+- **修复编译与打包失败问题**：修复了在上一版本重构 `SyncEngine` 与 `VfsFolderPickerDialog` 时引入的 Dart 语法错误与参数不匹配问题，彻底解决了 Github Actions 中 `Build APK` 阶段由于代码报错导致的流水线中断，确保了应用能够被成功编译与发布。
+- 完整更新：https://github.com/whmdg20090421/vault_app/releases/tag/v1.8.1
 <!-- RELEASE_SUMMARY_END -->
 
 ## 更新历史 (Changelog)
 
 为了保持页面整洁，以下仅展示版本号与简要更新说明。点击版本号蓝色链接可查看极度详细的更新内容：
 
+- [1.8.1](docs/changelogs/v1.8.1.md) - 修复 Dart 语法错误导致 Action `Build APK` 编译中断的 Bug。
 - [1.8.0](docs/changelogs/v1.8.0.md) - 修复同步盲区与 ETag 比较问题，解决极端情况下的数据同步丢失与覆盖隐患。
 - [1.7.0](docs/changelogs/v1.7.0.md) - 重构文件一致性校验机制（ETag），加入并发锁 (LOCK/UNLOCK) 控制，并引入基于 JSON 的全局配置与同步任务断点续传持久化管理。
 
