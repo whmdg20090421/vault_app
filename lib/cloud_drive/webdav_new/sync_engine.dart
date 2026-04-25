@@ -299,77 +299,156 @@ class SyncEngine {
             bool isDifferent = false;
             
             String? lastETag;
-            String? lastRemoteModStr;
-            if (localIndex.containsKey(relativePath)) {
-              final indexInfo = localIndex[relativePath];
-              if (indexInfo is Map) {
-                lastETag = indexInfo['eTag'];
-                lastRemoteModStr = indexInfo['remoteMod'];
+              String? lastRemoteModStr;
+              if (localIndex.containsKey(relativePath)) {
+                final indexInfo = localIndex[relativePath];
+                if (indexInfo is Map) {
+                  lastETag = indexInfo['eTag'];
+                  lastRemoteModStr = indexInfo['remoteMod'];
+                }
               }
-            }
 
-            if (localStat.size != remoteFile.size) {
-              isDifferent = true;
-            } else {
+              String _normalizeETag(String eTag) {
+                String normalized = eTag.trim();
+                if (normalized.startsWith('W/')) normalized = normalized.substring(2);
+                if (normalized.startsWith('"') && normalized.endsWith('"')) {
+                  normalized = normalized.substring(1, normalized.length - 1);
+                }
+                return normalized;
+              }
+
+              bool localChanged = localModified.contains(relativePath) || localAdded.contains(relativePath);
+              bool remoteChanged = false;
+
               if (remoteFile.eTag != null && lastETag != null) {
-                if (remoteFile.eTag != lastETag) {
-                  isDifferent = true;
-                }
+                remoteChanged = _normalizeETag(remoteFile.eTag!) != _normalizeETag(lastETag);
               } else if (remoteMod != null && lastRemoteModStr != null) {
-                if (remoteMod.toIso8601String() != lastRemoteModStr) {
-                  isDifferent = true;
-                }
+                remoteChanged = remoteMod.toIso8601String() != lastRemoteModStr;
               } else {
-                if (localModified.contains(relativePath)) {
-                  isDifferent = true;
-                } else {
-                  isDifferent = false;
-                }
+                remoteChanged = true;
               }
-            }
 
-            if (isDifferent) {
-              if (direction == SyncDirection.cloudToLocal || 
-                 (direction == SyncDirection.twoWay && remoteMod != null && remoteMod.isAfter(localMod))) {
-                syncTasks.add(_SyncJob(
-                  SyncFileItem(path: localEntityPath, name: remoteFile.name, size: remoteFile.size ?? 0),
-                  (onProgress) async {
-                    print('Downloading updated file: ${remoteFile.name}');
-                    await _withLock(remoteFile.path, () async {
-                      await service.download(remoteFile.path, localEntityPath, onProgress: onProgress);
-                    });
+              bool isDifferent = (localStat.size != remoteFile.size) || remoteChanged || localChanged;
+
+              if (isDifferent) {
+                if (direction == SyncDirection.cloudToLocal) {
+                  syncTasks.add(_SyncJob(
+                    SyncFileItem(path: localEntityPath, name: remoteFile.name, size: remoteFile.size ?? 0),
+                    (onProgress) async {
+                      print('Downloading updated file: ${remoteFile.name}');
+                      await _withLock(remoteFile.path, () async {
+                        await service.download(remoteFile.path, localEntityPath, onProgress: onProgress);
+                      });
+                    }
+                  ));
+                } else if (direction == SyncDirection.localToCloud) {
+                  syncTasks.add(_SyncJob(
+                    SyncFileItem(path: localEntityPath, name: remoteFile.name, size: localStat.size),
+                    (onProgress) async {
+                      print('Uploading updated file: ${remoteFile.name}');
+                      await _withLock(remoteFile.path, () async {
+                        await service.upload(localEntityPath, remoteFile.path, onProgress: onProgress);
+                      });
+                    }
+                  ));
+                } else if (direction == SyncDirection.twoWay) {
+                  if (remoteChanged && !localChanged) {
+                    syncTasks.add(_SyncJob(
+                      SyncFileItem(path: localEntityPath, name: remoteFile.name, size: remoteFile.size ?? 0),
+                      (onProgress) async {
+                        print('Downloading updated file: ${remoteFile.name}');
+                        await _withLock(remoteFile.path, () async {
+                          await service.download(remoteFile.path, localEntityPath, onProgress: onProgress);
+                        });
+                      }
+                    ));
+                  } else if (!remoteChanged && localChanged) {
+                    syncTasks.add(_SyncJob(
+                      SyncFileItem(path: localEntityPath, name: remoteFile.name, size: localStat.size),
+                      (onProgress) async {
+                        print('Uploading updated file: ${remoteFile.name}');
+                        await _withLock(remoteFile.path, () async {
+                          await service.upload(localEntityPath, remoteFile.path, onProgress: onProgress);
+                        });
+                      }
+                    ));
+                  } else {
+                    if (remoteMod != null && remoteMod.isAfter(localMod)) {
+                      syncTasks.add(_SyncJob(
+                        SyncFileItem(path: localEntityPath, name: remoteFile.name, size: remoteFile.size ?? 0),
+                        (onProgress) async {
+                          print('Downloading updated file (conflict resolved by remote): ${remoteFile.name}');
+                          await _withLock(remoteFile.path, () async {
+                            await service.download(remoteFile.path, localEntityPath, onProgress: onProgress);
+                          });
+                        }
+                      ));
+                    } else {
+                      syncTasks.add(_SyncJob(
+                        SyncFileItem(path: localEntityPath, name: remoteFile.name, size: localStat.size),
+                        (onProgress) async {
+                          print('Uploading updated file (conflict resolved by local): ${remoteFile.name}');
+                          await _withLock(remoteFile.path, () async {
+                            await service.upload(localEntityPath, remoteFile.path, onProgress: onProgress);
+                          });
+                        }
+                      ));
+                    }
                   }
-                ));
-              } else if (direction == SyncDirection.localToCloud || direction == SyncDirection.twoWay) {
-                syncTasks.add(_SyncJob(
-                  SyncFileItem(path: localEntityPath, name: remoteFile.name, size: localStat.size),
-                  (onProgress) async {
-                    print('Uploading updated file: ${remoteFile.name}');
-                    await _withLock(remoteFile.path, () async {
-                      await service.upload(localEntityPath, remoteFile.path, onProgress: onProgress);
-                    });
-                  }
-                ));
-              }
-            }
-            localModified.remove(relativePath);
-          }
-        } else {
-          // On remote, not locally
-          if (localDeleted.contains(relativePath)) {
-            if (direction == SyncDirection.localToCloud || direction == SyncDirection.twoWay) {
-              syncTasks.add(_SyncJob(
-                SyncFileItem(path: remoteFile.path, name: remoteFile.name, size: remoteFile.size ?? 0),
-                (onProgress) async {
-                  print('Deleting remote file: ${remoteFile.name}');
-                  await _withLock(remoteFile.path, () async {
-                    await service.remove(remoteFile.path);
-                  });
-                  if (onProgress != null) onProgress(remoteFile.size ?? 0, remoteFile.size ?? 0);
                 }
-              ));
-            }
-            localDeleted.remove(relativePath);
+              }
+
+              if (localAdded.contains(relativePath)) localAdded.remove(relativePath);
+              localModified.remove(relativePath);
+            } else {
+              if (localDeleted.contains(relativePath)) {
+                bool isRemoteUpdated = false;
+                if (localIndex.containsKey(relativePath)) {
+                  final indexInfo = localIndex[relativePath];
+                  if (indexInfo is Map) {
+                    final lastETag = indexInfo['eTag'];
+                    final lastRemoteModStr = indexInfo['remoteMod'];
+                    
+                    String _normalizeETag(String eTag) {
+                      String normalized = eTag.trim();
+                      if (normalized.startsWith('W/')) normalized = normalized.substring(2);
+                      if (normalized.startsWith('"') && normalized.endsWith('"')) {
+                        normalized = normalized.substring(1, normalized.length - 1);
+                      }
+                      return normalized;
+                    }
+
+                    if (remoteFile.eTag != null && lastETag != null) {
+                      isRemoteUpdated = _normalizeETag(remoteFile.eTag!) != _normalizeETag(lastETag);
+                    } else if (remoteFile.lastModified != null && lastRemoteModStr != null) {
+                      isRemoteUpdated = remoteFile.lastModified!.toIso8601String() != lastRemoteModStr;
+                    }
+                  }
+                }
+
+                if (isRemoteUpdated && direction == SyncDirection.twoWay) {
+                  syncTasks.add(_SyncJob(
+                    SyncFileItem(path: localEntityPath, name: remoteFile.name, size: remoteFile.size ?? 0),
+                    (onProgress) async {
+                      print('Downloading remotely updated file instead of deleting: ${remoteFile.name}');
+                      await _withLock(remoteFile.path, () async {
+                        await service.download(remoteFile.path, localEntityPath, onProgress: onProgress);
+                      });
+                    }
+                  ));
+                } else if (direction == SyncDirection.localToCloud || direction == SyncDirection.twoWay) {
+                  syncTasks.add(_SyncJob(
+                    SyncFileItem(path: remoteFile.path, name: remoteFile.name, size: remoteFile.size ?? 0),
+                    (onProgress) async {
+                      print('Deleting remote file: ${remoteFile.name}');
+                      await _withLock(remoteFile.path, () async {
+                        await service.remove(remoteFile.path);
+                      });
+                      if (onProgress != null) onProgress(remoteFile.size ?? 0, remoteFile.size ?? 0);
+                    }
+                  ));
+                }
+                localDeleted.remove(relativePath);
           } else {
             if (direction == SyncDirection.cloudToLocal || direction == SyncDirection.twoWay) {
               syncTasks.add(_SyncJob(
